@@ -201,24 +201,36 @@ function BoothHeaderLogo({
     return { logoW: logoH * aspect, logoH };
   }, [tex]);
 
+  const padX = 0.45;
+  const padY = 0.22;
+
   return (
     <group position={[0, 6.5, -3.58]}>
-      <mesh castShadow>
+      {/* Bright white panel behind logo (replaces dark PNG matte read as grey) */}
+      <mesh position={[0, 0, -0.06]} receiveShadow>
+        <planeGeometry args={[logoW + padX, logoH + padY]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.42} metalness={0.02} />
+      </mesh>
+      {/* Logo plane — emissiveMap reads logo colors as self-illumination */}
+      <mesh castShadow position={[0, 0, 0.03]}>
         <planeGeometry args={[logoW, logoH]} />
         <meshStandardMaterial
           map={tex}
+          emissiveMap={tex}
+          emissive="#f2fff6"
+          emissiveIntensity={1.05}
+          color="#ffffff"
           transparent
-          alphaTest={0.12}
-          roughness={0.55}
-          metalness={0.05}
-          emissive="#ffffff"
-          emissiveIntensity={0.08}
+          alphaTest={0.08}
+          roughness={0.22}
+          metalness={0}
+          toneMapped
           polygonOffset
           polygonOffsetFactor={-1}
         />
       </mesh>
       <Text
-        position={[0, -0.52, 0.06]}
+        position={[0, -0.52, 0.08]}
         fontSize={0.26}
         color={accent}
         anchorX="center"
@@ -226,7 +238,7 @@ function BoothHeaderLogo({
         font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
       >
         {tagline}
-        <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.12} />
+        <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.55} />
       </Text>
     </group>
   );
