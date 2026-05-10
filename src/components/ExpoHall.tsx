@@ -156,7 +156,7 @@ export function ExpoHall() {
           target-position={[0, 6, -4.5]}
         />
       </group>
-      {/* Custom GLB lives in Booths.tsx → VertexEliteCustomOnly (avoid duplicating textured.glb here) */}
+      {/* Vertex Elite + luxury stalls are defined in Booths.tsx */}
     </group>
   );
 }

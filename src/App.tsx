@@ -3,6 +3,7 @@ import { KeyboardControls, Stats } from '@react-three/drei';
 import { Player } from './components/Player';
 import { ExpoHall } from './components/ExpoHall';
 import { Booths } from './components/Booths';
+import { RoamingExecutive } from './components/RoamingExecutive';
 import { Ballroom } from './components/Ballroom';
 import { Lighting } from './components/Lighting';
 import { Effects } from './components/Effects';
@@ -114,6 +115,7 @@ export default function App() {
             <Lighting />
             <ExpoHall />
             <Booths />
+            <RoamingExecutive />
             <Ballroom />
             <Player />
             <Effects />

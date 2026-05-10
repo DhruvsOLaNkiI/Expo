@@ -1,4 +1,4 @@
-import { Text, Box, Cylinder, Torus, useGLTF } from '@react-three/drei';
+import { Text, Box, Cylinder, Torus, useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useStore } from '../store';
 import { Suspense, useRef, useMemo, useLayoutEffect } from 'react';
@@ -15,16 +15,49 @@ const PROJECT_VIDEOS = [
   "/13391496_3840_2160_60fps.mp4"
 ];
 
-/** File in `public/…` → URL starts with `/assets/…` */
-const VERTEX_ELITE_MODEL_URL =
-  '/assets/7ad7b4d9-2523-4285-9504-9b4ea81e8ca3/textured.glb';
 /**
- * Hostess character: central help desk + every luxury booth (URL-encode spaces/parens).
- * Swap file under `public/assets/` and update `HOSTESS_MODEL_URL`.
+ * Vertex Elite uses the same procedural `Booth` shell as other luxury stalls (`VERTEX_ELITE_HALL_*`).
+ * Hostess: `public/assets/indian_office_woman.glb` (Mixamo rig + idle clip).
  */
-const HOSTESS_MODEL_URL = '/assets/scene%20(3).glb';
+const HOSTESS_MODEL_URL = '/assets/indian_office_woman.glb';
 const HOSTESS_MAX_WIDTH = 2.25;
 const HOSTESS_MAX_HEIGHT = 1.58;
+
+/** Hallway decorative trees — Maple (`public/assets/maple1_MZRT.glb`) */
+const HALL_TREE_MODEL_URL = '/assets/maple1_MZRT.glb';
+/** World-space height after uniform scale (meters); multiplied by each `<Plant scale={…} />` */
+const HALL_TREE_TARGET_HEIGHT = 5.15;
+
+/**
+ * Procedural `Booth` local space: +Y up, +Z toward main aisle / visitors, −Z back wall.
+ * Reception desk lives in `<group position={[0, 0.5, 0]}>`; body is box 4×1×1 centered → back face at z = −0.5 in that group.
+ */
+const BOOTH_DESK_GROUP_Y = 0.5;
+const BOOTH_COUNTER_HALF_DEPTH_Z = 0.5;
+/** Space between counter back plane and avatar anchor (collision-safe). */
+const BOOTH_HOSTESS_BACK_CLEARANCE = 0.42;
+/** Slight −X shifts hostess away from the small counter TV (+X side of desk). */
+const BOOTH_HOSTESS_DESK_LOCAL_X = -0.36;
+/**
+ * Extra **up** (meters) so shoes sit on the floor — animated GLBs often need a small nudge vs `prepareHostessModel`’s bind pose.
+ * Increase if feet clip **into** the floor; decrease if she floats.
+ */
+const BOOTH_HOSTESS_FLOOR_LIFT = 0.075;
+/**
+ * Yaw (radians) around Y: turn the hostess so she faces visitors on the aisle.
+ * - `0` and `Math.PI` differ by 180° — use whichever matches your GLB’s forward axis.
+ * - Add small values (e.g. `±0.15`) for a slight angle toward the hall center.
+ */
+const BOOTH_HOSTESS_YAW = 0;
+/**
+ * Position inside desk group: feet near hall floor (booth y≈0 → desk-local y ≈ −BOOTH_DESK_GROUP_Y + lift).
+ * z = behind counter back edge.
+ */
+const BOOTH_HOSTESS_DESK_LOCAL: [number, number, number] = [
+  BOOTH_HOSTESS_DESK_LOCAL_X,
+  -BOOTH_DESK_GROUP_Y + BOOTH_HOSTESS_FLOOR_LIFT,
+  -(BOOTH_COUNTER_HALF_DEPTH_Z + BOOTH_HOSTESS_BACK_CLEARANCE),
+];
 
 /** Stable idle phase per booth / desk (desync motion). */
 function stringToPhase(s: string) {
@@ -34,8 +67,8 @@ function stringToPhase(s: string) {
 }
 
 /**
- * Luxury row booth definitions — one assistant is spawned per entry (see `Booth` + `BoothHostessGreeter`).
- * Vertex Elite custom plot is separate below.
+ * Luxury row booth definitions — one assistant per entry (see `Booth` + `BoothHostessGreeter`).
+ * Vertex Elite slot uses the same `Booth` geometry at `VERTEX_ELITE_HALL_*` (no separate canopy GLB).
  */
 const EXPO_LUXURY_BOOTHS_LEFT: {
   position: [number, number, number];
@@ -61,9 +94,6 @@ const EXPO_LUXURY_BOOTHS_RIGHT: {
   { position: [20, 0, 5], rotation: [0, -Math.PI / 2, 0], id: 'builder-5', name: 'THE MONARCH', color: '#fcf9f2', videoIndex: 4 },
   { position: [20, 0, 25], rotation: [0, -Math.PI / 2 - 0.16, 0], id: 'builder-6', name: 'HORIZON VISTAS', color: '#fdfbf5', videoIndex: 5 },
 ];
-/** Longest axis of the GLB in world units after load (tune to fit the slot) */
-const VERTEX_ELITE_MAX_DIM = 12;
-
 /**
  * World position [ X, Y, Z ] — change these to slide your model on the floor:
  *
@@ -88,17 +118,22 @@ const VERTEX_ELITE_HALL_ROTATION: [number, number, number] = [
   VERTEX_ELITE_ROTATION_Z,
 ];
 
+/** Optional header canopy logo (PNG); used e.g. for Vertex / Eldeco branding */
+const BOOTH_HEADER_LOGO_VERTEX = '/assets/edeco.png';
+
 export function Booths() {
   return (
     <group position={[0, 0, 0]}>
       {/* Central Featured Help Desk Zone */}
       <FeaturedProperty position={[0, 0, 0]} />
 
-      {/* Main Path Decorative Plants */}
-      <Plant position={[-5, 0, 15]} />
-      <Plant position={[5, 0, 15]} />
-      <Plant position={[-5, 0, 30]} />
-      <Plant position={[5, 0, 30]} />
+      {/* Main Path Decorative Plants (`tree.glb`) */}
+      <Suspense fallback={null}>
+        <Plant position={[-5, 0, 15]} scale={1.08} />
+        <Plant position={[5, 0, 15]} scale={1.08} />
+        <Plant position={[-5, 0, 30]} scale={0.92} />
+        <Plant position={[5, 0, 30]} scale={0.92} />
+      </Suspense>
 
       {/* Row of Luxury Booths Left — definitions in EXPO_LUXURY_BOOTHS_LEFT */}
       {EXPO_LUXURY_BOOTHS_LEFT.map((b) => (
@@ -113,13 +148,17 @@ export function Booths() {
           videoUrl={PROJECT_VIDEOS[b.videoIndex]}
         />
       ))}
-      {/* Vertex Elite: no procedural stall — only your GLB (see VertexEliteCustomOnly) */}
-      <Suspense fallback={null}>
-        <VertexEliteCustomOnly
-          position={VERTEX_ELITE_HALL_POSITION}
-          rotation={VERTEX_ELITE_HALL_ROTATION}
-        />
-      </Suspense>
+      <Booth
+        key="vertex-elite"
+        position={VERTEX_ELITE_HALL_POSITION}
+        rotation={VERTEX_ELITE_HALL_ROTATION}
+        id="vertex-elite"
+        name="VERTEX ELITE"
+        color="#fcfaf5"
+        accent="#d4af37"
+        videoUrl={PROJECT_VIDEOS[2]}
+        headerLogoUrl={BOOTH_HEADER_LOGO_VERTEX}
+      />
 
       {/* Row of Luxury Booths Right */}
       {EXPO_LUXURY_BOOTHS_RIGHT.map((b) => (
@@ -138,97 +177,80 @@ export function Booths() {
   );
 }
 
-/** Replaces the entire Vertex Elite procedural stall with only `VERTEX_ELITE_MODEL_URL`. */
-function VertexEliteCustomOnly({
-  position,
-  rotation,
+function BoothHeaderLogo({
+  url,
+  tagline,
+  accent,
 }: {
-  position: [number, number, number];
-  rotation: [number, number, number];
+  url: string;
+  tagline: string;
+  accent: string;
 }) {
-  const setActiveBooth = useStore((state) => state.setActiveBooth);
-  const { scene } = useGLTF(VERTEX_ELITE_MODEL_URL) as { scene: THREE.Object3D };
+  const tex = useTexture(url);
+  useLayoutEffect(() => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+  }, [tex]);
 
-  const scaled = useMemo(() => {
-    const root = scene.clone(true);
-    // Drop baked root rotation/scale from the exporter so the booth sits level on the floor
-    root.rotation.set(0, 0, 0);
-    root.scale.set(1, 1, 1);
-    root.updateMatrixWorld(true);
-    root.traverse((obj) => {
-      const m = obj as THREE.Mesh;
-      if (m.isMesh) {
-        m.castShadow = true;
-        m.receiveShadow = true;
-      }
-    });
-    const box = new THREE.Box3().setFromObject(root);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const max = Math.max(size.x, size.y, size.z, 1e-6);
-    root.scale.setScalar(VERTEX_ELITE_MAX_DIM / max);
-    root.updateMatrixWorld(true);
-    const box2 = new THREE.Box3().setFromObject(root);
-    const center = new THREE.Vector3();
-    box2.getCenter(center);
-    root.position.sub(center);
-    root.updateMatrixWorld(true);
-    const box3 = new THREE.Box3().setFromObject(root);
-    root.position.y -= box3.min.y;
-    return root;
-  }, [scene]);
+  const { logoW, logoH } = useMemo(() => {
+    const img = tex.image as { width?: number; height?: number } | undefined;
+    const aspect =
+      img?.width && img?.height && img.height > 0 ? img.width / img.height : 3.4;
+    const logoH = 0.7;
+    return { logoW: logoH * aspect, logoH };
+  }, [tex]);
 
   return (
-    <group position={position} rotation={rotation}>
-      <pointLight position={[0, 6, 0]} intensity={80} distance={35} decay={2} color="#ffffff" />
-      <spotLight
-        position={[4, 10, 4]}
-        angle={0.65}
-        penumbra={0.55}
-        intensity={120}
-        color="#fff5e6"
-        distance={40}
-        decay={2}
-        castShadow
-        target-position={[0, 2, 0]}
-      />
-
-      {/* Fine-tune offset after hall placement (small nudges only; main move = VERTEX_ELITE_HALL_POSITION) */}
-      <group position={[0, 0, 0]} rotation={[0, 0, 0]}>
-        <primitive object={scaled} />
-      </group>
-
-      <Suspense fallback={null}>
-        <ExpoHostessAvatar
-          position={[2.05, 0, 4.55]}
-          rotation={[0, -0.76, 0]}
-          idlePhase={stringToPhase('vertex-elite')}
+    <group position={[0, 6.5, -3.58]}>
+      <mesh castShadow>
+        <planeGeometry args={[logoW, logoH]} />
+        <meshStandardMaterial
+          map={tex}
+          transparent
+          alphaTest={0.12}
+          roughness={0.55}
+          metalness={0.05}
+          emissive="#ffffff"
+          emissiveIntensity={0.08}
+          polygonOffset
+          polygonOffsetFactor={-1}
         />
-      </Suspense>
-
-      <mesh
-        position={[0, 2, 0]}
-        visible={false}
-        onClick={(e) => {
-          e.stopPropagation();
-          const offset = rotation[1] > 0 ? 6 : -6;
-          setActiveBooth('VERTEX ELITE', [position[0] + offset, 1.7, position[2]]);
-          document.exitPointerLock();
-        }}
-        onPointerOver={() => {
-          document.body.style.cursor = 'pointer';
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = 'auto';
-        }}
-      >
-        <boxGeometry args={[10, 5, 8]} />
       </mesh>
+      <Text
+        position={[0, -0.52, 0.06]}
+        fontSize={0.26}
+        color={accent}
+        anchorX="center"
+        anchorY="middle"
+        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
+      >
+        {tagline}
+        <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.12} />
+      </Text>
     </group>
   );
 }
 
-function Booth({ position, rotation, id, name, color, accent, videoUrl }: any) {
+function Booth({
+  position,
+  rotation,
+  id,
+  name,
+  color,
+  accent,
+  videoUrl,
+  headerLogoUrl,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  id: string;
+  name: string;
+  color: string;
+  accent: string;
+  videoUrl: string;
+  headerLogoUrl?: string;
+}) {
   const setActiveBooth = useStore((state) => state.setActiveBooth);
 
   return (
@@ -275,18 +297,24 @@ function Booth({ position, rotation, id, name, color, accent, videoUrl }: any) {
         <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} />
       </mesh>
 
-      {/* Branding Text */}
-      <Text
-        position={[0, 6.5, -3.6]}
-        fontSize={0.8}
-        color={accent}
-        anchorX="center"
-        anchorY="middle"
-        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-      >
-        {name}
-        <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.15} />
-      </Text>
+      {/* Branding: optional PNG on canopy, else gold title only */}
+      {headerLogoUrl ? (
+        <Suspense fallback={null}>
+          <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={accent} />
+        </Suspense>
+      ) : (
+        <Text
+          position={[0, 6.5, -3.6]}
+          fontSize={0.8}
+          color={accent}
+          anchorX="center"
+          anchorY="middle"
+          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
+        >
+          {name}
+          <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.15} />
+        </Text>
+      )}
 
       {/* Interactive Concierge Desk */}
       <group position={[0, 0.5, 0]}>
@@ -330,6 +358,11 @@ function Booth({ position, rotation, id, name, color, accent, videoUrl }: any) {
         >
           <boxGeometry args={[5, 3, 3]} />
         </mesh>
+
+        {/* Hostess: behind reception counter, facing aisle (+Z booth local); anchored to desk group */}
+        <Suspense fallback={null}>
+          <BoothHostessGreeter boothId={id} />
+        </Suspense>
       </group>
 
       {/* Main Display Screen (Large TV) */}
@@ -367,11 +400,6 @@ function Booth({ position, rotation, id, name, color, accent, videoUrl }: any) {
         </Box>
       </group>
 
-      <Suspense fallback={null}>
-        <BoothHostessGreeter side={rotation[1] > 0 ? 'left' : 'right'} boothId={id} />
-      </Suspense>
-
-      {/* Promotional standee outside booth (aisle side, local +Z) */}
       <BoothStandee name={name} accent={accent} />
     </group>
   );
@@ -447,16 +475,48 @@ function BoothStandee({ name, accent }: { name: string; accent: string }) {
   );
 }
 
-function Plant({ position }: { position: [number, number, number] }) {
+function prepareHallTreeModel(source: THREE.Object3D, heightScale: number) {
+  const root = source.clone(true) as THREE.Object3D;
+  root.rotation.set(0, 0, 0);
+  root.scale.set(1, 1, 1);
+  root.updateMatrixWorld(true);
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (m.isMesh) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.frustumCulled = true;
+    }
+  });
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const h = Math.max(size.y, 1e-6);
+  root.scale.setScalar((HALL_TREE_TARGET_HEIGHT / h) * heightScale);
+  root.updateMatrixWorld(true);
+  const box2 = new THREE.Box3().setFromObject(root);
+  const c = new THREE.Vector3();
+  box2.getCenter(c);
+  root.position.sub(c);
+  root.updateMatrixWorld(true);
+  const box3 = new THREE.Box3().setFromObject(root);
+  root.position.y -= box3.min.y;
+  root.updateMatrixWorld(true);
+  return root;
+}
+
+function Plant({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
+  const { scene } = useGLTF(HALL_TREE_MODEL_URL) as { scene: THREE.Object3D };
+  const model = useMemo(() => prepareHallTreeModel(scene, scale), [scene, scale]);
   return (
     <group position={position}>
-      <Cylinder args={[0.5, 0.4, 1, 16]} position={[0, 0.5, 0]} castShadow>
-        <meshStandardMaterial color="#fcfcfc" roughness={0.2} metalness={0.1} />
-      </Cylinder>
-      <mesh position={[0, 1.5, 0]} castShadow>
-        <sphereGeometry args={[0.8, 16, 16]} />
-        <meshStandardMaterial color="#1a4d2e" roughness={0.9} />
-      </mesh>
+      <primitive object={model} />
     </group>
   );
 }
@@ -530,58 +590,31 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
 
   return (
     <group position={position}>
-      {/* --- RECESSED FLOOR ARCHITECTURE --- */}
+      {/* --- CIRCULAR HELP DESK (on main hall floor — recessed stage disc removed) --- */}
       <group position={[0, 0, 0]}>
-        {/* Large Outer Trim Ring */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
-          <ringGeometry args={[11.5, 12, 128]} />
-          <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} transparent opacity={0.6} />
-        </mesh>
-
-        {/* Recessed Marble Layer */}
-        <mesh position={[0, 0.05, 0]} receiveShadow>
-          <cylinderGeometry args={[11, 11.2, 0.1, 128]} />
-          <meshStandardMaterial color="#fcf9f2" roughness={0.3} metalness={0.1} />
-        </mesh>
-
-        {/* Embedded Warm LED Ring */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.11, 0]}>
-          <ringGeometry args={[10.5, 10.7, 128]} />
-          <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={2} />
-        </mesh>
-
-        {/* Inner Floor Cutout Styling */}
-        <mesh position={[0, 0.08, 0]} receiveShadow>
-          <cylinderGeometry args={[10.3, 10.3, 0.05, 128]} />
-          <meshStandardMaterial color="#ffffff" roughness={0.05} metalness={0.2} />
-        </mesh>
-      </group>
-
-      {/* --- CIRCULAR HELP DESK (Recessed into Floor) --- */}
-      <group position={[0, 0.08, 0]}>
         {/* Main Circular Counter Structure */}
         <group rotation={[0, -Math.PI / 6, 0]}>
           {/* Desk Body (Polished White Marble) */}
           <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
-            <cylinderGeometry args={[5.8, 5.8, 1.1, 128, 1, true, 0, Math.PI * 1.6]} />
+            <cylinderGeometry args={[5.8, 5.8, 1.1, 128, 1, true, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#ffffff" roughness={0.1} metalness={0.1} side={THREE.DoubleSide} />
           </mesh>
 
           {/* Champagne Gold Mid-Belt Detail */}
           <mesh position={[0, 0.55, 0]}>
-            <cylinderGeometry args={[5.82, 5.82, 0.3, 128, 1, true, 0, Math.PI * 1.6]} />
+            <cylinderGeometry args={[5.82, 5.82, 0.3, 128, 1, true, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.1} side={THREE.DoubleSide} />
           </mesh>
 
           {/* Desk Top Surface (Premium Marble) */}
           <mesh position={[0, 1.1, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <ringGeometry args={[5, 5.85, 128, 1, 0, Math.PI * 1.6]} />
+            <ringGeometry args={[5, 5.85, 128, 1, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#ffffff" roughness={0.05} metalness={0.2} side={THREE.DoubleSide} />
           </mesh>
 
           {/* Under-counter LED Glow */}
           <mesh position={[0, 1.05, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[5.7, 5.8, 128, 1, 0, Math.PI * 1.6]} />
+            <ringGeometry args={[5.7, 5.8, 128, 1, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={1.5} side={THREE.DoubleSide} />
           </mesh>
 
@@ -615,13 +648,13 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
             </Text>
           </group>
 
-          {/* Integrated iMac-style Stations */}
+          {/* Integrated iMac-style stations — evenly spaced on full ring */}
           {Array.from({ length: 5 }).map((_, i) => {
-            const angle = 0.5 + i * 0.7;
+            const angle = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
             const x = 5.3 * Math.cos(angle);
             const z = 5.3 * Math.sin(angle);
             return (
-              <group key={i} position={[x, 0.85, z]} rotation={[0, -angle - Math.PI/2, 0]}>
+              <group key={i} position={[x, 0.85, z]} rotation={[0, -angle - Math.PI / 2, 0]}>
                 <mesh position={[0, 0, 0]}>
                   <boxGeometry args={[0.6, 0.4, 0.02]} />
                   <meshStandardMaterial color="#111" metalness={0.9} roughness={0.1} />
@@ -735,6 +768,16 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
   );
 }
 
+/** Sketchfab / numbered bones like `LeftArm_013`, `Hips_01` (see `scene (3).glb`). */
+function hasScene3HostRig(root: THREE.Object3D) {
+  let found = false;
+  root.traverse((o) => {
+    const b = o as THREE.Bone;
+    if (b.isBone && (b.name === 'Hips_01' || /^LeftForeArm1_/.test(b.name))) found = true;
+  });
+  return found;
+}
+
 function hasFoldableArmRig(root: THREE.Object3D) {
   let found = false;
   root.traverse((o) => {
@@ -744,7 +787,35 @@ function hasFoldableArmRig(root: THREE.Object3D) {
   return found;
 }
 
-/** Optional reception pose for rigs that match office-girl bone names. */
+/**
+ * Reception pose for `scene (3).glb`: small **additive** Euler deltas on the main arm chain only.
+ * Do not touch forearm *twist* bones (`LeftForeArm1_` …) — they are chest-weighted and cause tearing.
+ * Do not use broad regexes (they can hit unintended nodes on dense rigs).
+ */
+function applyScene3ReceptionPose(root: THREE.Object3D) {
+  const addAllNamed = (name: string, dx: number, dy: number, dz: number) => {
+    root.traverse((o) => {
+      const b = o as THREE.Bone;
+      if (b.isBone && b.name === name) {
+        b.rotation.x += dx;
+        b.rotation.y += dy;
+        b.rotation.z += dz;
+      }
+    });
+  };
+
+  // “Hands low, modest clasp” — symmetric; keeps wrists below chest to avoid stop-gesture / behind-back look
+  addAllNamed('LeftShoulder_012', 0.025, 0.07, -0.035);
+  addAllNamed('RightShoulder_038', 0.025, -0.07, 0.035);
+  addAllNamed('LeftArm_013', 0.42, 0.04, -0.14);
+  addAllNamed('RightArm_039', 0.42, -0.04, 0.14);
+  addAllNamed('LeftForeArm_014', 0.4, 0, 0.02);
+  addAllNamed('RightForeArm_040', 0.4, 0, -0.02);
+  addAllNamed('LeftHand_017', 0.06, -0.12, 0.04);
+  addAllNamed('RightHand_043', 0.06, 0.12, -0.04);
+}
+
+/** Optional reception pose for rigs that match older office-girl bone names (absolute rotations). */
 function applyFoldedHandsPose(root: THREE.Object3D) {
   const apply = (re: RegExp, rx: number, ry: number, rz: number) => {
     root.traverse((o) => {
@@ -764,7 +835,10 @@ function applyFoldedHandsPose(root: THREE.Object3D) {
   apply(/^RightHand_[0-9]/, 0.22, 0.38, -0.12);
 }
 
-function prepareHostessModel(sourceScene: THREE.Object3D) {
+function prepareHostessModel(
+  sourceScene: THREE.Object3D,
+  opts?: { skipManualArmPose?: boolean }
+) {
   const root = cloneSkinnedHierarchy(sourceScene) as THREE.Object3D;
   root.rotation.set(0, 0, 0);
   root.scale.set(1, 1, 1);
@@ -790,9 +864,14 @@ function prepareHostessModel(sourceScene: THREE.Object3D) {
   box2.getCenter(c);
   root.position.sub(c);
   root.updateMatrixWorld(true);
-  if (hasFoldableArmRig(root)) {
-    applyFoldedHandsPose(root);
-    root.updateMatrixWorld(true);
+  if (!opts?.skipManualArmPose) {
+    if (hasScene3HostRig(root)) {
+      applyScene3ReceptionPose(root);
+      root.updateMatrixWorld(true);
+    } else if (hasFoldableArmRig(root)) {
+      applyFoldedHandsPose(root);
+      root.updateMatrixWorld(true);
+    }
   }
   const box3 = new THREE.Box3().setFromObject(root);
   root.position.y -= box3.min.y;
@@ -815,7 +894,20 @@ function ExpoHostessAvatar({
     animations: THREE.AnimationClip[];
   };
 
-  const model = useMemo(() => prepareHostessModel(scene), [scene]);
+  const animCount = animations?.length ?? 0;
+  const model = useMemo(
+    () => prepareHostessModel(scene, { skipManualArmPose: animCount > 0 }),
+    [scene, animCount]
+  );
+
+  /** Hips_01 / Mixamo-style rig: without a baked clip, skip spine/forearm procedural idle. */
+  const isScene3Hostess = useMemo(() => {
+    let ok = false;
+    model.traverse((o) => {
+      if (o.name === 'Hips_01') ok = true;
+    });
+    return ok;
+  }, [model]);
 
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const idleBonesRef = useRef<{
@@ -885,18 +977,19 @@ function ExpoHostessAvatar({
 
     const procedural = !animations?.length;
     if (procedural) {
+      const headAmp = isScene3Hostess ? 0.35 : 1;
       if (rec.head && rec.baseHead) {
-        rec.head.rotation.x = rec.baseHead.x + Math.sin(t * 0.92 + ph) * 0.028;
-        rec.head.rotation.y = rec.baseHead.y + Math.sin(t * 0.71 + ph * 1.7) * 0.048;
+        rec.head.rotation.x = rec.baseHead.x + Math.sin(t * 0.92 + ph) * 0.028 * headAmp;
+        rec.head.rotation.y = rec.baseHead.y + Math.sin(t * 0.71 + ph * 1.7) * 0.048 * headAmp;
       }
-      if (rec.spine && rec.baseSpine) {
+      if (!isScene3Hostess && rec.spine && rec.baseSpine) {
         rec.spine.rotation.x = rec.baseSpine.x + Math.sin(t * 2.05 + ph) * 0.017;
       }
-      if (rec.lFore && rec.baseLFore) {
+      if (!isScene3Hostess && rec.lFore && rec.baseLFore) {
         rec.lFore.rotation.x = rec.baseLFore.x + Math.sin(t * 1.22 + ph) * 0.032;
         rec.lFore.rotation.z = rec.baseLFore.z + Math.sin(t * 1.04 + ph * 0.5) * 0.036;
       }
-      if (rec.rFore && rec.baseRFore) {
+      if (!isScene3Hostess && rec.rFore && rec.baseRFore) {
         rec.rFore.rotation.x = rec.baseRFore.x + Math.sin(t * 1.19 + ph * 1.08) * 0.032;
         rec.rFore.rotation.z = rec.baseRFore.z + Math.sin(t * 1.06 + ph * 0.55) * 0.036;
       }
@@ -913,16 +1006,13 @@ function ExpoHostessAvatar({
 }
 
 /**
- * Reception-side hostess: between concierge desk (+Z) and standee, offset from TV / back wall,
- * rotated toward the main aisle (visitor path).
+ * Behind the procedural reception counter (parent = desk group). Faces +Z booth local (aisle).
  */
-function BoothHostessGreeter({ side, boothId }: { side: 'left' | 'right'; boothId: string }) {
-  const yawTowardAisle = side === 'left' ? 0.24 : -0.24;
-  const baseFace = side === 'left' ? Math.PI : 0;
+function BoothHostessGreeter({ boothId }: { boothId: string }) {
   return (
     <ExpoHostessAvatar
-      position={[-1.02, 0, 2.66]}
-      rotation={[0, baseFace + yawTowardAisle, 0]}
+      position={BOOTH_HOSTESS_DESK_LOCAL}
+      rotation={[0, BOOTH_HOSTESS_YAW, 0]}
       idlePhase={stringToPhase(boothId)}
     />
   );
@@ -938,5 +1028,5 @@ function HelpDeskCustomGirl() {
   );
 }
 
-useGLTF.preload(VERTEX_ELITE_MODEL_URL);
 useGLTF.preload(HOSTESS_MODEL_URL);
+useGLTF.preload(HALL_TREE_MODEL_URL);
