@@ -8,6 +8,12 @@ const ROAMING_NPC_MODEL_URL = '/assets/scanned_animated_walking_man.glb';
 const EXECUTIVE_MAX_HEIGHT = 1.82;
 const EXECUTIVE_MAX_WIDTH = 2.2;
 
+/**
+ * When false: NPC stays at spawn, animation is sampled once then paused — no looping walk / patrol.
+ * Set to true to restore hall patrol + looping locomotion clips.
+ */
+const EXECUTIVE_PATROL_ENABLED = false;
+
 /** Max world speed (m/s) after smoothing */
 const WALK_MAX_SPEED = 1.55;
 const ACCEL = 5.2;
@@ -169,8 +175,9 @@ export function RoamingExecutive() {
     idle.play();
     idleActionRef.current = idle;
 
+    let walk: THREE.AnimationAction | null = null;
     if (walkClip && walkClip !== idleClip) {
-      const walk = mixer.clipAction(walkClip);
+      walk = mixer.clipAction(walkClip);
       walk.setLoop(THREE.LoopRepeat, Infinity);
       walk.clampWhenFinished = false;
       walk.enabled = true;
@@ -179,6 +186,15 @@ export function RoamingExecutive() {
       walkActionRef.current = walk;
       walkClipRef.current = walkClip;
       hasSeparateWalkRef.current = true;
+    }
+
+    if (!EXECUTIVE_PATROL_ENABLED) {
+      mixer.update(0.35);
+      idle.paused = true;
+      if (walk) {
+        walk.paused = true;
+        walk.setEffectiveWeight(0);
+      }
     }
 
     return () => {
@@ -232,6 +248,8 @@ export function RoamingExecutive() {
   }, [destinations]);
 
   useFrame((state, delta) => {
+    if (!EXECUTIVE_PATROL_ENABLED) return;
+
     // Must use `delta` from useFrame — the loop already called clock.getDelta();
     // calling getDelta() here again yields ~0 and the AnimationMixer never advances.
     const dt = Math.min(delta, MAX_DELTA);

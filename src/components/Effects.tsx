@@ -1,23 +1,23 @@
-import { Bloom, EffectComposer, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing';
+import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing';
+import { ToneMappingMode } from 'postprocessing';
 import { HalfFloatType } from 'three';
 
 /**
- * Stable cinematic post stack: multisampled buffer, adaptive tone map,
- * conservative bloom (no mipmap blur on video), SMAA for edge AA, light vignette.
+ * Lightweight post stack (fewer passes + no mipmap Bloom = smoother on low-end GPUs).
+ * Tune Bloom `intensity` / `luminanceThreshold` if LEDs look too flat or too hot.
  */
 export function Effects() {
   return (
-    <EffectComposer multisampling={8} frameBufferType={HalfFloatType}>
+    <EffectComposer multisampling={0} frameBufferType={HalfFloatType}>
       <Bloom
-        luminanceThreshold={2.05}
-        luminanceSmoothing={0.12}
+        luminanceThreshold={1.85}
+        luminanceSmoothing={0.22}
         mipmapBlur={false}
-        intensity={0.2}
-        radius={0.22}
+        intensity={0.15}
+        radius={0.3}
       />
-      <ToneMapping adaptive />
-      <Vignette eskil={false} offset={0.22} darkness={0.42} />
-      <SMAA />
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} whitePoint={3.6} middleGrey={0.6} />
+      <Vignette eskil={false} offset={0.22} darkness={0.32} />
     </EffectComposer>
   );
 }

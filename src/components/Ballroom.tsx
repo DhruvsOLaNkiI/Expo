@@ -1,5 +1,5 @@
 import { Text, Box, useGLTF } from '@react-three/drei';
-import { Suspense, useMemo } from 'react';
+import { Suspense, useMemo, useRef, useLayoutEffect } from 'react';
 import * as THREE from 'three';
 import schoolChairUrl from '../../school-chair/school_chair.glb?url';
 import { LedVideoPlane } from './LedVideoPlane';
@@ -108,14 +108,20 @@ export function Ballroom() {
         position={[0, 8, -8.3]}
         fontSize={1.2}
         color="#d4af37"
+        sdfGlyphSize={192}
         font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
       >
         Yamuna Expressway DIGITAL Property Expo
       </Text>
       <Text
-        position={[0, 5, -8.3]}
+        position={[0, 5, -8.28]}
         fontSize={1.5}
-        color="#ffffffff"
+        color="#ebe8e2"
+        maxWidth={28}
+        textAlign="center"
+        sdfGlyphSize={256}
+        outlineWidth={0}
+        strokeWidth={0}
         font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
       >
         Digital Broker.in
@@ -148,26 +154,59 @@ export function Ballroom() {
         );
       })}
 
-      {/* Stage Lighting */}
-      <spotLight
+      {/* Soft fill on backdrop — reduces harsh under-screen shadows */}
+      <pointLight position={[0, 6.2, -6]} intensity={14} distance={22} decay={2} color="#f5f0e8" />
+
+      {/* Stage Lighting — aimed at screen (invalid target-position was ignored before) */}
+      <BallroomSpot
         position={[-15, 12, 5]}
-        angle={Math.PI / 6}
-        penumbra={0.5}
-        intensity={50}
-        color="#ffddaa"
-        castShadow
-        target-position={[0, 2, -4]}
+        target={[0, 6, -8.2]}
+        intensity={38}
       />
-      <spotLight
+      <BallroomSpot
         position={[15, 12, 5]}
-        angle={Math.PI / 6}
-        penumbra={0.5}
-        intensity={50}
-        color="#ffddaa"
-        castShadow
-        target-position={[0, 2, -4]}
+        target={[0, 6, -8.2]}
+        intensity={38}
       />
     </group>
+  );
+}
+
+function BallroomSpot({
+  position,
+  target,
+  intensity,
+}: {
+  position: [number, number, number];
+  target: [number, number, number];
+  intensity: number;
+}) {
+  const lightRef = useRef<THREE.SpotLight>(null);
+  const targetRef = useRef<THREE.Group>(null);
+  useLayoutEffect(() => {
+    const L = lightRef.current;
+    const T = targetRef.current;
+    if (!L || !T) return;
+    L.target = T;
+    L.target.updateMatrixWorld();
+  }, []);
+  return (
+    <>
+      <spotLight
+        ref={lightRef}
+        position={position}
+        angle={Math.PI / 5.5}
+        penumbra={0.78}
+        intensity={intensity}
+        color="#ffddaa"
+        distance={55}
+        decay={2}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-bias={-0.0001}
+      />
+      <group ref={targetRef} position={target} />
+    </>
   );
 }
 

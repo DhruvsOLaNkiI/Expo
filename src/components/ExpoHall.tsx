@@ -1,7 +1,7 @@
 import { Torus } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../store';
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useRef, useLayoutEffect } from 'react';
 import { LedVideoPlane } from './LedVideoPlane';
 
 export function ExpoHall() {
@@ -59,10 +59,17 @@ export function ExpoHall() {
         </mesh>
       )}
 
-      {/* ======= CEILING ======= */}
+      {/* ======= CEILING ======= (slightly deeper tone vs walls; polygonOffset avoids z-fight with cove soffit) */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, ceilingY, 0]} receiveShadow>
         <planeGeometry args={[hallSize, hallSize]} />
-        <meshStandardMaterial color="#fdfaf5" roughness={0.9} />
+        <meshStandardMaterial
+          color="#ebe6df"
+          roughness={0.92}
+          metalness={0.04}
+          polygonOffset
+          polygonOffsetFactor={1}
+          polygonOffsetUnits={1}
+        />
       </mesh>
 
       {/* Architectural Ceiling Rings (Bharat Mandapam vibe) */}
@@ -84,6 +91,14 @@ export function ExpoHall() {
         <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.6} />
       </mesh>
 
+      {/* Hidden warm LED cove — strip sits in ceiling recess; only soft wash reads on panels */}
+      <HallPerimeterCoveWash
+        halfHall={halfHall}
+        ceilingY={ceilingY}
+        wallHeight={wallHeight}
+        hallSize={hallSize}
+      />
+
       {/* ======= OUTER WALLS ======= */}
       <Wall position={[0, wallHeight / 2, -halfHall]} rotation={[0, 0, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
       <Wall position={[0, wallHeight / 2, halfHall]} rotation={[0, Math.PI, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
@@ -92,17 +107,6 @@ export function ExpoHall() {
 
       {/* ======= ENTRANCE LOBBY ======= */}
       <group position={[0, 0, entranceZ]}>
-        {/* Signage Screen with Video */}
-        <group position={[0, 8, 1.9]} rotation={[0, Math.PI, 0]}>
-          <mesh>
-            <planeGeometry args={[20, 5]} />
-            <meshStandardMaterial color="#111" roughness={0.2} metalness={0.8} />
-          </mesh>
-          <Suspense fallback={<meshBasicMaterial color="#111" />}>
-            <LedVideoPlane args={[19.8, 4.8]} url="/expo-led-video.mp4" />
-          </Suspense>
-        </group>
-
         {/* Reception Desk */}
         <group position={[0, 0.5, -4]}>
           <mesh position={[0, 0, 0]} castShadow>
@@ -115,7 +119,7 @@ export function ExpoHall() {
           </mesh>
         </group>
 
-        {/* Large Reception Banner */}
+        {/* Large Reception Banner (Single Premium Display) */}
         <group position={[0, 6, -4.5]} rotation={[0, Math.PI, 0]}>
           {/* Support Pillars */}
           <mesh position={[-8.1, -3, 0]}>
@@ -127,12 +131,14 @@ export function ExpoHall() {
             <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
           </mesh>
 
-          <mesh position={[0, 0, -0.1]}>
-            <planeGeometry args={[16.2, 9.2]} />
-            <meshStandardMaterial color="#000" metalness={1} roughness={0.1} />
-          </mesh>
-          <Suspense fallback={<meshBasicMaterial color="#111" />}>
-            <LedVideoPlane args={[16, 9]} url="/expo-led-video.mp4" />
+          {/* Main LED Video Panel */}
+          <Suspense fallback={
+            <mesh position={[0, 0, -0.1]}>
+              <planeGeometry args={[16.2, 9.2]} />
+              <meshStandardMaterial color="#080808" metalness={0.8} roughness={0.2} />
+            </mesh>
+          }>
+            <LedVideoPlane args={[16.2, 9.2]} url="/expo-led-video.mp4" position={[0, 0, -0.1]} />
           </Suspense>
 
           {/* Decorative frame */}
@@ -161,6 +167,207 @@ export function ExpoHall() {
   );
 }
 
+const COVE_SOFFIT_MAT = {
+  color: '#9c958c',
+  roughness: 0.98,
+  metalness: 0.02,
+} as const;
+
+const COVE_LIP_MAT = {
+  color: '#8a847b',
+  roughness: 0.97,
+  metalness: 0.03,
+} as const;
+
+/** Recessed perimeter cove + hidden RectAreaLights — warm wash on wall panels only */
+function HallPerimeterCoveWash({
+  halfHall,
+  ceilingY,
+  wallHeight,
+  hallSize,
+}: {
+  halfHall: number;
+  ceilingY: number;
+  wallHeight: number;
+  hallSize: number;
+}) {
+  const stripLen = hallSize - 2.4;
+  const ly = ceilingY - 0.11;
+  const inset = 0.095;
+  const warm = '#ffecd8';
+  /** Nits — was too low vs hall floods (300+ spot + 0.48 ambient); needs headroom to read on walls */
+  const intensity = 88;
+  const narrow = 0.14;
+  const soffitT = 0.11;
+  const soffitD = 0.42;
+  const lipH = 0.28;
+  const lipT = 0.078;
+  const edgeTrim = 1.2;
+  const span = hallSize - edgeTrim * 2;
+
+  return (
+    <group>
+      {/* North (+Z into hall) */}
+      <mesh castShadow receiveShadow position={[0, ceilingY - soffitT / 2, -halfHall + soffitD / 2 + 0.02]}>
+        <boxGeometry args={[span, soffitT, soffitD]} />
+        <meshStandardMaterial {...COVE_SOFFIT_MAT} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[0, ceilingY - soffitT - lipH / 2, -halfHall + soffitD - lipT / 2 + 0.02]}>
+        <boxGeometry args={[span, lipH, lipT]} />
+        <meshStandardMaterial {...COVE_LIP_MAT} />
+      </mesh>
+      <CoveStripLight
+        position={[0, ly, -halfHall + inset]}
+        target={[0, ly - wallHeight * 0.22, -halfHall]}
+        width={stripLen}
+        height={narrow}
+        color={warm}
+        intensity={intensity}
+      />
+      <CoveWallSpot
+        position={[0, ceilingY - 0.14, -halfHall + 0.26]}
+        target={[0, ceilingY - 2.35, -halfHall]}
+        color={warm}
+      />
+
+      {/* South */}
+      <mesh castShadow receiveShadow position={[0, ceilingY - soffitT / 2, halfHall - soffitD / 2 - 0.02]}>
+        <boxGeometry args={[span, soffitT, soffitD]} />
+        <meshStandardMaterial {...COVE_SOFFIT_MAT} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[0, ceilingY - soffitT - lipH / 2, halfHall - soffitD + lipT / 2 - 0.02]}>
+        <boxGeometry args={[span, lipH, lipT]} />
+        <meshStandardMaterial {...COVE_LIP_MAT} />
+      </mesh>
+      <CoveStripLight
+        position={[0, ly, halfHall - inset]}
+        target={[0, ly - wallHeight * 0.22, halfHall]}
+        width={stripLen}
+        height={narrow}
+        color={warm}
+        intensity={intensity}
+      />
+      <CoveWallSpot
+        position={[0, ceilingY - 0.14, halfHall - 0.26]}
+        target={[0, ceilingY - 2.35, halfHall]}
+        color={warm}
+      />
+
+      {/* West */}
+      <mesh castShadow receiveShadow position={[-halfHall + soffitD / 2 + 0.02, ceilingY - soffitT / 2, 0]}>
+        <boxGeometry args={[soffitD, soffitT, span]} />
+        <meshStandardMaterial {...COVE_SOFFIT_MAT} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[-halfHall + soffitD - lipT / 2 + 0.02, ceilingY - soffitT - lipH / 2, 0]}>
+        <boxGeometry args={[lipT, lipH, span]} />
+        <meshStandardMaterial {...COVE_LIP_MAT} />
+      </mesh>
+      <CoveStripLight
+        position={[-halfHall + inset, ly, 0]}
+        target={[-halfHall, ly - wallHeight * 0.22, 0]}
+        width={stripLen}
+        height={narrow}
+        color={warm}
+        intensity={intensity}
+      />
+      <CoveWallSpot
+        position={[-halfHall + 0.26, ceilingY - 0.14, 0]}
+        target={[-halfHall, ceilingY - 2.35, 0]}
+        color={warm}
+      />
+
+      {/* East */}
+      <mesh castShadow receiveShadow position={[halfHall - soffitD / 2 - 0.02, ceilingY - soffitT / 2, 0]}>
+        <boxGeometry args={[soffitD, soffitT, span]} />
+        <meshStandardMaterial {...COVE_SOFFIT_MAT} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[halfHall - soffitD + lipT / 2 - 0.02, ceilingY - soffitT - lipH / 2, 0]}>
+        <boxGeometry args={[lipT, lipH, span]} />
+        <meshStandardMaterial {...COVE_LIP_MAT} />
+      </mesh>
+      <CoveStripLight
+        position={[halfHall - inset, ly, 0]}
+        target={[halfHall, ly - wallHeight * 0.22, 0]}
+        width={stripLen}
+        height={narrow}
+        color={warm}
+        intensity={intensity}
+      />
+      <CoveWallSpot
+        position={[halfHall - 0.26, ceilingY - 0.14, 0]}
+        target={[halfHall, ceilingY - 2.35, 0]}
+        color={warm}
+      />
+    </group>
+  );
+}
+
+/** Wide warm spot from cove — RectArea alone was drowned by hall floods; strip stays hidden in recess */
+function CoveWallSpot({
+  position,
+  target,
+  color,
+}: {
+  position: [number, number, number];
+  target: [number, number, number];
+  color: string;
+}) {
+  const lightRef = useRef<THREE.SpotLight>(null);
+  const targetRef = useRef<THREE.Group>(null);
+  const [px, py, pz] = position;
+  const [tx, ty, tz] = target;
+  useLayoutEffect(() => {
+    const L = lightRef.current;
+    const T = targetRef.current;
+    if (!L || !T) return;
+    L.target = T;
+    L.target.updateMatrixWorld();
+  }, []);
+  return (
+    <>
+      <spotLight
+        ref={lightRef}
+        position={[px, py, pz]}
+        color={color}
+        intensity={78}
+        distance={56}
+        decay={2}
+        angle={0.72}
+        penumbra={0.96}
+        castShadow={false}
+      />
+      <group ref={targetRef} position={[tx, ty, tz]} />
+    </>
+  );
+}
+
+function CoveStripLight({
+  position,
+  target,
+  width,
+  height,
+  color,
+  intensity,
+}: {
+  position: [number, number, number];
+  target: [number, number, number];
+  width: number;
+  height: number;
+  color: string;
+  intensity: number;
+}) {
+  const ref = useRef<THREE.RectAreaLight>(null);
+  const [px, py, pz] = position;
+  const [tx, ty, tz] = target;
+  useLayoutEffect(() => {
+    const L = ref.current;
+    if (!L) return;
+    L.position.set(px, py, pz);
+    L.lookAt(tx, ty, tz);
+  }, [px, py, pz, tx, ty, tz, width, height, color, intensity]);
+  return <rectAreaLight ref={ref} args={[color, intensity, width, height]} />;
+}
+
 function Wall({
   position,
   rotation,
@@ -176,29 +383,34 @@ function Wall({
   const panelGap = wallWidth / panelCount;
   return (
     <group position={position} rotation={rotation}>
-      <mesh receiveShadow>
+      <mesh receiveShadow castShadow>
         <planeGeometry args={[wallWidth, wallHeight]} />
-        <meshStandardMaterial color="#fcf9f2" roughness={0.9} metalness={0.05} />
+        <meshStandardMaterial
+          color="#e4e0d8"
+          roughness={0.96}
+          metalness={0.02}
+          envMapIntensity={0.38}
+        />
       </mesh>
 
       {/* Decorative Vertical Gold Panels */}
       {Array.from({ length: panelCount }).map((_, i) => (
         <mesh key={i} position={[-wallWidth / 2 + panelGap / 2 + i * panelGap, 0, 0.1]} castShadow receiveShadow>
           <boxGeometry args={[0.8, wallHeight - 2, 0.15]} />
-          <meshStandardMaterial color="#d4af37" metalness={0.85} roughness={0.15} />
+          <meshStandardMaterial color="#d4af37" metalness={0.85} roughness={0.15} envMapIntensity={1.1} />
         </mesh>
       ))}
 
       {/* Gold Trim */}
-      <mesh position={[0, wallHeight / 2 - 0.5, 0.1]} castShadow>
+      <mesh position={[0, wallHeight / 2 - 0.5, 0.1]} castShadow receiveShadow>
         <boxGeometry args={[wallWidth, 0.5, 0.2]} />
-        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} envMapIntensity={1.05} />
       </mesh>
 
       {/* Bottom Gold Skirting */}
-      <mesh position={[0, -wallHeight / 2 + 0.2, 0.1]}>
+      <mesh position={[0, -wallHeight / 2 + 0.2, 0.1]} castShadow receiveShadow>
         <boxGeometry args={[wallWidth, 0.4, 0.15]} />
-        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} envMapIntensity={1.05} />
       </mesh>
     </group>
   );

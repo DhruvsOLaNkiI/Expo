@@ -1,6 +1,16 @@
 import { Environment } from '@react-three/drei';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+
+/** Required once for WebGL — enables physically based wall wash from RectAreaLights */
+let rectAreaLightUniformsReady = false;
+function ensureRectAreaLightUniforms() {
+  if (rectAreaLightUniformsReady) return;
+  RectAreaLightUniformsLib.init();
+  rectAreaLightUniformsReady = true;
+}
 
 export function Lighting() {
+  ensureRectAreaLightUniforms();
   return (
     <>
       {/* Soft sky/ground fill — lifts crushed blacks, reduces shadow noise */}
@@ -14,7 +24,7 @@ export function Lighting() {
         intensity={1.35}
         color="#fffaf0"
         castShadow
-        shadow-mapSize={[4096, 4096]}
+        shadow-mapSize={[1024, 1024]}
         shadow-camera-near={0.5}
         shadow-camera-far={140}
         shadow-camera-left={-58}

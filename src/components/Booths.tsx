@@ -1,22 +1,17 @@
 import { Text, Box, Cylinder, Torus, useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useStore } from '../store';
-import { Suspense, useRef, useMemo, useLayoutEffect } from 'react';
+import { Suspense, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { LedVideoPlane } from './LedVideoPlane';
-
-const PROJECT_VIDEOS = [
-  "/13391496_3840_2160_60fps.mp4",
-  "/13391496_3840_2160_60fps.mp4",
-  "/13391496_3840_2160_60fps.mp4",
-  "/13391496_3840_2160_60fps.mp4",
-  "/13391496_3840_2160_60fps.mp4",
-  "/13391496_3840_2160_60fps.mp4"
-];
+import { LedScreenSurface } from './LedVideoPlane';
+import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
+import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
+import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
+import { applyBoothOverrides, buildDefaultBoothLayoutList, type PlacedImage } from '../data/boothLayouts';
 
 /**
- * Vertex Elite uses the same procedural `Booth` shell as other luxury stalls (`VERTEX_ELITE_HALL_*`).
+ * Vertex Elite uses the same procedural `Booth` shell as other luxury stalls; defaults live in `src/data/boothLayouts.ts` (overridable via Booth CMS + `public/booth-cms.json`).
  * Hostess: `public/assets/indian_office_woman.glb` (Mixamo rig + idle clip).
  */
 const HOSTESS_MODEL_URL = '/assets/indian_office_woman.glb';
@@ -66,62 +61,19 @@ function stringToPhase(s: string) {
   return h * 0.001 * Math.PI;
 }
 
-/**
- * Luxury row booth definitions — one assistant per entry (see `Booth` + `BoothHostessGreeter`).
- * Vertex Elite slot uses the same `Booth` geometry at `VERTEX_ELITE_HALL_*` (no separate canopy GLB).
- */
-const EXPO_LUXURY_BOOTHS_LEFT: {
-  position: [number, number, number];
-  rotation: [number, number, number];
-  id: string;
-  name: string;
-  color: string;
-  videoIndex: number;
-}[] = [
-  { position: [-20, 0, -15], rotation: [0, Math.PI / 2 - 0.16, 0], id: 'builder-1', name: 'LUXE TOWERS', color: '#fcfaf5', videoIndex: 0 },
-  { position: [-20, 0, 5], rotation: [0, Math.PI / 2, 0], id: 'builder-2', name: 'AURUM RESIDENCES', color: '#fcf9f2', videoIndex: 1 },
-];
-
-const EXPO_LUXURY_BOOTHS_RIGHT: {
-  position: [number, number, number];
-  rotation: [number, number, number];
-  id: string;
-  name: string;
-  color: string;
-  videoIndex: number;
-}[] = [
-  { position: [20, 0, -15], rotation: [0, -Math.PI / 2 + 0.16, 0], id: 'builder-4', name: 'CROWN ESTATES', color: '#fcfaf5', videoIndex: 3 },
-  { position: [20, 0, 5], rotation: [0, -Math.PI / 2, 0], id: 'builder-5', name: 'THE MONARCH', color: '#fcf9f2', videoIndex: 4 },
-  { position: [20, 0, 25], rotation: [0, -Math.PI / 2 - 0.16, 0], id: 'builder-6', name: 'HORIZON VISTAS', color: '#fdfbf5', videoIndex: 5 },
-];
-/**
- * World position [ X, Y, Z ] — change these to slide your model on the floor:
- *
- *   X — LEFT ↔ RIGHT (birds-eye): smaller number = LEFT, larger = RIGHT
- *   Y — UP ↔ DOWN (keep 0 unless you want it floating or sunk)
- *   Z — along the hall: smaller Z (more negative) = deeper toward the FAR wall when you walk forward (W);
- *                       larger Z (more positive) = closer to the ENTRANCE lobby end
- *
- * Nudge in steps of ~2–5 to see the difference.
- */
-const VERTEX_ELITE_HALL_POSITION: [number, number, number] = [-21.5, 0, 19];
-/** Keep 0 for a level floor. Only use non-zero if you intentionally want pitch (forward/back tilt). */
-const VERTEX_ELITE_ROTATION_X = 0;
-/** Roll around Z — keep 0 so the model stays upright; use only Y for “spin” on the floor */
-const VERTEX_ELITE_ROTATION_Z = 0;
-/** Yaw: spin on the floor (face the aisle). Match other left-row booths (~90° + small tweak). */
-const VERTEX_ELITE_ROTATION_Y = Math.PI / 2 + 0.06;
-
-const VERTEX_ELITE_HALL_ROTATION: [number, number, number] = [
-  VERTEX_ELITE_ROTATION_X,
-  VERTEX_ELITE_ROTATION_Y,
-  VERTEX_ELITE_ROTATION_Z,
-];
-
-/** Optional header canopy logo (PNG); used e.g. for Vertex / Eldeco branding */
-const BOOTH_HEADER_LOGO_VERTEX = '/assets/edeco.png';
-
 export function Booths() {
+  const boothOverrides = useStore((s) => s.boothOverrides);
+  const initBoothCms = useStore((s) => s.initBoothCms);
+
+  useEffect(() => {
+    void initBoothCms();
+  }, [initBoothCms]);
+
+  const layouts = useMemo(
+    () => applyBoothOverrides(buildDefaultBoothLayoutList(), boothOverrides),
+    [boothOverrides]
+  );
+
   return (
     <group position={[0, 0, 0]}>
       {/* Central Featured Help Desk Zone */}
@@ -135,44 +87,43 @@ export function Booths() {
         <Plant position={[5, 0, 30]} scale={0.92} />
       </Suspense>
 
-      {/* Row of Luxury Booths Left — definitions in EXPO_LUXURY_BOOTHS_LEFT */}
-      {EXPO_LUXURY_BOOTHS_LEFT.map((b) => (
-        <Booth
-          key={b.id}
-          position={b.position}
-          rotation={b.rotation}
-          id={b.id}
-          name={b.name}
-          color={b.color}
-          accent="#d4af37"
-          videoUrl={PROJECT_VIDEOS[b.videoIndex]}
-        />
-      ))}
-      <Booth
-        key="vertex-elite"
-        position={VERTEX_ELITE_HALL_POSITION}
-        rotation={VERTEX_ELITE_HALL_ROTATION}
-        id="vertex-elite"
-        name="VERTEX ELITE"
-        color="#fcfaf5"
-        accent="#d4af37"
-        videoUrl={PROJECT_VIDEOS[2]}
-        headerLogoUrl={BOOTH_HEADER_LOGO_VERTEX}
-      />
-
-      {/* Row of Luxury Booths Right */}
-      {EXPO_LUXURY_BOOTHS_RIGHT.map((b) => (
-        <Booth
-          key={b.id}
-          position={b.position}
-          rotation={b.rotation}
-          id={b.id}
-          name={b.name}
-          color={b.color}
-          accent="#d4af37"
-          videoUrl={PROJECT_VIDEOS[b.videoIndex]}
-        />
-      ))}
+      {layouts.map((b) =>
+        b.id === 'vertex-elite' ? (
+          <VertexEliteBooth
+            key={b.id}
+            position={b.position}
+            rotation={b.rotation}
+            boothScale={b.scale}
+            id={b.id}
+            name={b.name}
+            color={b.color}
+            accent={b.accent}
+            counterColor={b.counterColor}
+            videoUrl={b.videoUrl}
+            lighting={b.lighting}
+            placedImages={b.placedImages}
+            brochureUrl={b.brochureUrl}
+            priceListUrl={b.priceListUrl}
+            siteMapUrl={b.siteMapUrl}
+          />
+        ) : (
+          <Booth
+            key={b.id}
+            position={b.position}
+            rotation={b.rotation}
+            boothScale={b.scale}
+            id={b.id}
+            name={b.name}
+            color={b.color}
+            accent={b.accent}
+            counterColor={b.counterColor}
+            videoUrl={b.videoUrl}
+            headerLogoUrl={b.headerLogoUrl}
+            lighting={b.lighting}
+            placedImages={b.placedImages}
+          />
+        )
+      )}
     </group>
   );
 }
@@ -201,36 +152,128 @@ function BoothHeaderLogo({
     return { logoW: logoH * aspect, logoH };
   }, [tex]);
 
-  const padX = 0.45;
-  const padY = 0.22;
+  const padX = 0.52;
+  const padY = 0.26;
+  const boardW = logoW + padX;
+  const boardH = logoH + padY;
+  const trim = 0.038;
+  const gold = '#d4af37';
+  const warmWhite = '#fffaf4';
+  const haloEmissive = '#fff8f0';
 
   return (
     <group position={[0, 6.5, -3.58]}>
-      {/* Bright white panel behind logo (replaces dark PNG matte read as grey) */}
-      <mesh position={[0, 0, -0.06]} receiveShadow>
-        <planeGeometry args={[logoW + padX, logoH + padY]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.42} metalness={0.02} />
+      {/* Soft wash toward wall — mall-style backlit halo */}
+      <pointLight position={[0, 0, -0.28]} intensity={2.2} distance={5.5} decay={2} color={haloEmissive} />
+      <pointLight position={[0, 0.15, -0.22]} intensity={0.85} distance={4} decay={2} color="#fff5e6" />
+
+      {/* Deep lightbox — warm emissive “LED wash” behind graphic */}
+      <mesh position={[0, 0, -0.14]}>
+        <planeGeometry args={[boardW * 0.98, boardH * 0.98]} />
+        <meshStandardMaterial
+          color={warmWhite}
+          emissive={haloEmissive}
+          emissiveIntensity={2.4}
+          roughness={1}
+          metalness={0}
+          toneMapped={false}
+        />
       </mesh>
-      {/* Logo plane — emissiveMap reads logo colors as self-illumination */}
-      <mesh castShadow position={[0, 0, 0.03]}>
+
+      {/* Satin acrylic face — PBR white, very soft env read */}
+      <mesh position={[0, 0, -0.055]}>
+        <planeGeometry args={[boardW, boardH]} />
+        <meshPhysicalMaterial
+          color="#fdfdfd"
+          roughness={0.22}
+          metalness={0}
+          clearcoat={0.42}
+          clearcoatRoughness={0.2}
+          envMapIntensity={0.14}
+          reflectivity={0.12}
+        />
+      </mesh>
+
+      {/* Perimeter “LED” strips — soft gold + white */}
+      <mesh position={[0, boardH / 2 + trim / 2, 0.012]}>
+        <boxGeometry args={[boardW + trim * 2.2, trim, 0.028]} />
+        <meshStandardMaterial
+          color={gold}
+          emissive="#fff4dc"
+          emissiveIntensity={0.55}
+          metalness={0.35}
+          roughness={0.38}
+        />
+      </mesh>
+      <mesh position={[0, -boardH / 2 - trim / 2, 0.012]}>
+        <boxGeometry args={[boardW + trim * 2.2, trim, 0.028]} />
+        <meshStandardMaterial
+          color={gold}
+          emissive="#fff4dc"
+          emissiveIntensity={0.55}
+          metalness={0.35}
+          roughness={0.38}
+        />
+      </mesh>
+      <mesh position={[-boardW / 2 - trim / 2, 0, 0.012]}>
+        <boxGeometry args={[trim, boardH + trim * 2, 0.028]} />
+        <meshStandardMaterial
+          color={gold}
+          emissive="#fff4dc"
+          emissiveIntensity={0.5}
+          metalness={0.35}
+          roughness={0.38}
+        />
+      </mesh>
+      <mesh position={[boardW / 2 + trim / 2, 0, 0.012]}>
+        <boxGeometry args={[trim, boardH + trim * 2, 0.028]} />
+        <meshStandardMaterial
+          color={gold}
+          emissive="#fff4dc"
+          emissiveIntensity={0.5}
+          metalness={0.35}
+          roughness={0.38}
+        />
+      </mesh>
+
+      {/* Inner rim glow — subtle white/gold edge wash on acrylic */}
+      <mesh position={[0, 0, 0.018]}>
+        <planeGeometry args={[boardW * 0.94, boardH * 0.94]} />
+        <meshStandardMaterial
+          color="#ffffff"
+          emissive="#fffdf8"
+          emissiveIntensity={0.35}
+          transparent
+          opacity={0.45}
+          depthWrite={false}
+          roughness={1}
+          metalness={0}
+          toneMapped={false}
+        />
+      </mesh>
+
+      {/* Logo — strong emissive for backlit + bloom; sits proud of face */}
+      <mesh castShadow position={[0, 0, 0.078]}>
         <planeGeometry args={[logoW, logoH]} />
         <meshStandardMaterial
           map={tex}
           emissiveMap={tex}
-          emissive="#f2fff6"
-          emissiveIntensity={1.05}
+          emissive="#f4fff8"
+          emissiveIntensity={2.15}
           color="#ffffff"
           transparent
-          alphaTest={0.08}
-          roughness={0.22}
+          alphaTest={0.06}
+          roughness={0.55}
           metalness={0}
-          toneMapped
+          envMapIntensity={0.08}
+          toneMapped={false}
           polygonOffset
           polygonOffsetFactor={-1}
         />
       </mesh>
+
       <Text
-        position={[0, -0.52, 0.08]}
+        position={[0, -0.52, 0.095]}
         fontSize={0.26}
         color={accent}
         anchorX="center"
@@ -238,7 +281,13 @@ function BoothHeaderLogo({
         font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
       >
         {tagline}
-        <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.55} />
+        <meshStandardMaterial
+          attach="material"
+          color={accent}
+          emissive={accent}
+          emissiveIntensity={0.75}
+          toneMapped={false}
+        />
       </Text>
     </group>
   );
@@ -247,40 +296,48 @@ function BoothHeaderLogo({
 function Booth({
   position,
   rotation,
+  boothScale,
   id,
   name,
   color,
   accent,
+  counterColor,
   videoUrl,
   headerLogoUrl,
+  lighting,
+  placedImages,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
+  boothScale: [number, number, number];
   id: string;
   name: string;
   color: string;
   accent: string;
+  counterColor: string;
   videoUrl: string;
   headerLogoUrl?: string;
+  lighting: import('../data/boothLayouts').BoothLighting;
+  placedImages: PlacedImage[];
 }) {
   const setActiveBooth = useStore((state) => state.setActiveBooth);
 
   return (
-    <group position={position} rotation={rotation}>
+    <group position={position} rotation={rotation} scale={boothScale}>
       {/* Back Wall with Luxury Trim */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
         <meshStandardMaterial color={color} roughness={0.4} metalness={0.6} />
       </mesh>
       
-      {/* Gold Wall Accents */}
+      {/* Accent Wall Pillars */}
       <mesh position={[-5.8, 3, -3.9]}>
         <boxGeometry args={[0.2, 6.2, 0.6]} />
-        <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.1} />
+        <meshStandardMaterial color={accent} metalness={1} roughness={0.1} />
       </mesh>
       <mesh position={[5.8, 3, -3.9]}>
         <boxGeometry args={[0.2, 6.2, 0.6]} />
-        <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.1} />
+        <meshStandardMaterial color={accent} metalness={1} roughness={0.1} />
       </mesh>
 
       {/* Side Walls */}
@@ -300,13 +357,25 @@ function Booth({
       </mesh>
       <mesh position={[0, 0.06, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[12, 0.05]} />
-        <meshStandardMaterial color="#d4af37" emissive="#d4af37" emissiveIntensity={2} />
+        <meshStandardMaterial color={lighting.ledStripColor} emissive={lighting.ledStripColor} emissiveIntensity={lighting.ledStripIntensity} />
       </mesh>
 
-      {/* Header/Signage */}
+      {/* Header fascia — Vertex: physical satin acrylic slab; others: metallic canopy */}
       <mesh position={[0, 6.5, -4]} castShadow>
         <boxGeometry args={[12.5, 1.5, 0.6]} />
-        <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} />
+        {headerLogoUrl ? (
+          <meshPhysicalMaterial
+            color="#fcfcfc"
+            roughness={0.2}
+            metalness={0}
+            clearcoat={0.48}
+            clearcoatRoughness={0.22}
+            envMapIntensity={0.15}
+            reflectivity={0.35}
+          />
+        ) : (
+          <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} />
+        )}
       </mesh>
 
       {/* Branding: optional PNG on canopy, else gold title only */}
@@ -332,7 +401,7 @@ function Booth({
       <group position={[0, 0.5, 0]}>
         <mesh position={[0, 0, 0]} castShadow receiveShadow>
           <boxGeometry args={[4, 1, 1]} />
-          <meshStandardMaterial color="#ffffff" metalness={0.1} roughness={0.2} />
+          <meshStandardMaterial color={counterColor} metalness={0.1} roughness={0.2} />
         </mesh>
         <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
           <boxGeometry args={[4.2, 0.1, 1.2]} />
@@ -346,7 +415,7 @@ function Booth({
             <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
           </mesh>
           <Suspense fallback={<meshBasicMaterial color="#000" />}>
-            <LedVideoPlane args={[1.5, 0.9]} url={videoUrl} position={[0, 0, 0.01]} />
+            <LedScreenSurface args={[1.5, 0.9]} url={videoUrl} position={[0, 0, 0.01]} />
           </Suspense>
           <mesh position={[0, -0.6, 0]}>
             <boxGeometry args={[0.4, 0.2, 0.2]} />
@@ -385,7 +454,7 @@ function Booth({
         </mesh>
         <group position={[0, 0, 0.11]}>
           <Suspense fallback={<meshBasicMaterial color="#000" />}>
-            <LedVideoPlane args={[6.2, 3.4]} url={videoUrl} />
+            <LedScreenSurface args={[6.2, 3.4]} url={videoUrl} />
           </Suspense>
         </group>
       </group>
@@ -395,8 +464,8 @@ function Booth({
         position={[0, 7.5, -1.2]}
         angle={0.45}
         penumbra={0.7}
-        intensity={55}
-        color="#ffe7bf"
+        intensity={lighting.spotlightIntensity}
+        color={lighting.spotlightColor}
         distance={18}
         decay={2}
         target-position={[0, 3, -3.8]}
@@ -413,6 +482,375 @@ function Booth({
       </group>
 
       <BoothStandee name={name} accent={accent} />
+
+      {/* CMS-placed custom images */}
+      {placedImages.map((img) => (
+        <Suspense key={img.id} fallback={null}>
+          <BoothPlacedImage item={img} />
+        </Suspense>
+      ))}
+    </group>
+  );
+}
+
+function BoothPlacedImage({ item }: { item: PlacedImage }) {
+  const tex = useTexture(item.url);
+  useLayoutEffect(() => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+  }, [tex]);
+  return (
+    <mesh position={item.position} rotation={item.rotation}>
+      <planeGeometry args={item.size} />
+      <meshStandardMaterial
+        map={tex}
+        transparent
+        alphaTest={0.05}
+        toneMapped={false}
+        roughness={0.5}
+        depthWrite
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
+      />
+    </mesh>
+  );
+}
+
+/* ─── Futuristic Vertex Elite Studio Booth ─── */
+export function VertexEliteBooth({
+  position, rotation, boothScale, id, name, color, accent, counterColor,
+  videoUrl, lighting, placedImages, brochureUrl, priceListUrl, siteMapUrl,
+  cmsPreview,
+  cmsPlacedImageEdit,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  boothScale: [number, number, number];
+  id: string;
+  name: string;
+  color: string;
+  accent: string;
+  counterColor: string;
+  videoUrl: string;
+  lighting: import('../data/boothLayouts').BoothLighting;
+  placedImages: PlacedImage[];
+  brochureUrl?: string;
+  priceListUrl?: string;
+  siteMapUrl?: string;
+  /** When true, skip the invisible “enter booth” hitbox (expo hall only). */
+  cmsPreview?: boolean;
+  cmsPlacedImageEdit?: {
+    selectedImageId: string | null;
+    onSelectImage: (id: string | null) => void;
+    onDragImage: (id: string, pos: [number, number, number]) => void;
+  };
+}) {
+  const setActiveBooth = useStore((s) => s.setActiveBooth);
+  const glow = accent;
+  const dark = '#0c0c12';
+  const glass = '#1a1a28';
+
+  return (
+    <group position={position} rotation={rotation} scale={boothScale}>
+      {/* ── Dark reflective floor ── */}
+      <mesh position={[0, 0.02, -1.5]} receiveShadow>
+        <boxGeometry args={[13, 0.04, 7]} />
+        <meshStandardMaterial color="#0a0a10" roughness={0.07} metalness={0.94} />
+      </mesh>
+      {/* Floor LED edge strips */}
+      {[[-6.3, 0.04, -1.5], [6.3, 0.04, -1.5]].map(([x, y, z], i) => (
+        <mesh key={`fstrip-${i}`} position={[x, y, z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.06, 7]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3.5} toneMapped={false} />
+        </mesh>
+      ))}
+      {/* Front threshold LED strip */}
+      <mesh position={[0, 0.04, 2.05]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[13, 0.08]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4} toneMapped={false} />
+      </mesh>
+
+      {/* ── Back wall ── */}
+      <mesh position={[0, 3.2, -4.5]} receiveShadow>
+        <boxGeometry args={[13, 6.4, 0.35]} />
+        <meshStandardMaterial color={dark} roughness={0.2} metalness={0.9} />
+      </mesh>
+      {/* Vertical accent LED strips on back wall */}
+      {[-6.2, 6.2].map((x, i) => (
+        <mesh key={`vled-${i}`} position={[x, 3.2, -4.28]}>
+          <boxGeometry args={[0.06, 6.4, 0.02]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4.5} toneMapped={false} />
+        </mesh>
+      ))}
+      {/* Horizontal LED strip top of back wall */}
+      <mesh position={[0, 6.42, -4.28]}>
+        <boxGeometry args={[12.5, 0.06, 0.02]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4} toneMapped={false} />
+      </mesh>
+      {/* Horizontal LED strip bottom */}
+      <mesh position={[0, 0.08, -4.28]}>
+        <boxGeometry args={[12.5, 0.06, 0.02]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3} toneMapped={false} />
+      </mesh>
+
+      {/* ── Side walls — glass-dark panels ── */}
+      {[[-6.2, 1], [6.2, 1]].map(([x], i) => (
+        <mesh key={`side-${i}`} position={[x, 3.2, -1.5]} receiveShadow>
+          <boxGeometry args={[0.25, 6.4, 6]} />
+          <meshStandardMaterial color={glass} roughness={0.12} metalness={0.78} transparent opacity={0.93} />
+        </mesh>
+      ))}
+      {/* Side wall inner LED strips */}
+      {[-6.05, 6.05].map((x, i) => (
+        <mesh key={`sided-${i}`} position={[x, 0.08, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.04, 6]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={2.5} toneMapped={false} />
+        </mesh>
+      ))}
+
+      {/* ── Ceiling slab ── */}
+      <mesh position={[0, 6.55, -1.5]}>
+        <boxGeometry args={[13, 0.2, 7]} />
+        <meshStandardMaterial color="#0a0a10" roughness={0.22} metalness={0.92} />
+      </mesh>
+
+      {/* Ceiling oval LED halo — smaller torus so it stays inside the booth shell (no wall clip) */}
+      <mesh position={[0, 6.32, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[2.75, 0.11, 32, 160]} />
+        <meshStandardMaterial
+          color={glow}
+          emissive={glow}
+          emissiveIntensity={3.5}
+          toneMapped={false}
+          polygonOffset
+          polygonOffsetFactor={1}
+          polygonOffsetUnits={1}
+        />
+      </mesh>
+      <pointLight position={[0, 6.22, -1.8]} intensity={16} color={glow} distance={11} decay={2} />
+
+      {/* ── Back canopy slab ── */}
+      <mesh position={[0, 6.84, -4.38]}>
+        <boxGeometry args={[13.2, 1.1, 0.74]} />
+        <meshStandardMaterial color="#08080f" roughness={0.08} metalness={0.92} />
+      </mesh>
+      <mesh position={[0, 7.395, -4.38]}>
+        <boxGeometry args={[13.18, 0.05, 0.76]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.9} metalness={0.95} roughness={0.06} toneMapped={false} />
+      </mesh>
+
+      {/* ── FRONT ENTRANCE FASCIA — header at z≈+1.84, fully visible from the aisle ──
+           Ceiling front edge is at z = −1.5 + 3.5 = +2.0.
+           Fascia slab: center z=1.84, depth=0.32 → front face z=2.0.
+           Sign center z=2.09, depth=0.18 → back=2.0 (flush), front=2.18 (protrudes). ── */}
+
+      {/* Main fascia structural slab */}
+      <mesh position={[0, 6.12, 1.84]}>
+        <boxGeometry args={[13.2, 1.22, 0.32]} />
+        <meshStandardMaterial color="#08080f" roughness={0.07} metalness={0.93} />
+      </mesh>
+
+      {/* Gold top rail */}
+      <mesh position={[0, 6.74, 1.84]}>
+        <boxGeometry args={[13.18, 0.055, 0.34]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.0} metalness={0.96} roughness={0.05} toneMapped={false} />
+      </mesh>
+      {/* Gold bottom rail */}
+      <mesh position={[0, 5.50, 1.84]}>
+        <boxGeometry args={[13.18, 0.055, 0.34]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.0} metalness={0.96} roughness={0.05} toneMapped={false} />
+      </mesh>
+      {/* Gold left/right end caps */}
+      {[-6.56, 6.56].map((x, i) => (
+        <mesh key={`ffront-${i}`} position={[x, 6.12, 1.84]}>
+          <boxGeometry args={[0.055, 1.18, 0.34]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.88} metalness={0.96} roughness={0.05} toneMapped={false} />
+        </mesh>
+      ))}
+
+      {/* Ceiling-to-fascia join cap */}
+      <mesh position={[0, 6.545, 1.84]}>
+        <boxGeometry args={[13.2, 0.12, 0.34]} />
+        <meshStandardMaterial color="#07070e" metalness={0.95} roughness={0.08} />
+      </mesh>
+
+      {/* Underside LED strip */}
+      <mesh position={[0, 5.49, 1.9]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12.8, 0.06]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4.5} toneMapped={false} />
+      </mesh>
+
+      {/* ── VERTEX ELITE sign on front face of fascia, protrudes toward aisle ── */}
+      <Suspense fallback={null}>
+        <VertexEliteCanopyBranding glow={glow} />
+      </Suspense>
+
+      {/* ── Main LED wall display (large) ── */}
+      <group position={[0, 3.2, -4.25]}>
+        <mesh>
+          <boxGeometry args={[8.5, 4.5, 0.12]} />
+          <meshStandardMaterial color="#030308" metalness={0.96} roughness={0.05} />
+        </mesh>
+        <mesh position={[0, 0, 0.02]}>
+          <boxGeometry args={[8.7, 4.7, 0.01]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.85} transparent opacity={0.38} toneMapped={false} />
+        </mesh>
+        <group position={[0, 0, 0.07]}>
+          <Suspense fallback={<meshBasicMaterial color="#000" />}>
+            <LedScreenSurface args={[8.3, 4.3]} url={videoUrl} />
+          </Suspense>
+        </group>
+      </group>
+
+      {/* ── Floating reception desk ── */}
+      <group position={[0, 0.55, 0.8]}>
+        <mesh>
+          <boxGeometry args={[5, 1.1, 0.9]} />
+          <meshStandardMaterial color="#111118" roughness={0.1} metalness={0.85} />
+        </mesh>
+        <mesh position={[0, 0.56, 0]}>
+          <boxGeometry args={[5.2, 0.06, 1.0]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.8} metalness={0.6} roughness={0.2} />
+        </mesh>
+        {/* Desk front LED strip */}
+        <mesh position={[0, 0, 0.46]}>
+          <boxGeometry args={[5, 0.04, 0.01]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3.5} toneMapped={false} />
+        </mesh>
+        {/* Counter tablet display */}
+        <group position={[1.5, 0.9, -0.1]} rotation={[-0.25, -0.2, 0]}>
+          <mesh>
+            <boxGeometry args={[1.4, 0.9, 0.06]} />
+            <meshStandardMaterial color="#05050a" metalness={0.92} roughness={0.06} />
+          </mesh>
+        </group>
+        {/* Hostess */}
+        <Suspense fallback={null}>
+          <BoothHostessGreeter boothId={id} />
+        </Suspense>
+      </group>
+
+      {/* ── CTA kiosk — front-right by reception: path stays open (center x clear), screen + branding visible ── */}
+      <VertexEliteCtaKiosk
+        glow={glow}
+        brochureUrl={brochureUrl}
+        priceListUrl={priceListUrl}
+        siteMapUrl={siteMapUrl}
+        position={[4.48, 0.03, 2.02]}
+        rotation={[0, 0.13, 0]}
+      />
+
+      {/* Click target — hall only (CMS reuses this mesh but must not open the expo booth UI). */}
+      {!cmsPreview && (
+        <mesh
+          position={[0, 1.5, 0.8]}
+          visible={false}
+          onClick={(e) => {
+            e.stopPropagation();
+            const offset = rotation[1] > 0 ? 7 : -7;
+            const tp: [number, number, number] = [position[0] + offset, 1.7, position[2]];
+            setActiveBooth(name, tp);
+            document.exitPointerLock();
+          }}
+          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+          onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+        >
+          <boxGeometry args={[6, 3, 4]} />
+        </mesh>
+      )}
+
+      {/* ── Lounge chairs — no castShadow on small pieces ── */}
+      {[[-3.5, 0, 1.8], [3.5, 0, 1.8]].map(([cx, cy, cz], ci) => (
+        <group key={`chair-${ci}`} position={[cx, cy, cz]} rotation={[0, ci === 0 ? 0.3 : -0.3, 0]}>
+          <mesh position={[0, 0.22, 0]}>
+            <boxGeometry args={[0.9, 0.18, 0.9]} />
+            <meshStandardMaterial color="#1a1a22" roughness={0.35} metalness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.36, 0]}>
+            <boxGeometry args={[0.82, 0.1, 0.82]} />
+            <meshStandardMaterial color="#222230" roughness={0.7} metalness={0.15} />
+          </mesh>
+          <mesh position={[0, 0.52, -0.38]}>
+            <boxGeometry args={[0.82, 0.35, 0.1]} />
+            <meshStandardMaterial color="#222230" roughness={0.65} metalness={0.15} />
+          </mesh>
+          {[[-0.35, 0, -0.35], [0.35, 0, -0.35], [-0.35, 0, 0.35], [0.35, 0, 0.35]].map(([lx, , lz], li) => (
+            <mesh key={`leg-${li}`} position={[lx, 0.07, lz]}>
+              <cylinderGeometry args={[0.025, 0.025, 0.14, 6]} />
+              <meshStandardMaterial color="#888" metalness={0.95} roughness={0.1} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* ── Side tables ── */}
+      {[[-2.4, 0, 2.0], [2.4, 0, 2.0]].map(([tx, ty, tz], ti) => (
+        <group key={`table-${ti}`} position={[tx, ty, tz]}>
+          <mesh position={[0, 0.32, 0]}>
+            <cylinderGeometry args={[0.3, 0.3, 0.04, 16]} />
+            <meshStandardMaterial color="#ccc" roughness={0.12} metalness={0.2} transparent opacity={0.65} />
+          </mesh>
+          <mesh position={[0, 0.16, 0]}>
+            <cylinderGeometry args={[0.04, 0.04, 0.32, 6]} />
+            <meshStandardMaterial color="#333" metalness={0.9} roughness={0.15} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* ── Indoor plants ── */}
+      {[[-5.2, 0, -3.8], [5.2, 0, -3.8], [-5.2, 0, 1.0], [5.2, 0, 1.0]].map(([px, py, pz], pi) => (
+        <group key={`plant-${pi}`} position={[px, py, pz]}>
+          <mesh position={[0, 0.35, 0]}>
+            <cylinderGeometry args={[0.28, 0.22, 0.7, 10]} />
+            <meshStandardMaterial color="#1a1a1a" roughness={0.5} metalness={0.6} />
+          </mesh>
+          <mesh position={[0, 1.1, 0]}>
+            <cylinderGeometry args={[0.035, 0.045, 0.8, 5]} />
+            <meshStandardMaterial color="#3d2b15" roughness={0.85} />
+          </mesh>
+          {/* 2 spheres instead of 4 for foliage */}
+          {[[0, 1.68, 0, 0.38], [0, 1.9, 0, 0.24]].map(([fx, fy, fz, r], fi) => (
+            <mesh key={`leaf-${fi}`} position={[fx, fy, fz]}>
+              <sphereGeometry args={[r, 8, 7]} />
+              <meshStandardMaterial color="#1a5c2a" roughness={0.75} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* ── Pedestal ── */}
+      <group position={[-3.5, 0, -2.5]}>
+        <Cylinder args={[0.7, 0.7, 0.9, 20]} position={[0, 0.45, 0]}>
+          <meshStandardMaterial color="#111116" roughness={0.1} metalness={0.9} />
+        </Cylinder>
+        <mesh position={[0, 0.91, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.55, 0.68, 32]} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3} toneMapped={false} side={THREE.DoubleSide} />
+        </mesh>
+        <Box args={[0.45, 1.4, 0.45]} position={[0, 1.6, 0]}>
+          <meshStandardMaterial color="#fff" roughness={0.1} metalness={0.1} />
+        </Box>
+      </group>
+
+      {/* ── Lighting — 2 lights only (no castShadow here, global light casts shadow) ── */}
+      <pointLight position={[0, 5.5, -1.5]} intensity={lighting.spotlightIntensity * 0.55} color={lighting.spotlightColor} distance={18} decay={2} />
+      <pointLight position={[0, 5.0, -4.0]} intensity={8} color={glow} distance={12} decay={2} />
+
+      {placedImages.map((img) => (
+        <Suspense key={img.id} fallback={null}>
+          {cmsPlacedImageEdit ? (
+            <BoothPlacedImageInteractive
+              item={img}
+              selected={img.id === cmsPlacedImageEdit.selectedImageId}
+              onSelect={() => cmsPlacedImageEdit.onSelectImage(img.id)}
+              onDrag={(pos) => cmsPlacedImageEdit.onDragImage(img.id, pos)}
+            />
+          ) : (
+            <BoothPlacedImage item={img} />
+          )}
+        </Suspense>
+      ))}
     </group>
   );
 }
@@ -721,7 +1159,7 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
                     <meshStandardMaterial color="#111" metalness={0.5} roughness={0.2} />
                   </mesh>
                   <Suspense fallback={<meshBasicMaterial color="#000" />}>
-                    <LedVideoPlane
+                    <LedScreenSurface
                       args={[6.1, 4.5]}
                       url="/13391496_3840_2160_60fps.mp4"
                       position={[0, 0, 8.31]}
@@ -922,6 +1360,8 @@ function ExpoHostessAvatar({
   }, [model]);
 
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  /** Paused clip holds a natural pose; stopping the action resets the rig to bind pose (T-pose). */
+  const freezePoseActiveRef = useRef(false);
   const idleBonesRef = useRef<{
     head?: THREE.Bone;
     spine?: THREE.Bone;
@@ -954,6 +1394,7 @@ function ExpoHostessAvatar({
   }, [model]);
 
   useLayoutEffect(() => {
+    freezePoseActiveRef.current = false;
     if (!animations?.length) {
       mixerRef.current = null;
       return;
@@ -964,8 +1405,15 @@ function ExpoHostessAvatar({
     const action = mixer.clipAction(clip);
     action.setLoop(THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = false;
+    action.setEffectiveWeight(1);
     action.play();
+    const dur = clip.duration > 1e-6 ? clip.duration : 1;
+    const seekT = Math.min(Math.max(dur * 0.18, 0.12), dur * 0.95);
+    mixer.update(seekT);
+    action.paused = true;
+    freezePoseActiveRef.current = true;
     return () => {
+      freezePoseActiveRef.current = false;
       action.stop();
       mixer.stopAllAction();
       mixerRef.current = null;
@@ -975,18 +1423,15 @@ function ExpoHostessAvatar({
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
     const ph = idlePhase;
-    const rec = idleBonesRef.current;
-    const mixer = mixerRef.current;
-
-    if (mixer && animations?.length) {
-      mixer.update(delta);
-    }
 
     if (breathingRef.current) {
       const br = Math.sin(t * 2.12 + ph) * 0.007;
       breathingRef.current.scale.set(1 + br * 0.35, 1 + br, 1 + br * 0.35);
     }
 
+    if (freezePoseActiveRef.current) return;
+
+    const rec = idleBonesRef.current;
     const procedural = !animations?.length;
     if (procedural) {
       const headAmp = isScene3Hostess ? 0.35 : 1;
