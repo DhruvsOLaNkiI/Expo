@@ -24,7 +24,7 @@ export function Lighting() {
         intensity={1.35}
         color="#fffaf0"
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[512, 512]}
         shadow-camera-near={0.5}
         shadow-camera-far={140}
         shadow-camera-left={-58}
@@ -70,7 +70,7 @@ export function Lighting() {
         decay={2}
       />
 
-      <Environment preset="city" environmentIntensity={0.52} />
+      <Environment preset="city" environmentIntensity={0.38} />
     </>
   );
 }

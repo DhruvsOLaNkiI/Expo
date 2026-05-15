@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { LedScreenSurface } from '../components/LedVideoPlane';
 import { BoothPlacedImageInteractive } from '../components/BoothPlacedImageInteractive';
 import { VertexEliteBooth } from '../components/Booths';
-import type { BoothLighting, PlacedImage } from '../data/boothLayouts';
+import type { BoothLighting, PlacedImage, HostessQuickReply } from '../data/boothLayouts';
+import { siteMapUrlsFromConfig } from '../data/boothLayouts';
 
 const FONT =
   'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
@@ -28,6 +29,8 @@ export type PreviewProps = {
   brochureUrl?: string;
   priceListUrl?: string;
   siteMapUrl?: string;
+  siteMapGallery?: string[];
+  hostessQuickReplies?: HostessQuickReply[];
 };
 
 /* ─── Clickable surface that reports intersection point + normal ─── */
@@ -92,8 +95,11 @@ function BoothScene({
   brochureUrl = '',
   priceListUrl = '',
   siteMapUrl = '',
+  siteMapGallery = [],
+  hostessQuickReplies = [],
 }: PreviewProps) {
   const isVertexElite = boothId === 'vertex-elite';
+  const siteMapUrls = siteMapUrlsFromConfig({ siteMapUrl, siteMapGallery });
   const hasLogo = Boolean(headerLogoUrl?.trim()) && !isVertexElite;
   const placing = Boolean(placingImageUrl);
 
@@ -125,7 +131,8 @@ function BoothScene({
             placedImages={placedImages}
             brochureUrl={brochureUrl}
             priceListUrl={priceListUrl}
-            siteMapUrl={siteMapUrl}
+            siteMapUrls={siteMapUrls}
+            hostessQuickReplies={hostessQuickReplies}
             cmsPreview
             cmsPlacedImageEdit={{
               selectedImageId,

@@ -71,9 +71,9 @@ export function BoothCmsPanel() {
     if (b) loadFormFromMerged(b);
   }, [selectedId, mergedList, loadFormFromMerged]);
 
-  const handleApply = () => {
+  const handleApply = async () => {
     const rot = deg3ToRad3(num(rxDeg, 0), num(ryDeg, 0), num(rzDeg, 0));
-    patch(selectedId, {
+    await patch(selectedId, {
       position: [num(px, 0), num(py, 0), num(pz, 0)],
       rotation: rot,
       name: name.trim() || undefined,
@@ -98,15 +98,17 @@ export function BoothCmsPanel() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const j = JSON.parse(String(reader.result)) as { overrides?: Record<string, unknown> };
-        if (!j?.overrides || typeof j.overrides !== 'object') return;
-        for (const [id, p] of Object.entries(j.overrides)) {
-          if (p && typeof p === 'object') patch(id, p as BoothLayoutPatch);
+      void (async () => {
+        try {
+          const j = JSON.parse(String(reader.result)) as { overrides?: Record<string, unknown> };
+          if (!j?.overrides || typeof j.overrides !== 'object') return;
+          for (const [id, p] of Object.entries(j.overrides)) {
+            if (p && typeof p === 'object') await patch(id, p as BoothLayoutPatch);
+          }
+        } catch {
+          /* invalid json */
         }
-      } catch {
-        /* invalid json */
-      }
+      })();
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -149,7 +151,7 @@ export function BoothCmsPanel() {
       <BoothCmsPreview boothId={selectedId} name={name} color={color} accent={accent} videoUrl={videoUrl} headerLogoUrl={headerLogoUrl} />
       <p className="mb-3 text-[10px] leading-snug text-gray-500">
         Live preview uses the fields below. Use a path under <code className="rounded bg-black/5 px-0.5">public/</code> for
-        deployable assets, or upload — large images are stored as data URLs in local overrides.
+        deployable assets; large uploads are stored in this browser (localStorage or IndexedDB).
       </p>
 
       <div className="mb-2 grid grid-cols-3 gap-2">
@@ -225,13 +227,13 @@ export function BoothCmsPanel() {
       </label>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="rounded bg-[#d4af37] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#b08d29]" onClick={handleApply}>
+        <button type="button" className="rounded bg-[#d4af37] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#b08d29]" onClick={() => void handleApply()}>
           Apply
         </button>
-        <button type="button" className="rounded border border-black/15 px-3 py-1.5 text-xs hover:bg-black/5" onClick={() => resetBooth(selectedId)}>
+        <button type="button" className="rounded border border-black/15 px-3 py-1.5 text-xs hover:bg-black/5" onClick={() => void resetBooth(selectedId)}>
           Reset booth
         </button>
-        <button type="button" className="rounded border border-black/15 px-3 py-1.5 text-xs hover:bg-black/5" onClick={resetAll}>
+        <button type="button" className="rounded border border-black/15 px-3 py-1.5 text-xs hover:bg-black/5" onClick={() => void resetAll()}>
           Reset all
         </button>
       </div>

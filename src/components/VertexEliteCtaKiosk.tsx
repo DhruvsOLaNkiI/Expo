@@ -12,7 +12,7 @@ const WHITE       = '#fffef8';
 const DARK        = '#020209';
 const GLASS       = '#07071a';
 
-type CtaRow = { label: string; url: string };
+type CtaRow = { label: string; url: string; siteMapUrls?: string[] };
 
 function BookIcon({ glow, z }: { glow: string; z: number }) {
   return (
@@ -56,7 +56,9 @@ function CtaButton({
   const [hovered, setHovered] = useState(false);
   const rowGap = 0.07;
   const y = -index * (btnH + rowGap);
-  const enabled = Boolean(row.url?.trim());
+  const enabled = row.siteMapUrls
+    ? row.siteMapUrls.some((u) => u.trim())
+    : Boolean(row.url?.trim());
 
   const handleClick = (e: THREE.Event) => {
     (e as unknown as { stopPropagation(): void }).stopPropagation();
@@ -64,10 +66,21 @@ function CtaButton({
     if (typeof document !== 'undefined' && document.pointerLockElement) {
       document.exitPointerLock();
     }
+    if (row.label === 'VIEW SITE MAP') {
+      const slides = (row.siteMapUrls ?? []).map((u) => u.trim()).filter(Boolean);
+      if (slides.length === 0) return;
+      useStore.getState().setCtaResourcePopup({
+        title: row.label,
+        url: slides[0],
+        variant: 'image',
+        imageGallery: slides.length > 1 ? slides : undefined,
+      });
+      return;
+    }
     useStore.getState().setCtaResourcePopup({
       title: row.label,
       url: row.url,
-      variant: row.label === 'VIEW SITE MAP' ? 'image' : 'document',
+      variant: 'document',
     });
   };
 
@@ -153,21 +166,21 @@ export function VertexEliteCtaKiosk({
   glow = GOLD,
   brochureUrl  = '',
   priceListUrl = '',
-  siteMapUrl   = '',
+  siteMapUrls  = [],
   position = [4.48, 0.03, 2.02] as [number, number, number],
   rotation = [0, 0.13, 0] as [number, number, number],
 }: {
   glow?: string;
   brochureUrl?:  string;
   priceListUrl?: string;
-  siteMapUrl?:   string;
+  siteMapUrls?:  string[];
   position?: [number, number, number];
   rotation?: [number, number, number];
 }) {
   const rows: CtaRow[] = [
     { label: 'VIEW BROCHURE',   url: brochureUrl },
     { label: 'VIEW PRICE LIST', url: priceListUrl },
-    { label: 'VIEW SITE MAP',   url: siteMapUrl },
+    { label: 'VIEW SITE MAP',   url: siteMapUrls[0] ?? '', siteMapUrls },
   ];
 
   const kW = 1.92;

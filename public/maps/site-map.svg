@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="880" height="620" viewBox="0 0 880 620">
   <rect width="100%" height="100%" fill="#0c0c14"/>
   <text x="440" y="56" text-anchor="middle" fill="#d4af37" font-family="system-ui,sans-serif" font-size="26" font-weight="700">VERTEX ELITE - SITE MAP (PLACEHOLDER)</text>
-  <text x="440" y="88" text-anchor="middle" fill="#a8a8b8" font-family="system-ui,sans-serif" font-size="14">Replace with PNG or JPG in CMS, Media tab, Site Map URL</text>
+  <text x="440" y="88" text-anchor="middle" fill="#a8a8b8" font-family="system-ui,sans-serif" font-size="14">Replace this file: public/maps/site-map.svg  or use /maps/site-map.png after adding your PNG</text>
   <rect x="64" y="120" width="752" height="440" rx="10" fill="#12121c" stroke="#d4af37" stroke-width="2"/>
   <rect x="120" y="170" width="200" height="140" fill="#1e1e2a" stroke="#d4af37" stroke-opacity="0.5"/>
   <rect x="340" y="170" width="200" height="300" fill="#1e1e2a" stroke="#d4af37" stroke-opacity="0.5"/>

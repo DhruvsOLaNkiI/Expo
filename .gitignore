@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+# PageIndex CLI output (generated JSON trees)
+pageindex/results/
+pageindex/.venv/
+pageindex/uploads/

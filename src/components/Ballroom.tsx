@@ -11,7 +11,7 @@ function ConferenceChair({ position }: { position: [number, number, number] }) {
     cloned.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
-        mesh.castShadow = true;
+        mesh.castShadow = false;
         mesh.receiveShadow = true;
       }
     });
@@ -25,7 +25,7 @@ function ConferenceChair({ position }: { position: [number, number, number] }) {
   );
 }
 
-export function Ballroom() {
+export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
   return (
     <group position={[0, 0, -30]}>
       {/* Stage */}
@@ -85,13 +85,17 @@ export function Ballroom() {
           </mesh>
 
           {/* Cinematic giant side display content */}
-          <Suspense fallback={<meshBasicMaterial color="#111" />}>
-            <LedVideoPlane
-              args={[9.62, 6.52]}
-              url="/expo-led-video.mp4"
-              position={[0, 0, 0.12]}
-            />
-          </Suspense>
+          {showVideos ? (
+            <Suspense fallback={<meshBasicMaterial color="#111" />}>
+              <LedVideoPlane
+                args={[9.62, 6.52]}
+                url="/expo-led-video.mp4"
+                position={[0, 0, 0.12]}
+              />
+            </Suspense>
+          ) : (
+            <meshBasicMaterial color="#111" />
+          )}
 
           {/* Side LED glow for presentation mood */}
           <rectAreaLight
@@ -201,9 +205,7 @@ function BallroomSpot({
         color="#ffddaa"
         distance={55}
         decay={2}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-bias={-0.0001}
+        castShadow={false}
       />
       <group ref={targetRef} position={target} />
     </>

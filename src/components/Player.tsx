@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { PointerLockControls } from 'three-stdlib';
 import { useStore } from '../store';
+import { regBounds, REG_SPAWN } from '../data/registrationHall';
+import { HALL_HALF_EXTENT } from '../data/boothLayouts';
 
 /** Walk speed (m/s) — comfortable expo pace (was 12, felt uncontrollable). */
 const MOVE_SPEED = 6.5;
 /** Avoid huge position jumps after a frame hitch. */
 const MAX_DELTA = 0.08;
 /** Must match `ExpoHall` `halfHall` (90 / 2) — keep camera inside walls with margin. */
-const HALF_HALL = 45;
 const PLAYER_MARGIN = 3.5;
-const BOUND = HALF_HALL - PLAYER_MARGIN;
+const EXPO_BOUND = HALL_HALF_EXTENT - PLAYER_MARGIN;
 /** Joystick magnitude below this = no intentional move (avoids drift + bad normalize). */
 const JOY_DEAD = 0.14;
 
@@ -31,8 +32,12 @@ export function Player() {
   const playerPosition = useStore((state) => state.playerPosition);
   const setPlayerPosition = useStore((state) => state.setPlayerPosition);
   const joystickData = useStore((state) => state.joystickData);
+  const hallLayoutEditMode = useStore((state) => state.hallLayoutEditMode);
+  const expoPhase = useStore((state) => state.expoPhase);
+  const registrationUi = useStore((state) => state.registrationUi);
 
   const isLocked = useRef(false);
+  const spawnedRef = useRef(false);
   const [isTouch, setIsTouch] = useState(false);
 
   const touchStart = useRef({ x: 0, y: 0 });
@@ -48,6 +53,14 @@ export function Player() {
       setPlayerPosition(null);
     }
   }, [playerPosition, camera, setPlayerPosition]);
+
+  useEffect(() => {
+    if (spawnedRef.current) return;
+    spawnedRef.current = true;
+    if (expoPhase === 'registration') {
+      camera.position.set(REG_SPAWN[0], REG_SPAWN[1], REG_SPAWN[2]);
+    }
+  }, [camera, expoPhase]);
 
   useEffect(() => {
     if (isTouch) return;
@@ -107,16 +120,23 @@ export function Player() {
     }
 
     const handleClick = () => {
-      if (!activeBooth && !ctaResourcePopup && controlsRef.current && !isLocked.current) {
+      if (hallLayoutEditMode) return;
+      if (
+        !activeBooth &&
+        !ctaResourcePopup &&
+        registrationUi === 'none' &&
+        controlsRef.current &&
+        !isLocked.current
+      ) {
         controlsRef.current.lock();
       }
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [activeBooth, ctaResourcePopup, isTouch, camera]);
+  }, [activeBooth, ctaResourcePopup, registrationUi, isTouch, camera, hallLayoutEditMode]);
 
   useFrame((_, delta) => {
-    if (activeBooth || ctaResourcePopup) return;
+    if (activeBooth || ctaResourcePopup || hallLayoutEditMode || registrationUi !== 'none') return;
 
     const canMoveDesktop = !isTouch && isLocked.current;
     const canMoveTouch = isTouch;
@@ -168,8 +188,14 @@ export function Player() {
     const step = MOVE_SPEED * dt;
     camera.position.addScaledVector(_wish, step);
 
-    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -BOUND, BOUND);
-    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -BOUND, BOUND);
+    if (expoPhase === 'registration') {
+      const b = regBounds();
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, b.minX, b.maxX);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, b.minZ, b.maxZ);
+    } else {
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -EXPO_BOUND, EXPO_BOUND);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -EXPO_BOUND, EXPO_BOUND);
+    }
     camera.position.y = 1.7;
   });
 

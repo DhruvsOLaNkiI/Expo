@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "pageindex:install": "cd pageindex && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt",
+    "pageindex:run-example": "python3 scripts/pageindex_run.py --pdf_path \"examples/documents/EOE Floor Plan Deck.pdf\"",
+    "pageindex:run": "python3 scripts/pageindex_run.py"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -30,8 +33,10 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "multer": "^2.1.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

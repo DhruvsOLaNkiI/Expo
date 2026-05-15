@@ -1,14 +1,17 @@
-import { Text, Box, Cylinder, Torus, useGLTF, useTexture } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { Html, Text, Box, Cylinder, Torus, useGLTF, useTexture } from '@react-three/drei';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useStore } from '../store';
-import { Suspense, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
+import { Suspense, useRef, useMemo, useLayoutEffect, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { LedScreenSurface } from './LedVideoPlane';
+import { LedScreenSurface, isScreenImageUrl } from './LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
+import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
-import { applyBoothOverrides, buildDefaultBoothLayoutList, type PlacedImage } from '../data/boothLayouts';
+import { applyBoothOverrides, buildDefaultBoothLayoutList, DEFAULT_SCENE_CONFIG, siteMapUrlsFromConfig, mergeHallLayout, type PlacedImage, type HostessQuickReply, type MediaItem, type CompanyProfile } from '../data/boothLayouts';
+
+const EMPTY_HOSTESS_REPLIES: HostessQuickReply[] = [];
 
 /**
  * Vertex Elite uses the same procedural `Booth` shell as other luxury stalls; defaults live in `src/data/boothLayouts.ts` (overridable via Booth CMS + `public/booth-cms.json`).
@@ -54,6 +57,202 @@ const BOOTH_HOSTESS_DESK_LOCAL: [number, number, number] = [
   -(BOOTH_COUNTER_HALF_DEPTH_Z + BOOTH_HOSTESS_BACK_CLEARANCE),
 ];
 
+/** World-space head anchor for speech bubble + proximity (meters above desk-local feet). */
+const BOOTH_HOSTESS_BUBBLE_LOCAL_Y = BOOTH_HOSTESS_DESK_LOCAL[1] + 1.74;
+
+/** Hall camera must be within this horizontal-ish distance to trigger greeting. */
+const HOSTESS_GREETING_PROXIMITY_M = 5.15;
+/** Avoid overlapping SpeechSynthesis when several hostesses could fire at once. */
+let lastGlobalHostessSpeechAt = 0;
+const HOSTESS_SPEECH_GLOBAL_GAP_MS = 9000;
+
+const _hostessHeadWorld = new THREE.Vector3();
+
+function trySpeakHostessGreeting() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const now = Date.now();
+  if (now - lastGlobalHostessSpeechAt < HOSTESS_SPEECH_GLOBAL_GAP_MS) return;
+  lastGlobalHostessSpeechAt = now;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance('How can I help you?');
+    u.rate = 0.9;
+    u.pitch = 1.02;
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* ignore */
+  }
+}
+
+function speakHostessReply(text: string) {
+  const t = text.trim();
+  if (!t || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.rate = 0.9;
+    u.pitch = 1;
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* ignore */
+  }
+}
+
+function HostessGreetingBubble({
+  localPosition,
+  quickReplies,
+}: {
+  localPosition: [number, number, number];
+  quickReplies: HostessQuickReply[];
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const { camera } = useThree();
+  const activeBooth = useStore((s) => s.activeBooth);
+  const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
+  const setAiChatOpen = useStore((s) => s.setAiChatOpen);
+  const [visible, setVisible] = useState(false);
+  const wasNearRef = useRef(false);
+  const showRef = useRef(false);
+  const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
+
+  const shownOptions = useMemo(
+    () => quickReplies.filter((r) => r.label.trim() && (r.response.trim() || r.action === 'askAi')),
+    [quickReplies],
+  );
+
+  useFrame(() => {
+    if (activeBooth || ctaResourcePopup) {
+      wasNearRef.current = false;
+      if (showRef.current) {
+        showRef.current = false;
+        setVisible(false);
+      }
+      setActiveReplyId((id) => (id !== null ? null : id));
+      return;
+    }
+    if (!groupRef.current) return;
+    groupRef.current.getWorldPosition(_hostessHeadWorld);
+    const d = _hostessHeadWorld.distanceTo(camera.position);
+    const near = d < HOSTESS_GREETING_PROXIMITY_M;
+    if (near !== showRef.current) {
+      showRef.current = near;
+      setVisible(near);
+    }
+    if (!near) setActiveReplyId((id) => (id !== null ? null : id));
+    if (near && !wasNearRef.current) trySpeakHostessGreeting();
+    wasNearRef.current = near;
+  });
+
+  const activeReply = activeReplyId ? shownOptions.find((o) => o.id === activeReplyId) : undefined;
+
+  return (
+    <group ref={groupRef} position={localPosition}>
+      <Html
+        center
+        distanceFactor={7}
+        zIndexRange={[16777271, 16777271]}
+        style={{
+          opacity: visible ? 1 : 0,
+          transition: 'opacity 0.22s ease',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            gap: 6,
+            width: 'max-content',
+            maxWidth: 'min(92vw, 280px)',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              width: 'max-content',
+              maxWidth: 'min(92vw, 280px)',
+              whiteSpace: 'nowrap',
+              padding: '8px 14px',
+              borderRadius: 12,
+              background: '#ffffff',
+              border: '1.5px solid #111111',
+              boxShadow: '0 6px 18px rgba(0,0,0,0.22)',
+              color: '#111111',
+              fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontSize: 14,
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+              lineHeight: 1.2,
+              textAlign: 'center',
+              alignSelf: 'center',
+            }}
+          >
+            How can I help you?
+          </div>
+
+          {shownOptions.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, pointerEvents: 'auto' }}>
+              {shownOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (opt.action === 'askAi') {
+                      setAiChatOpen(true);
+                      setActiveReplyId(null);
+                      return;
+                    }
+                    setActiveReplyId(opt.id);
+                    speakHostessReply(opt.response);
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(212,175,55,0.55)',
+                    background: 'rgba(20,20,28,0.92)',
+                    color: '#f5e6bc',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textAlign: 'left',
+                    lineHeight: 1.25,
+                  }}
+                >
+                  {opt.label.trim()}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeReply && (
+            <div
+              style={{
+                maxHeight: 120,
+                overflowY: 'auto',
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: 'rgba(255,255,255,0.96)',
+                border: '1px solid #111',
+                color: '#1a1520',
+                fontSize: 12,
+                fontWeight: 500,
+                lineHeight: 1.35,
+                textAlign: 'left',
+                pointerEvents: 'auto',
+              }}
+            >
+              {activeReply.response.trim()}
+            </div>
+          )}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 /** Stable idle phase per booth / desk (desync motion). */
 function stringToPhase(s: string) {
   let h = 0;
@@ -61,9 +260,13 @@ function stringToPhase(s: string) {
   return h * 0.001 * Math.PI;
 }
 
-export function Booths() {
+export function Booths({ showVideos = true }: { showVideos?: boolean }) {
   const boothOverrides = useStore((s) => s.boothOverrides);
+  const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const hallLayout = useMemo(() => mergeHallLayout(sceneOverrides.hallLayout), [sceneOverrides.hallLayout]);
   const initBoothCms = useStore((s) => s.initBoothCms);
+
+  const showStandardBooths = sceneOverrides.showStandardBooths ?? DEFAULT_SCENE_CONFIG.showStandardBooths;
 
   useEffect(() => {
     void initBoothCms();
@@ -74,6 +277,11 @@ export function Booths() {
     [boothOverrides]
   );
 
+  const layoutsToRender = useMemo(
+    () => (showStandardBooths ? layouts : layouts.filter((b) => b.id === 'vertex-elite')),
+    [layouts, showStandardBooths],
+  );
+
   return (
     <group position={[0, 0, 0]}>
       {/* Central Featured Help Desk Zone */}
@@ -81,13 +289,12 @@ export function Booths() {
 
       {/* Main Path Decorative Plants (`tree.glb`) */}
       <Suspense fallback={null}>
-        <Plant position={[-5, 0, 15]} scale={1.08} />
-        <Plant position={[5, 0, 15]} scale={1.08} />
-        <Plant position={[-5, 0, 30]} scale={0.92} />
-        <Plant position={[5, 0, 30]} scale={0.92} />
+        {hallLayout.plantPositions.map((pos, i) => (
+          <Plant key={`hall-plant-${i}`} name={`hall-plant-${i}`} position={pos} scale={hallLayout.plantScales[i] ?? 1} />
+        ))}
       </Suspense>
 
-      {layouts.map((b) =>
+      {layoutsToRender.map((b) =>
         b.id === 'vertex-elite' ? (
           <VertexEliteBooth
             key={b.id}
@@ -104,7 +311,11 @@ export function Booths() {
             placedImages={b.placedImages}
             brochureUrl={b.brochureUrl}
             priceListUrl={b.priceListUrl}
-            siteMapUrl={b.siteMapUrl}
+            siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+            hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+            showVideos={showVideos}
+            media={b.media}
+            company={b.company}
           />
         ) : (
           <Booth
@@ -121,6 +332,8 @@ export function Booths() {
             headerLogoUrl={b.headerLogoUrl}
             lighting={b.lighting}
             placedImages={b.placedImages}
+            hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+            showVideos={showVideos}
           />
         )
       )}
@@ -306,6 +519,8 @@ function Booth({
   headerLogoUrl,
   lighting,
   placedImages,
+  hostessQuickReplies,
+  showVideos = true,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -319,11 +534,14 @@ function Booth({
   headerLogoUrl?: string;
   lighting: import('../data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
+  hostessQuickReplies: HostessQuickReply[];
+  showVideos?: boolean;
 }) {
   const setActiveBooth = useStore((state) => state.setActiveBooth);
+  const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
 
   return (
-    <group position={position} rotation={rotation} scale={boothScale}>
+    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
       {/* Back Wall with Luxury Trim */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
@@ -415,7 +633,7 @@ function Booth({
             <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
           </mesh>
           <Suspense fallback={<meshBasicMaterial color="#000" />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={videoUrl} position={[0, 0, 0.01]} />
+            <LedScreenSurface args={[1.5, 0.9]} url={effectiveVideoUrl} position={[0, 0, 0.01]} />
           </Suspense>
           <mesh position={[0, -0.6, 0]}>
             <boxGeometry args={[0.4, 0.2, 0.2]} />
@@ -442,7 +660,7 @@ function Booth({
 
         {/* Hostess: behind reception counter, facing aisle (+Z booth local); anchored to desk group */}
         <Suspense fallback={null}>
-          <BoothHostessGreeter boothId={id} />
+          <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
         </Suspense>
       </group>
 
@@ -454,7 +672,7 @@ function Booth({
         </mesh>
         <group position={[0, 0, 0.11]}>
           <Suspense fallback={<meshBasicMaterial color="#000" />}>
-            <LedScreenSurface args={[6.2, 3.4]} url={videoUrl} />
+            <LedScreenSurface args={[6.2, 3.4]} url={effectiveVideoUrl} />
           </Suspense>
         </group>
       </group>
@@ -520,9 +738,13 @@ function BoothPlacedImage({ item }: { item: PlacedImage }) {
 /* ─── Futuristic Vertex Elite Studio Booth ─── */
 export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  videoUrl, lighting, placedImages, brochureUrl, priceListUrl, siteMapUrl,
+  videoUrl, lighting, placedImages, brochureUrl, priceListUrl, siteMapUrls,
+  media = [],
+  company,
+  hostessQuickReplies,
   cmsPreview,
   cmsPlacedImageEdit,
+  showVideos = true,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -537,7 +759,10 @@ export function VertexEliteBooth({
   placedImages: PlacedImage[];
   brochureUrl?: string;
   priceListUrl?: string;
-  siteMapUrl?: string;
+  siteMapUrls: string[];
+  media?: MediaItem[];
+  company?: CompanyProfile;
+  hostessQuickReplies?: HostessQuickReply[];
   /** When true, skip the invisible “enter booth” hitbox (expo hall only). */
   cmsPreview?: boolean;
   cmsPlacedImageEdit?: {
@@ -545,14 +770,16 @@ export function VertexEliteBooth({
     onSelectImage: (id: string | null) => void;
     onDragImage: (id: string, pos: [number, number, number]) => void;
   };
+  showVideos?: boolean;
 }) {
-  const setActiveBooth = useStore((s) => s.setActiveBooth);
   const glow = accent;
   const dark = '#0c0c12';
   const glass = '#1a1a28';
+  const hq = hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES;
+  const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
 
   return (
-    <group position={position} rotation={rotation} scale={boothScale}>
+    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
       {/* ── Dark reflective floor ── */}
       <mesh position={[0, 0.02, -1.5]} receiveShadow>
         <boxGeometry args={[13, 0.04, 7]} />
@@ -698,7 +925,7 @@ export function VertexEliteBooth({
         </mesh>
         <group position={[0, 0, 0.07]}>
           <Suspense fallback={<meshBasicMaterial color="#000" />}>
-            <LedScreenSurface args={[8.3, 4.3]} url={videoUrl} />
+            <LedScreenSurface args={[8.3, 4.3]} url={effectiveVideoUrl} />
           </Suspense>
         </group>
       </group>
@@ -727,7 +954,7 @@ export function VertexEliteBooth({
         </group>
         {/* Hostess */}
         <Suspense fallback={null}>
-          <BoothHostessGreeter boothId={id} />
+          <BoothHostessGreeter boothId={id} cmsPreview={cmsPreview} hostessQuickReplies={hq} />
         </Suspense>
       </group>
 
@@ -736,29 +963,24 @@ export function VertexEliteBooth({
         glow={glow}
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
-        siteMapUrl={siteMapUrl}
+        siteMapUrls={siteMapUrls}
         position={[4.48, 0.03, 2.02]}
         rotation={[0, 0.13, 0]}
       />
 
-      {/* Click target — hall only (CMS reuses this mesh but must not open the expo booth UI). */}
-      {!cmsPreview && (
-        <mesh
-          position={[0, 1.5, 0.8]}
-          visible={false}
-          onClick={(e) => {
-            e.stopPropagation();
-            const offset = rotation[1] > 0 ? 7 : -7;
-            const tp: [number, number, number] = [position[0] + offset, 1.7, position[2]];
-            setActiveBooth(name, tp);
-            document.exitPointerLock();
-          }}
-          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-          onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-        >
-          <boxGeometry args={[6, 3, 4]} />
-        </mesh>
-      )}
+      <VertexEliteProximityPanels
+        glow={glow}
+        brochureUrl={brochureUrl}
+        priceListUrl={priceListUrl}
+        siteMapUrls={siteMapUrls}
+        videoUrl={videoUrl}
+        media={media}
+        placedImages={placedImages}
+        company={company}
+        cmsPreview={cmsPreview}
+      />
+
+      {/* No invisible “open booth card” hitbox: canopy / interior clicks should not open the legacy center modal (HUD + kiosk handle CTAs). */}
 
       {/* ── Lounge chairs — no castShadow on small pieces ── */}
       {[[-3.5, 0, 1.8], [3.5, 0, 1.8]].map(([cx, cy, cz], ci) => (
@@ -956,16 +1178,18 @@ function prepareHallTreeModel(source: THREE.Object3D, heightScale: number) {
 }
 
 function Plant({
+  name,
   position,
   scale = 1,
 }: {
+  name: string;
   position: [number, number, number];
   scale?: number;
 }) {
   const { scene } = useGLTF(HALL_TREE_MODEL_URL) as { scene: THREE.Object3D };
   const model = useMemo(() => prepareHallTreeModel(scene, scale), [scene, scale]);
   return (
-    <group position={position}>
+    <group name={name} position={position}>
       <primitive object={model} />
     </group>
   );
@@ -1465,23 +1689,43 @@ function ExpoHostessAvatar({
 /**
  * Behind the procedural reception counter (parent = desk group). Faces +Z booth local (aisle).
  */
-function BoothHostessGreeter({ boothId }: { boothId: string }) {
+function BoothHostessGreeter({
+  boothId,
+  cmsPreview,
+  hostessQuickReplies,
+}: {
+  boothId: string;
+  cmsPreview?: boolean;
+  hostessQuickReplies: HostessQuickReply[];
+}) {
+  const bubbleLocal: [number, number, number] = [
+    BOOTH_HOSTESS_DESK_LOCAL[0],
+    BOOTH_HOSTESS_BUBBLE_LOCAL_Y,
+    BOOTH_HOSTESS_DESK_LOCAL[2],
+  ];
   return (
-    <ExpoHostessAvatar
-      position={BOOTH_HOSTESS_DESK_LOCAL}
-      rotation={[0, BOOTH_HOSTESS_YAW, 0]}
-      idlePhase={stringToPhase(boothId)}
-    />
+    <>
+      <ExpoHostessAvatar
+        position={BOOTH_HOSTESS_DESK_LOCAL}
+        rotation={[0, BOOTH_HOSTESS_YAW, 0]}
+        idlePhase={stringToPhase(boothId)}
+      />
+      {!cmsPreview && <HostessGreetingBubble localPosition={bubbleLocal} quickReplies={hostessQuickReplies} />}
+    </>
   );
 }
 
 function HelpDeskCustomGirl() {
+  const bubbleLocal: [number, number, number] = [1.72, 0 + 1.74, 3.28];
   return (
-    <ExpoHostessAvatar
-      position={[1.72, 0, 3.28]}
-      rotation={[0, -0.8, 0]}
-      idlePhase={stringToPhase('concierge-desk')}
-    />
+    <>
+      <ExpoHostessAvatar
+        position={[1.72, 0, 3.28]}
+        rotation={[0, -0.8, 0]}
+        idlePhase={stringToPhase('concierge-desk')}
+      />
+      <HostessGreetingBubble localPosition={bubbleLocal} quickReplies={EMPTY_HOSTESS_REPLIES} />
+    </>
   );
 }
 

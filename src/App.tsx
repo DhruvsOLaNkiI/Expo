@@ -7,9 +7,19 @@ import { RoamingExecutive } from './components/RoamingExecutive';
 import { Ballroom } from './components/Ballroom';
 import { Lighting } from './components/Lighting';
 import { Effects } from './components/Effects';
-import { useStore, type CtaResourcePopup } from './store';
+import { useStore } from './store';
 import { CmsDashboard } from './cms/CmsDashboard';
-import { Suspense, useState, useEffect, lazy } from 'react';
+import { CtaResourcePopupView } from './components/CtaResourcePopup';
+import { AiChatbox } from './components/AiChatbox';
+import { VertexEliteScreenHud } from './components/VertexEliteScreenHud';
+import { PageIndexPortal } from './PageIndexPortal';
+import { Suspense, useState, useEffect, useMemo } from 'react';
+import { mergeSceneConfig } from './data/boothLayouts';
+import { HallLayoutGizmos } from './components/HallLayoutGizmos';
+import { HallLayoutEditHud } from './components/HallLayoutEditHud';
+import { RegistrationHall } from './components/RegistrationHall';
+import { RegistrationLobbyHud } from './components/RegistrationLobbyHud';
+import { FastTravelHud } from './components/FastTravelHud';
 
 function Joystick() {
   const setJoystickData = useStore((state) => state.setJoystickData);
@@ -53,115 +63,39 @@ function Joystick() {
   );
 }
 
-function CtaResourcePopupView({ popup, onClose }: { popup: CtaResourcePopup; onClose: () => void }) {
-  const variant = popup.variant ?? 'document';
-  const [imageError, setImageError] = useState(false);
-
-  useEffect(() => {
-    setImageError(false);
-  }, [popup.url, popup.title]);
-
-  const openTab = () => {
-    window.open(popup.url, '_blank', 'noopener,noreferrer');
-  };
-
-  const isImage = variant === 'image';
-
-  return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm pointer-events-auto"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cta-popup-title"
-        className={`w-full rounded-xl border border-[#d4af37]/40 bg-[#0a0a10]/95 p-6 text-[#fffef8] shadow-2xl ${isImage ? 'max-w-4xl' : 'max-w-lg'}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3 border-b border-white/10 pb-4">
-          <h2 id="cta-popup-title" className="text-lg font-bold uppercase tracking-[0.18em] text-[#d4af37]">
-            {popup.title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        {isImage && !imageError ? (
-          <>
-            <p className="mb-3 text-sm text-white/70">
-              Site map preview on screen. Scroll if the image is larger than the panel. Use &quot;Open in new tab&quot; for the full-size file or if the image does not load.
-            </p>
-            <div className="mb-6 max-h-[min(72vh,780px)] overflow-auto rounded-lg border border-white/10 bg-black/40 p-2">
-              <img
-                src={popup.url}
-                alt={popup.title}
-                className="mx-auto block max-h-[min(68vh,720px)] w-auto max-w-full object-contain select-none"
-                draggable={false}
-                decoding="async"
-                referrerPolicy="no-referrer"
-                onError={() => setImageError(true)}
-              />
-            </div>
-          </>
-        ) : isImage && imageError ? (
-          <>
-            <p className="mb-4 text-sm text-amber-200/90">
-              This URL could not be shown as an image (wrong format, blocked hotlink, or unavailable). Use &quot;Open in new tab&quot;, or set Site Map URL in CMS to a PNG, JPG, WebP, SVG, or a data URL.
-            </p>
-            <p className="mb-6 break-all rounded-lg bg-black/40 px-3 py-2 font-mono text-xs text-[#f5d060]">
-              {popup.url}
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="mb-4 text-sm text-white/70">
-              Preview opens in a new tab, or use the button below. Close this panel to keep exploring the hall.
-            </p>
-            <p className="mb-6 break-all rounded-lg bg-black/40 px-3 py-2 font-mono text-xs text-[#f5d060]">
-              {popup.url}
-            </p>
-          </>
-        )}
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            className="min-h-[44px] flex-1 rounded-lg bg-[#d4af37] px-4 py-3 text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-[#c9a43a]"
-            onClick={openTab}
-          >
-            Open in new tab
-          </button>
-          <button
-            type="button"
-            className="min-h-[44px] flex-1 rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/90 transition-colors hover:bg-white/10"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const activeBooth = useStore((s) => s.activeBooth);
   const setActiveBooth = useStore((s) => s.setActiveBooth);
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
+  const setAiChatOpen = useStore((s) => s.setAiChatOpen);
   const showInstructions = useStore((s) => s.showInstructions);
   const setShowInstructions = useStore((s) => s.setShowInstructions);
   const cmsPage = useStore((s) => s.cmsPage);
   const setCmsPage = useStore((s) => s.setCmsPage);
+  const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const sceneConfig = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
+  const postProcessing = sceneConfig.postProcessing;
+  const showBallroom = sceneConfig.showBallroom;
+  const showRoamingExecutive = sceneConfig.showRoamingExecutive;
+  const showVideos = sceneConfig.showVideos;
+  const setHallLayoutEditMode = useStore((s) => s.setHallLayoutEditMode);
+  const setHallLayoutSelection = useStore((s) => s.setHallLayoutSelection);
+  const hallLayoutEditMode = useStore((s) => s.hallLayoutEditMode);
+  const expoPhase = useStore((s) => s.expoPhase);
+  const registrationUi = useStore((s) => s.registrationUi);
+  const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
   const [isTouch, setIsTouch] = useState(false);
+
+  const inRegistration = expoPhase === 'registration';
+  const sceneBg = inRegistration ? '#0f0f12' : '#fdfbf2';
+  const sceneFogNear = inRegistration ? 25 : 25;
+  const sceneFogFar = inRegistration ? 100 : 120;
+
+  const glConfig = useMemo(
+    () => ({ antialias: postProcessing, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance' as const }),
+    [postProcessing],
+  );
 
   useEffect(() => {
     setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -172,6 +106,9 @@ export default function App() {
     if (normalized === '/cms') {
       setCmsPage('cms');
       window.history.replaceState(null, '', '/cms');
+    } else if (normalized === '/pageindex') {
+      setCmsPage('pageindex');
+      window.history.replaceState(null, '', '/pageindex');
     }
   }, [setCmsPage]);
 
@@ -179,6 +116,9 @@ export default function App() {
     if (cmsPage === 'cms') {
       if (document.pointerLockElement) document.exitPointerLock();
       window.history.replaceState(null, '', '/cms');
+    } else if (cmsPage === 'pageindex') {
+      if (document.pointerLockElement) document.exitPointerLock();
+      window.history.replaceState(null, '', '/pageindex');
     } else {
       window.history.replaceState(null, '', '/');
     }
@@ -189,6 +129,7 @@ export default function App() {
   }, [ctaResourcePopup]);
 
   if (cmsPage === 'cms') return <CmsDashboard />;
+  if (cmsPage === 'pageindex') return <PageIndexPortal />;
 
   return (
     <div
@@ -204,24 +145,79 @@ export default function App() {
         ]}
       >
         <Canvas
-          shadows="soft"
+          shadows
           camera={{ fov: 65, near: 0.1, far: 220 }}
-          dpr={[1, 1.25]}
-          gl={{ antialias: true, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance' }}
+          dpr={[1, 1]}
+          gl={glConfig}
         >
-          <color attach="background" args={['#fdfbf2']} />
-          <fog attach="fog" args={['#fdfbf2', 25, 120]} />
+          <color attach="background" args={[sceneBg]} />
+          <fog attach="fog" args={[sceneBg, sceneFogNear, sceneFogFar]} />
           <Suspense fallback={null}>
             <Lighting />
-            <ExpoHall />
-            <Booths />
-            <RoamingExecutive />
-            <Ballroom />
+            {inRegistration ? (
+              <RegistrationHall />
+            ) : (
+              <>
+                <ExpoHall showVideos={showVideos} />
+                <Booths showVideos={showVideos} />
+                {showRoamingExecutive && <RoamingExecutive />}
+                {showBallroom && <Ballroom showVideos={showVideos} />}
+              </>
+            )}
+            <HallLayoutGizmos />
             <Player />
-            <Effects />
+            {postProcessing && <Effects />}
           </Suspense>
         </Canvas>
       </KeyboardControls>
+
+      {inRegistration && registrationUi === 'none' && !showInstructions && !hallLayoutEditMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[45] pointer-events-none text-center px-4">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.35em] text-[#d4af37] mb-1">Event registration</p>
+          <p className="text-sm md:text-base font-semibold text-[#e8e4dc] tracking-wide">
+            Join the queue · Click the counter to check in
+          </p>
+        </div>
+      )}
+
+      <RegistrationLobbyHud />
+
+      <FastTravelHud />
+
+      {!inRegistration && <VertexEliteScreenHud />}
+
+      <HallLayoutEditHud />
+
+      {inRegistration && !showInstructions && registrationUi === 'none' && (
+        <button
+          type="button"
+          className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md pointer-events-auto hover:bg-black transition-all"
+          onClick={() => openRegistrationPopup()}
+        >
+          Register Now
+        </button>
+      )}
+
+      {/* Move hall props / booths in-world; saves to localStorage (scene + booth overrides). */}
+      <button
+        type="button"
+        className="fixed bottom-3 left-36 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
+        onClick={() => {
+          setHallLayoutSelection(inRegistration ? 'reg-reception-root' : 'hall-entrance-lobby');
+          setHallLayoutEditMode(true);
+        }}
+      >
+        Edit layout
+      </button>
+
+      {/* PageIndex PDF tool (separate page) */}
+      <button
+        type="button"
+        className="fixed bottom-3 left-3 z-[55] rounded-lg border border-emerald-500/25 bg-emerald-950/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-emerald-200 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-emerald-900/90 transition-all"
+        onClick={() => setCmsPage('pageindex')}
+      >
+        PageIndex
+      </button>
 
       {/* CMS launch button */}
       <button
@@ -231,6 +227,19 @@ export default function App() {
       >
         Open CMS
       </button>
+
+      {/* Ask AI button */}
+      <button
+        type="button"
+        className="fixed bottom-3 right-32 z-[55] rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/10 backdrop-blur-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl pointer-events-auto hover:bg-[#d4af37]/20 transition-all flex items-center gap-2"
+        onClick={() => setAiChatOpen(true)}
+      >
+        <span>🤖</span>
+        Ask AI
+      </button>
+
+      {/* AI Chatbox */}
+      <AiChatbox />
 
       {isTouch && !showInstructions && !ctaResourcePopup && <Joystick />}
 
@@ -280,7 +289,13 @@ export default function App() {
         <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-40 backdrop-blur-sm pointer-events-auto">
           <div className="text-center px-4">
             <h1 className="text-3xl md:text-5xl font-bold tracking-widest text-[#d4af37] mb-4">VIRTUAL EXPO</h1>
-            <h2 className="text-lg md:text-2xl font-light text-black tracking-[0.2em] mb-8 md:mb-12">LUXURY RESIDENCES</h2>
+            <h2 className="text-lg md:text-2xl font-light text-black tracking-[0.2em] mb-4 md:mb-6">LUXURY RESIDENCES</h2>
+            {inRegistration && (
+              <p className="text-sm text-gray-600 tracking-wide mb-8 md:mb-10 max-w-md mx-auto">
+                You will arrive in the registration lobby first, then enter the main exhibition hall.
+              </p>
+            )}
+            {!inRegistration && <div className="mb-8 md:mb-12" />}
             <div className="bg-black/5 border border-black/10 p-6 md:p-8 rounded-2xl backdrop-blur-md inline-block">
               <p className="text-black text-base md:text-lg mb-6">{isTouch ? "Tap to enter" : "Click anywhere to enter"}</p>
               <div className="flex items-center justify-center gap-4 md:gap-8 text-gray-700">

@@ -1,23 +1,28 @@
 import { Torus } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../store';
-import { useState, Suspense, useRef, useLayoutEffect } from 'react';
+import { useState, Suspense, useRef, useLayoutEffect, useMemo } from 'react';
 import { LedVideoPlane } from './LedVideoPlane';
+import { mergeHallLayout } from '../data/boothLayouts';
 
-export function ExpoHall() {
+export function ExpoHall({ showVideos = true }: { showVideos?: boolean }) {
   const setPlayerPosition = useStore((state) => state.setPlayerPosition);
+  const hallLayoutOv = useStore((state) => state.sceneOverrides.hallLayout);
+  const hallLayout = useMemo(() => mergeHallLayout(hallLayoutOv), [hallLayoutOv]);
   const [hoverPos, setHoverPos] = useState<THREE.Vector3 | null>(null);
   const hallSize = 90;
   const halfHall = hallSize / 2;
   const wallHeight = 18;
   const ceilingY = 18;
   const entranceZ = halfHall - 2;
-  const gridStep = 10;
+  const gridStep = 15;
   const gridLineCount = Math.floor(hallSize / gridStep) + 1;
+  const [ox, oy, oz] = hallLayout.entranceLobbyOffset;
+  const [bx, by, bz] = hallLayout.receptionBannerOffset;
 
   return (
     <group>
-      {/* ======= PREMIUM MARBLE FLOOR ======= */}
+      {/* ======= RED CARPET FLOORING ======= */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
@@ -31,22 +36,23 @@ export function ExpoHall() {
       >
         <planeGeometry args={[hallSize, hallSize]} />
         <meshStandardMaterial
-          color="#f0ede6"
-          roughness={0.15}
-          metalness={0.05}
+          color="#7a1228"
+          roughness={0.92}
+          metalness={0}
+          envMapIntensity={0.25}
         />
       </mesh>
 
-      {/* Subtle Floor Grid Lines (Marble Tile Effect) */}
+      {/* Subtle carpet nap / panel lines (darker pile) */}
       {Array.from({ length: gridLineCount }).map((_, i) => (
         <group key={`floor-grid-${i}`}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-halfHall + i * gridStep, 0.002, 0]}>
-            <planeGeometry args={[0.03, hallSize]} />
-            <meshStandardMaterial color="#d4d0c8" roughness={0.5} />
+            <planeGeometry args={[0.045, hallSize]} />
+            <meshStandardMaterial color="#4a0a18" roughness={0.96} metalness={0} />
           </mesh>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, -halfHall + i * gridStep]}>
-            <planeGeometry args={[hallSize, 0.03]} />
-            <meshStandardMaterial color="#d4d0c8" roughness={0.5} />
+            <planeGeometry args={[hallSize, 0.045]} />
+            <meshStandardMaterial color="#4a0a18" roughness={0.96} metalness={0} />
           </mesh>
         </group>
       ))}
@@ -74,20 +80,20 @@ export function ExpoHall() {
 
       {/* Architectural Ceiling Rings (Bharat Mandapam vibe) */}
       <group position={[0, ceilingY - 1.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <Torus args={[12, 0.25, 16, 100]}>
+        <Torus args={[12, 0.25, 12, 48]}>
           <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} emissive="#d4af37" emissiveIntensity={0.2} />
         </Torus>
-        <Torus args={[18.5, 0.25, 16, 100]}>
+        <Torus args={[18.5, 0.25, 12, 48]}>
           <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} emissive="#d4af37" emissiveIntensity={0.1} />
         </Torus>
-        <Torus args={[25.5, 0.25, 16, 100]}>
+        <Torus args={[25.5, 0.25, 12, 48]}>
           <meshStandardMaterial color="#fdfaf5" metalness={0.1} roughness={0.4} />
         </Torus>
       </group>
 
       {/* Recessed Ceiling Cove Light Ring */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ceilingY - 0.45, 0]}>
-        <ringGeometry args={[11.5, 12.3, 128]} />
+        <ringGeometry args={[11.5, 12.3, 64]} />
         <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.6} />
       </mesh>
 
@@ -106,7 +112,7 @@ export function ExpoHall() {
       <Wall position={[halfHall, wallHeight / 2, 0]} rotation={[0, -Math.PI / 2, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
 
       {/* ======= ENTRANCE LOBBY ======= */}
-      <group position={[0, 0, entranceZ]}>
+      <group name="hall-entrance-lobby" position={[ox, oy, entranceZ + oz]}>
         {/* Reception Desk */}
         <group position={[0, 0.5, -4]}>
           <mesh position={[0, 0, 0]} castShadow>
@@ -120,7 +126,7 @@ export function ExpoHall() {
         </group>
 
         {/* Large Reception Banner (Single Premium Display) */}
-        <group position={[0, 6, -4.5]} rotation={[0, Math.PI, 0]}>
+        <group name="hall-reception-banner" position={[bx, 6 + by, -4.5 + bz]} rotation={[0, Math.PI, 0]}>
           {/* Support Pillars */}
           <mesh position={[-8.1, -3, 0]}>
             <cylinderGeometry args={[0.1, 0.1, 12, 16]} />
@@ -132,14 +138,21 @@ export function ExpoHall() {
           </mesh>
 
           {/* Main LED Video Panel */}
-          <Suspense fallback={
+          {showVideos ? (
+            <Suspense fallback={
+              <mesh position={[0, 0, -0.1]}>
+                <planeGeometry args={[16.2, 9.2]} />
+                <meshStandardMaterial color="#080808" metalness={0.8} roughness={0.2} />
+              </mesh>
+            }>
+              <LedVideoPlane args={[16.2, 9.2]} url="/expo-led-video.mp4" position={[0, 0, -0.1]} />
+            </Suspense>
+          ) : (
             <mesh position={[0, 0, -0.1]}>
               <planeGeometry args={[16.2, 9.2]} />
               <meshStandardMaterial color="#080808" metalness={0.8} roughness={0.2} />
             </mesh>
-          }>
-            <LedVideoPlane args={[16.2, 9.2]} url="/expo-led-video.mp4" position={[0, 0, -0.1]} />
-          </Suspense>
+          )}
 
           {/* Decorative frame */}
           <mesh position={[0, 4.6, 0]}>
