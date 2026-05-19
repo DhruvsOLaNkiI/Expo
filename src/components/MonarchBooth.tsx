@@ -107,12 +107,21 @@ export function MonarchBooth({
         <meshStandardMaterial color={champagneGold} metalness={0.8} roughness={0.2} />
       </mesh>
 
-      {/* Header Canopy */}
+      {/* Header sign board — dark maroon so gold lettering reads clearly */}
       <mesh position={[0, 6.5, -4]} castShadow>
         <boxGeometry args={[12.5, 1.5, 0.8]} />
-        <meshStandardMaterial color={lightBeige} metalness={0.1} roughness={0.3} />
+        <meshStandardMaterial color={darkMaroon} roughness={0.55} metalness={0.12} />
       </mesh>
-      
+      {/* Champagne gold frame on sign face */}
+      <mesh position={[0, 6.5, -3.58]}>
+        <boxGeometry args={[12.5, 1.42, 0.04]} />
+        <meshStandardMaterial color={champagneGold} metalness={0.75} roughness={0.28} />
+      </mesh>
+      <mesh position={[0, 6.5, -3.56]}>
+        <boxGeometry args={[12.1, 1.22, 0.02]} />
+        <meshStandardMaterial color={maroon} roughness={0.6} metalness={0.1} />
+      </mesh>
+
       {/* Front edge lighting for Header Canopy */}
       <mesh position={[0, 5.8, -3.58]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />
@@ -121,15 +130,23 @@ export function MonarchBooth({
 
       {/* Branding */}
       <Text
-        position={[0, 6.5, -3.55]}
-        fontSize={0.8}
-        color={champagneGold}
+        position={[0, 6.5, -3.52]}
+        fontSize={0.72}
+        color="#f5e6c8"
         anchorX="center"
         anchorY="middle"
+        letterSpacing={0.04}
         font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
       >
         {name}
-        <meshStandardMaterial attach="material" color={champagneGold} emissive={champagneGold} emissiveIntensity={0.2} />
+        <meshStandardMaterial
+          attach="material"
+          color="#f5e6c8"
+          emissive="#e0ceaa"
+          emissiveIntensity={0.85}
+          metalness={0.35}
+          roughness={0.4}
+        />
       </Text>
 
       {/* Interactive Concierge Desk (Maroon & Gold) */}

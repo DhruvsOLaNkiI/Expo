@@ -219,9 +219,22 @@ export function CmsScenePanel() {
       <CmsColor label="Color" value={cfg.ceilingLightColor} onChange={(v) => patchScene({ ceilingLightColor: v })} />
 
       <SectionTitle>Fog</SectionTitle>
-      <CmsSlider label="Near" value={cfg.fogNear} onChange={(v) => patchScene({ fogNear: v })} min={1} max={100} step={1} />
-      <CmsSlider label="Far" value={cfg.fogFar} onChange={(v) => patchScene({ fogFar: v })} min={10} max={300} step={1} />
-      <CmsColor label="Fog Color" value={cfg.fogColor} onChange={(v) => patchScene({ fogColor: v })} />
+      <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+        <input
+          type="checkbox"
+          checked={cfg.fogEnabled === true}
+          onChange={(e) => patchScene({ fogEnabled: e.target.checked })}
+          className="accent-[#d4af37]"
+        />
+        <span className="text-[11px] text-white/80">Enable distance fog</span>
+      </label>
+      {cfg.fogEnabled && (
+        <>
+          <CmsSlider label="Near" value={cfg.fogNear} onChange={(v) => patchScene({ fogNear: v })} min={1} max={100} step={1} />
+          <CmsSlider label="Far" value={cfg.fogFar} onChange={(v) => patchScene({ fogFar: v })} min={10} max={300} step={1} />
+          <CmsColor label="Fog Color" value={cfg.fogColor} onChange={(v) => patchScene({ fogColor: v })} />
+        </>
+      )}
 
       <SectionTitle>Post-Processing</SectionTitle>
       <CmsSlider label="Bloom Intensity" value={cfg.bloomIntensity} onChange={(v) => patchScene({ bloomIntensity: v })} min={0} max={2} />

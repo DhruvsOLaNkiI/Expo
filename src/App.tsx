@@ -93,9 +93,8 @@ export default function App() {
   const needsOnboarding = !visitorProfile;
 
   const inRegistration = expoPhase === 'registration';
-  const sceneBg = inRegistration ? '#0f0f12' : '#fdfbf2';
-  const sceneFogNear = inRegistration ? 12 : 25;
-  const sceneFogFar = inRegistration ? 42 : 120;
+  const sceneBg = inRegistration ? '#0f0f12' : sceneConfig.bgColor || '#fdfbf2';
+  const fogEnabled = sceneConfig.fogEnabled === true;
 
   const glConfig = useMemo(
     () => ({ antialias: postProcessing, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance' as const }),
@@ -151,12 +150,21 @@ export default function App() {
       >
         <Canvas
           shadows
-          camera={{ fov: 65, near: 0.1, far: 220 }}
+          camera={{ fov: 65, near: 0.1, far: fogEnabled ? 220 : 400 }}
           dpr={[1, 1]}
           gl={glConfig}
         >
           <color attach="background" args={[sceneBg]} />
-          <fog attach="fog" args={[sceneBg, sceneFogNear, sceneFogFar]} />
+          {fogEnabled && (
+            <fog
+              attach="fog"
+              args={[
+                sceneConfig.fogColor || sceneBg,
+                inRegistration ? 12 : sceneConfig.fogNear,
+                inRegistration ? 42 : sceneConfig.fogFar,
+              ]}
+            />
+          )}
           <Suspense fallback={null}>
             <Lighting />
             {inRegistration ? (

@@ -8,6 +8,7 @@ import { LedScreenSurface, isScreenImageUrl } from './LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
+import { HallAisleStandees } from './HallAisleStandees';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
 import { applyBoothOverrides, buildDefaultBoothLayoutList, DEFAULT_SCENE_CONFIG, siteMapUrlsFromConfig, mergeHallLayout, type PlacedImage, type HostessQuickReply, type MediaItem, type CompanyProfile } from '../data/boothLayouts';
 import { MonarchBooth } from './MonarchBooth';
@@ -296,6 +297,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
           <Plant key={`hall-plant-${i}`} name={`hall-plant-${i}`} position={pos} scale={hallLayout.plantScales[i] ?? 1} />
         ))}
       </Suspense>
+
+      <HallAisleStandees layouts={layouts} />
 
       {layoutsToRender.map((b) => {
         if (b.id === 'vertex-elite') {
@@ -1372,35 +1375,53 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
             <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.35} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
           </mesh>
 
-          {/* Front Branding & Concierge Panel */}
+          {/* Front branding — Help Desk panel */}
           <group position={[0, 0, 0]} rotation={[0, Math.PI * 0.8, 0]}>
             <mesh position={[0, 0.55, 5.85]} castShadow>
-              <boxGeometry args={[3, 1.1, 0.1]} />
+              <boxGeometry args={[3.35, 1.15, 0.1]} />
               <meshStandardMaterial color="#ffffff" roughness={0.1} />
             </mesh>
             <Text
-              position={[0, 0.65, 5.96]}
-              fontSize={0.28}
-              color="#d4af37"
+              position={[0, 0.72, 5.96]}
+              fontSize={0.24}
+              color="#ffd700"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
               anchorY="middle"
+              letterSpacing={0.06}
             >
-              CONCIERGE
-              <meshStandardMaterial attach="material" color="#d4af37" emissive="#d4af37" emissiveIntensity={0.5} />
+              HELP DESK
+              <meshStandardMaterial attach="material" color="#ffd700" emissive="#ffd700" emissiveIntensity={0.45} />
             </Text>
             <Text
-              position={[0, 0.4, 5.96]}
-              fontSize={0.1}
-              color="#333"
+              position={[0, 0.52, 5.96]}
+              fontSize={0.068}
+              maxWidth={3.1}
+              color="#1a1a1a"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
               anchorY="middle"
-              letterSpacing={0.1}
+              letterSpacing={0.02}
             >
-              PREMIUM REAL ESTATE SUMMIT
+              Digital Property Expo (NOIDA)
+            </Text>
+            <Text
+              position={[0, 0.36, 5.96]}
+              fontSize={0.048}
+              color="#666"
+              font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
+              anchorX="center"
+              anchorY="middle"
+              letterSpacing={0.12}
+            >
+              Powered By
             </Text>
           </group>
+
+          {/* Concierge hostess — desk-local coords, faces visitors at the CONCIERGE panel */}
+          <Suspense fallback={null}>
+            <HelpDeskCustomGirl />
+          </Suspense>
 
           {/* Integrated iMac-style stations — evenly spaced on full ring */}
           {Array.from({ length: 5 }).map((_, i) => {
@@ -1420,9 +1441,6 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
               </group>
             );
           })}
-          <Suspense fallback={null}>
-            <HelpDeskCustomGirl />
-          </Suspense>
         </group>
       </group>
 
@@ -1687,14 +1705,39 @@ function prepareHostessModel(
   return root;
 }
 
+function applyLuxuryNavyOutfit(root: THREE.Object3D) {
+  const navy = new THREE.Color('#0f1a3d');
+  const navyLight = new THREE.Color('#1a2d52');
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+      const { r, g, b } = mat.color;
+      const isSkinOrHair =
+        (r > 0.42 && g > 0.28 && b > 0.22 && r > g) ||
+        (r > 0.55 && g > 0.45 && b > 0.38);
+      if (isSkinOrHair) continue;
+      mat.color.copy(r + g + b > 0.55 ? navyLight : navy);
+      mat.metalness = 0.22;
+      mat.roughness = 0.58;
+    }
+  });
+}
+
 function ExpoHostessAvatar({
   position,
   rotation,
   idlePhase = 0,
+  navyOutfit = false,
+  subtleIdleLoop = false,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   idlePhase?: number;
+  navyOutfit?: boolean;
+  subtleIdleLoop?: boolean;
 }) {
   const breathingRef = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(HOSTESS_MODEL_URL) as {
@@ -1703,10 +1746,11 @@ function ExpoHostessAvatar({
   };
 
   const animCount = animations?.length ?? 0;
-  const model = useMemo(
-    () => prepareHostessModel(scene, { skipManualArmPose: animCount > 0 }),
-    [scene, animCount]
-  );
+  const model = useMemo(() => {
+    const root = prepareHostessModel(scene, { skipManualArmPose: animCount > 0 });
+    if (navyOutfit) applyLuxuryNavyOutfit(root);
+    return root;
+  }, [scene, animCount, navyOutfit]);
 
   /** Hips_01 / Mixamo-style rig: without a baked clip, skip spine/forearm procedural idle. */
   const isScene3Hostess = useMemo(() => {
@@ -1766,6 +1810,16 @@ function ExpoHostessAvatar({
     action.setEffectiveWeight(1);
     action.play();
     const dur = clip.duration > 1e-6 ? clip.duration : 1;
+    if (subtleIdleLoop) {
+      action.timeScale = 0.42;
+      freezePoseActiveRef.current = false;
+      return () => {
+        freezePoseActiveRef.current = false;
+        action.stop();
+        mixer.stopAllAction();
+        mixerRef.current = null;
+      };
+    }
     const seekT = Math.min(Math.max(dur * 0.18, 0.12), dur * 0.95);
     mixer.update(seekT);
     action.paused = true;
@@ -1776,7 +1830,7 @@ function ExpoHostessAvatar({
       mixer.stopAllAction();
       mixerRef.current = null;
     };
-  }, [model, animations]);
+  }, [model, animations, subtleIdleLoop]);
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
@@ -1849,17 +1903,46 @@ export function BoothHostessGreeter({
   );
 }
 
+/** Same yaw as the CONCIERGE branding panel (`FeaturedProperty` front group). */
+const CONCIERGE_PANEL_YAW = Math.PI * 0.8;
+/** Just inside the panel (panel mesh z ≈ 5.85 in branding-local +Z). */
+const CONCIERGE_HOSTESS_RADIUS = 4.78;
+const CONCIERGE_HOSTESS_POS: [number, number, number] = [
+  CONCIERGE_HOSTESS_RADIUS * Math.sin(CONCIERGE_PANEL_YAW),
+  0,
+  CONCIERGE_HOSTESS_RADIUS * Math.cos(CONCIERGE_PANEL_YAW),
+];
+/** GLB forward is +Z — yaw aligns with radial line toward visitors (same as booth hostesses). */
+const CONCIERGE_HOSTESS_ROT: [number, number, number] = [0, CONCIERGE_PANEL_YAW, 0];
+const CONCIERGE_HOSTESS_BUBBLE_Y = 1.82;
+
 function HelpDeskCustomGirl() {
-  const bubbleLocal: [number, number, number] = [1.72, 0 + 1.74, 3.28];
+  const [px, , pz] = CONCIERGE_HOSTESS_POS;
+  const bubblePos: [number, number, number] = [px, CONCIERGE_HOSTESS_BUBBLE_Y, pz];
+
   return (
-    <>
-      <ExpoHostessAvatar
-        position={[1.72, 0, 3.28]}
-        rotation={[0, -0.8, 0]}
-        idlePhase={stringToPhase('concierge-desk')}
+    <group name="concierge-desk-hostess">
+      <spotLight
+        position={[px, 5.2, pz + 1.5]}
+        angle={0.48}
+        penumbra={0.88}
+        intensity={52}
+        color="#fff6e8"
+        distance={14}
+        decay={2}
+        castShadow
       />
-      <HostessGreetingBubble localPosition={bubbleLocal} quickReplies={EMPTY_HOSTESS_REPLIES} />
-    </>
+      <pointLight position={[px, 2.8, pz + 1.2]} intensity={14} color="#ffe8c8" distance={8} decay={2} />
+
+      <ExpoHostessAvatar
+        position={CONCIERGE_HOSTESS_POS}
+        rotation={CONCIERGE_HOSTESS_ROT}
+        idlePhase={stringToPhase('concierge-desk')}
+        navyOutfit
+      />
+      {/* Shows when you walk close — not the old always-on blue label */}
+      <HostessGreetingBubble localPosition={bubblePos} quickReplies={EMPTY_HOSTESS_REPLIES} />
+    </group>
   );
 }
 

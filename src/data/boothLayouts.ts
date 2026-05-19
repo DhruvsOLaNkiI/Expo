@@ -256,6 +256,8 @@ export type SceneConfig = {
   hallAmbientColor: string;
   ceilingLightIntensity: number;
   ceilingLightColor: string;
+  /** Distance fog — off by default so the hall stays sharp end-to-end. */
+  fogEnabled: boolean;
   fogNear: number;
   fogFar: number;
   fogColor: string;
@@ -293,6 +295,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   hallAmbientColor: '#fff8ef',
   ceilingLightIntensity: 280,
   ceilingLightColor: '#ffffff',
+  fogEnabled: false,
   fogNear: 25,
   fogFar: 120,
   fogColor: '#fdfbf2',

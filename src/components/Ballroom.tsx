@@ -1,8 +1,104 @@
-import { Text, Box, useGLTF } from '@react-three/drei';
-import { Suspense, useMemo, useRef, useLayoutEffect } from 'react';
+import { Box, useGLTF } from '@react-three/drei';
+import { Suspense, useMemo, useRef, useLayoutEffect, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import schoolChairUrl from '../../school-chair/school_chair.glb?url';
 import { LedVideoPlane } from './LedVideoPlane';
+
+const FONT =
+  'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
+
+/**
+ * ─── BALLROOM MAIN STAGE SCREEN TEXT ───────────────────────────────────────
+ * Set `enabled: true` and edit the strings below. Leave `enabled: false` for a
+ * plain black screen (no text). Side screens use `/expo-led-video.mp4` in public/.
+ */
+export const BALLROOM_MAIN_SCREEN = {
+  enabled: true,
+  headline: 'Digital Property Expo (NOIDA)',
+  poweredByLabel: 'Powered By',
+  poweredByBrand: 'Digital Broker.in',
+} as const;
+
+/** Main center LED panel size (meters). */
+const MAIN_SCREEN = {
+  position: [0, 6, -8.32] as [number, number, number],
+  width: 29.5,
+  height: 9.5,
+};
+
+function BallroomMainScreenSign({
+  headline,
+  poweredByLabel,
+  poweredByBrand,
+}: {
+  headline: string;
+  poweredByLabel: string;
+  poweredByBrand?: string;
+}) {
+  const [fontReady, setFontReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const face = new FontFace('BallroomInter', `url(${FONT})`);
+    void face
+      .load()
+      .then((loaded) => {
+        if (cancelled) return;
+        document.fonts.add(loaded);
+        setFontReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFontReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const texture = useMemo(() => {
+    const { width, height } = MAIN_SCREEN;
+    const canvas = document.createElement('canvas');
+    const w = 4096;
+    const h = Math.round(w * (height / width));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return new THREE.Texture();
+
+    ctx.fillStyle = '#080808';
+    ctx.fillRect(0, 0, w, h);
+
+    const family = fontReady ? 'BallroomInter, Inter, system-ui, sans-serif' : 'system-ui, sans-serif';
+    const draw = (text: string, y: number, size: number, color: string, weight: number) => {
+      ctx.font = `${weight} ${size}px ${family}`;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 0;
+      ctx.fillText(text, w / 2, y);
+    };
+
+    draw(headline, h * 0.36, 108, '#e8c547', 700);
+    draw(poweredByLabel, h * 0.54, 52, '#b8b4ac', 500);
+    if (poweredByBrand?.trim()) {
+      draw(poweredByBrand.trim(), h * 0.66, 132, '#f8f6f2', 800);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = 16;
+    return tex;
+  }, [headline, poweredByLabel, poweredByBrand, fontReady]);
+
+  return (
+    <mesh position={MAIN_SCREEN.position}>
+      <planeGeometry args={[MAIN_SCREEN.width, MAIN_SCREEN.height]} />
+      <meshBasicMaterial map={texture} toneMapped={false} />
+    </mesh>
+  );
+}
 
 function ConferenceChair({ position }: { position: [number, number, number] }) {
   const { scene } = useGLTF(schoolChairUrl);
@@ -45,11 +141,13 @@ export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
         <meshStandardMaterial color="#080808" roughness={0.4} metalness={0.2} />
       </mesh>
 
-      {/* Futuristic pattern lines on screen */}
-      <mesh position={[0, 6, -8.35]}>
-        <planeGeometry args={[29.5, 9.5]} />
-        <meshBasicMaterial color="#d4af37" wireframe transparent opacity={0.1} />
-      </mesh>
+      {BALLROOM_MAIN_SCREEN.enabled && (
+        <BallroomMainScreenSign
+          headline={BALLROOM_MAIN_SCREEN.headline}
+          poweredByLabel={BALLROOM_MAIN_SCREEN.poweredByLabel}
+          poweredByBrand={BALLROOM_MAIN_SCREEN.poweredByBrand}
+        />
+      )}
 
       {/* Massive Side Wall LED Presentation Panels */}
       {[-1, 1].map((side) => (
@@ -107,29 +205,6 @@ export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
           />
         </group>
       ))}
-
-      <Text
-        position={[0, 8, -8.3]}
-        fontSize={1.2}
-        color="#d4af37"
-        sdfGlyphSize={192}
-        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-      >
-        Yamuna Expressway DIGITAL Property Expo
-      </Text>
-      <Text
-        position={[0, 5, -8.28]}
-        fontSize={1.5}
-        color="#ebe8e2"
-        maxWidth={28}
-        textAlign="center"
-        sdfGlyphSize={256}
-        outlineWidth={0}
-        strokeWidth={0}
-        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-      >
-        Digital Broker.in
-      </Text>
 
       {/* Podium */}
       <group position={[0, 1, -1]}>
