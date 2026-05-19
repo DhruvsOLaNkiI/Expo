@@ -10,6 +10,9 @@ import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
 import { applyBoothOverrides, buildDefaultBoothLayoutList, DEFAULT_SCENE_CONFIG, siteMapUrlsFromConfig, mergeHallLayout, type PlacedImage, type HostessQuickReply, type MediaItem, type CompanyProfile } from '../data/boothLayouts';
+import { MonarchBooth } from './MonarchBooth';
+import { HorizonVistasBooth } from './HorizonVistasBooth';
+import { CrownEstatesBooth } from './CrownEstatesBooth';
 
 const EMPTY_HOSTESS_REPLIES: HostessQuickReply[] = [];
 
@@ -294,54 +297,143 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
         ))}
       </Suspense>
 
-      {layoutsToRender.map((b) =>
-        b.id === 'vertex-elite' ? (
-          <VertexEliteBooth
-            key={b.id}
-            position={b.position}
-            rotation={b.rotation}
-            boothScale={b.scale}
-            id={b.id}
-            name={b.name}
-            color={b.color}
-            accent={b.accent}
-            counterColor={b.counterColor}
-            videoUrl={b.videoUrl}
-            lighting={b.lighting}
-            placedImages={b.placedImages}
-            brochureUrl={b.brochureUrl}
-            priceListUrl={b.priceListUrl}
-            siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
-            hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
-            showVideos={showVideos}
-            media={b.media}
-            company={b.company}
-          />
-        ) : (
-          <Booth
-            key={b.id}
-            position={b.position}
-            rotation={b.rotation}
-            boothScale={b.scale}
-            id={b.id}
-            name={b.name}
-            color={b.color}
-            accent={b.accent}
-            counterColor={b.counterColor}
-            videoUrl={b.videoUrl}
-            headerLogoUrl={b.headerLogoUrl}
-            lighting={b.lighting}
-            placedImages={b.placedImages}
-            hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
-            showVideos={showVideos}
-          />
-        )
-      )}
+      {layoutsToRender.map((b) => {
+        if (b.id === 'vertex-elite') {
+          return (
+            <VertexEliteBooth
+              key={b.id}
+              position={b.position}
+              rotation={b.rotation}
+              boothScale={b.scale}
+              id={b.id}
+              name={b.name}
+              color={b.color}
+              accent={b.accent}
+              counterColor={b.counterColor}
+              videoUrl={b.videoUrl}
+              lighting={b.lighting}
+              placedImages={b.placedImages}
+              brochureUrl={b.brochureUrl}
+              priceListUrl={b.priceListUrl}
+              unitLayoutUrl={b.unitLayoutUrl}
+              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+              showVideos={showVideos}
+              media={b.media}
+              company={b.company}
+            />
+          );
+        } else if (b.id === 'builder-5') {
+          return (
+            <MonarchBooth
+              key={b.id}
+              position={b.position}
+              rotation={b.rotation}
+              boothScale={b.scale}
+              id={b.id}
+              name={b.name}
+              color={b.color}
+              accent={b.accent}
+              counterColor={b.counterColor}
+              videoUrl={b.videoUrl}
+              headerLogoUrl={b.headerLogoUrl}
+              lighting={b.lighting}
+              placedImages={b.placedImages}
+              brochureUrl={b.brochureUrl}
+              priceListUrl={b.priceListUrl}
+              unitLayoutUrl={b.unitLayoutUrl}
+              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+              media={b.media}
+              company={b.company}
+              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+              showVideos={showVideos}
+            />
+          );
+        } else if (b.id === 'builder-6') {
+          return (
+            <HorizonVistasBooth
+              key={b.id}
+              position={b.position}
+              rotation={b.rotation}
+              boothScale={b.scale}
+              id={b.id}
+              name={b.name}
+              color={b.color}
+              accent={b.accent}
+              counterColor={b.counterColor}
+              videoUrl={b.videoUrl}
+              headerLogoUrl={b.headerLogoUrl}
+              lighting={b.lighting}
+              placedImages={b.placedImages}
+              brochureUrl={b.brochureUrl}
+              priceListUrl={b.priceListUrl}
+              unitLayoutUrl={b.unitLayoutUrl}
+              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+              media={b.media}
+              company={b.company}
+              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+              showVideos={showVideos}
+            />
+          );
+        } else if (b.id === 'builder-4') {
+          return (
+            <CrownEstatesBooth
+              key={b.id}
+              position={b.position}
+              rotation={b.rotation}
+              boothScale={b.scale}
+              id={b.id}
+              name={b.name}
+              color={b.color}
+              accent={b.accent}
+              counterColor={b.counterColor}
+              videoUrl={b.videoUrl}
+              headerLogoUrl={b.headerLogoUrl}
+              lighting={b.lighting}
+              placedImages={b.placedImages}
+              brochureUrl={b.brochureUrl}
+              priceListUrl={b.priceListUrl}
+              unitLayoutUrl={b.unitLayoutUrl}
+              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+              media={b.media}
+              company={b.company}
+              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+              showVideos={showVideos}
+            />
+          );
+        } else {
+          return (
+            <Booth
+              key={b.id}
+              position={b.position}
+              rotation={b.rotation}
+              boothScale={b.scale}
+              id={b.id}
+              name={b.name}
+              color={b.color}
+              accent={b.accent}
+              counterColor={b.counterColor}
+              videoUrl={b.videoUrl}
+              headerLogoUrl={b.headerLogoUrl}
+              lighting={b.lighting}
+              placedImages={b.placedImages}
+              brochureUrl={b.brochureUrl}
+              priceListUrl={b.priceListUrl}
+              unitLayoutUrl={b.unitLayoutUrl}
+              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+              media={b.media}
+              company={b.company}
+              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+              showVideos={showVideos}
+            />
+          );
+        }
+      })}
     </group>
   );
 }
 
-function BoothHeaderLogo({
+export function BoothHeaderLogo({
   url,
   tagline,
   accent,
@@ -398,12 +490,12 @@ function BoothHeaderLogo({
         <planeGeometry args={[boardW, boardH]} />
         <meshPhysicalMaterial
           color="#fdfdfd"
-          roughness={0.22}
+          roughness={0.72}
           metalness={0}
-          clearcoat={0.42}
-          clearcoatRoughness={0.2}
-          envMapIntensity={0.14}
-          reflectivity={0.12}
+          clearcoat={0.1}
+          clearcoatRoughness={0.8}
+          envMapIntensity={0.08}
+          reflectivity={0.02}
         />
       </mesh>
 
@@ -519,6 +611,12 @@ function Booth({
   headerLogoUrl,
   lighting,
   placedImages,
+  brochureUrl = '',
+  priceListUrl = '',
+  unitLayoutUrl = '',
+  siteMapUrls = [],
+  media = [],
+  company,
   hostessQuickReplies,
   showVideos = true,
 }: {
@@ -534,11 +632,17 @@ function Booth({
   headerLogoUrl?: string;
   lighting: import('../data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
+  brochureUrl?: string;
+  priceListUrl?: string;
+  unitLayoutUrl?: string;
+  siteMapUrls?: string[];
+  media?: MediaItem[];
+  company?: CompanyProfile;
   hostessQuickReplies: HostessQuickReply[];
   showVideos?: boolean;
 }) {
-  const setActiveBooth = useStore((state) => state.setActiveBooth);
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const glow = accent || '#d4af37';
 
   return (
     <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
@@ -641,23 +745,6 @@ function Booth({
           </mesh>
         </group>
 
-        {/* Invisible Click Target for UI Overlay */}
-        <mesh
-          position={[0, 1, 0]}
-          visible={false}
-          onClick={(e) => {
-            e.stopPropagation();
-            const offset = rotation[1] > 0 ? 6 : -6;
-            const teleportPos: [number, number, number] = [position[0] + offset, 1.7, position[2]];
-            setActiveBooth(name, teleportPos);
-            document.exitPointerLock();
-          }}
-          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-          onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-        >
-          <boxGeometry args={[5, 3, 3]} />
-        </mesh>
-
         {/* Hostess: behind reception counter, facing aisle (+Z booth local); anchored to desk group */}
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
@@ -689,17 +776,21 @@ function Booth({
         target-position={[0, 3, -3.8]}
       />
 
-      {/* Scale Model Pedestal */}
-      <group position={[-3, 0.5, -1.5]}>
-        <Cylinder args={[0.8, 0.8, 1, 32]} position={[0, 0, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#ffffff" roughness={0.1} metalness={0.1} />
-        </Cylinder>
-        <Box args={[0.5, 1.5, 0.5]} position={[0, 1.25, 0]} castShadow>
-          <meshStandardMaterial color="#fff" roughness={0.1} metalness={0.1} />
-        </Box>
-      </group>
-
       <BoothStandee name={name} accent={accent} />
+
+      <VertexEliteProximityPanels
+        boothId={id}
+        glow={glow}
+        brochureUrl={brochureUrl}
+        priceListUrl={priceListUrl}
+        unitLayoutUrl={unitLayoutUrl}
+        siteMapUrls={siteMapUrls}
+        videoUrl={effectiveVideoUrl}
+        media={media}
+        placedImages={placedImages}
+        company={company}
+        entranceLocal={[0, 0, 2.5]}
+      />
 
       {/* CMS-placed custom images */}
       {placedImages.map((img) => (
@@ -711,7 +802,7 @@ function Booth({
   );
 }
 
-function BoothPlacedImage({ item }: { item: PlacedImage }) {
+export function BoothPlacedImage({ item }: { item: PlacedImage }) {
   const tex = useTexture(item.url);
   useLayoutEffect(() => {
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -738,7 +829,7 @@ function BoothPlacedImage({ item }: { item: PlacedImage }) {
 /* ─── Futuristic Vertex Elite Studio Booth ─── */
 export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  videoUrl, lighting, placedImages, brochureUrl, priceListUrl, siteMapUrls,
+  videoUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, siteMapUrls,
   media = [],
   company,
   hostessQuickReplies,
@@ -759,6 +850,7 @@ export function VertexEliteBooth({
   placedImages: PlacedImage[];
   brochureUrl?: string;
   priceListUrl?: string;
+  unitLayoutUrl?: string;
   siteMapUrls: string[];
   media?: MediaItem[];
   company?: CompanyProfile;
@@ -775,96 +867,91 @@ export function VertexEliteBooth({
   const glow = accent;
   const dark = '#0c0c12';
   const glass = '#1a1a28';
+  /** Matte LED trim — avoids mirror reflections on walls/floor. */
+  const ledStrip = (intensity = 1.1) => (
+    <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={intensity} roughness={0.92} metalness={0} />
+  );
   const hq = hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES;
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
 
   return (
     <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
-      {/* ── Dark reflective floor ── */}
+      {/* ── Matte floor (no mirror reflections) ── */}
       <mesh position={[0, 0.02, -1.5]} receiveShadow>
         <boxGeometry args={[13, 0.04, 7]} />
-        <meshStandardMaterial color="#0a0a10" roughness={0.07} metalness={0.94} />
+        <meshStandardMaterial color="#0a0a10" roughness={0.72} metalness={0.18} envMapIntensity={0.15} />
       </mesh>
       {/* Floor LED edge strips */}
       {[[-6.3, 0.04, -1.5], [6.3, 0.04, -1.5]].map(([x, y, z], i) => (
         <mesh key={`fstrip-${i}`} position={[x, y, z]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[0.06, 7]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3.5} toneMapped={false} />
+          {ledStrip(1.0)}
         </mesh>
       ))}
       {/* Front threshold LED strip */}
       <mesh position={[0, 0.04, 2.05]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[13, 0.08]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4} toneMapped={false} />
+        {ledStrip(1.1)}
       </mesh>
 
       {/* ── Back wall ── */}
       <mesh position={[0, 3.2, -4.5]} receiveShadow>
         <boxGeometry args={[13, 6.4, 0.35]} />
-        <meshStandardMaterial color={dark} roughness={0.2} metalness={0.9} />
+        <meshStandardMaterial color={dark} roughness={0.78} metalness={0.22} envMapIntensity={0.12} />
       </mesh>
       {/* Vertical accent LED strips on back wall */}
       {[-6.2, 6.2].map((x, i) => (
         <mesh key={`vled-${i}`} position={[x, 3.2, -4.28]}>
           <boxGeometry args={[0.06, 6.4, 0.02]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4.5} toneMapped={false} />
+          {ledStrip(1.0)}
         </mesh>
       ))}
       {/* Horizontal LED strip top of back wall */}
       <mesh position={[0, 6.42, -4.28]}>
         <boxGeometry args={[12.5, 0.06, 0.02]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4} toneMapped={false} />
+        {ledStrip(1.0)}
       </mesh>
       {/* Horizontal LED strip bottom */}
       <mesh position={[0, 0.08, -4.28]}>
         <boxGeometry args={[12.5, 0.06, 0.02]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3} toneMapped={false} />
+        {ledStrip(0.9)}
       </mesh>
 
-      {/* ── Side walls — glass-dark panels ── */}
+      {/* ── Side walls — matte dark panels (no mirror glare) ── */}
       {[[-6.2, 1], [6.2, 1]].map(([x], i) => (
         <mesh key={`side-${i}`} position={[x, 3.2, -1.5]} receiveShadow>
           <boxGeometry args={[0.25, 6.4, 6]} />
-          <meshStandardMaterial color={glass} roughness={0.12} metalness={0.78} transparent opacity={0.93} />
+          <meshStandardMaterial color={glass} roughness={0.88} metalness={0.08} transparent opacity={0.94} envMapIntensity={0.1} />
         </mesh>
       ))}
       {/* Side wall inner LED strips */}
       {[-6.05, 6.05].map((x, i) => (
         <mesh key={`sided-${i}`} position={[x, 0.08, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[0.04, 6]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={2.5} toneMapped={false} />
+          {ledStrip(0.85)}
         </mesh>
       ))}
 
       {/* ── Ceiling slab ── */}
       <mesh position={[0, 6.55, -1.5]}>
         <boxGeometry args={[13, 0.2, 7]} />
-        <meshStandardMaterial color="#0a0a10" roughness={0.22} metalness={0.92} />
+        <meshStandardMaterial color="#0a0a10" roughness={0.7} metalness={0.28} envMapIntensity={0.12} />
       </mesh>
 
-      {/* Ceiling oval LED halo — smaller torus so it stays inside the booth shell (no wall clip) */}
+      {/* Ceiling oval trim — unlit material so overhead spots do not specular-flare on it */}
       <mesh position={[0, 6.32, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
         <torusGeometry args={[2.75, 0.11, 32, 160]} />
-        <meshStandardMaterial
-          color={glow}
-          emissive={glow}
-          emissiveIntensity={3.5}
-          toneMapped={false}
-          polygonOffset
-          polygonOffsetFactor={1}
-          polygonOffsetUnits={1}
-        />
+        <meshBasicMaterial color={glow} toneMapped />
       </mesh>
-      <pointLight position={[0, 6.22, -1.8]} intensity={16} color={glow} distance={11} decay={2} />
 
       {/* ── Back canopy slab ── */}
       <mesh position={[0, 6.84, -4.38]}>
         <boxGeometry args={[13.2, 1.1, 0.74]} />
-        <meshStandardMaterial color="#08080f" roughness={0.08} metalness={0.92} />
+        <meshStandardMaterial color="#08080f" roughness={0.55} metalness={0.35} envMapIntensity={0.1} />
       </mesh>
       <mesh position={[0, 7.395, -4.38]}>
         <boxGeometry args={[13.18, 0.05, 0.76]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.9} metalness={0.95} roughness={0.06} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.45} metalness={0.2} roughness={0.65} />
       </mesh>
 
       {/* ── FRONT ENTRANCE FASCIA — header at z≈+1.84, fully visible from the aisle ──
@@ -875,37 +962,31 @@ export function VertexEliteBooth({
       {/* Main fascia structural slab */}
       <mesh position={[0, 6.12, 1.84]}>
         <boxGeometry args={[13.2, 1.22, 0.32]} />
-        <meshStandardMaterial color="#08080f" roughness={0.07} metalness={0.93} />
+        <meshStandardMaterial color="#08080f" roughness={0.5} metalness={0.35} envMapIntensity={0.1} />
       </mesh>
 
       {/* Gold top rail */}
       <mesh position={[0, 6.74, 1.84]}>
         <boxGeometry args={[13.18, 0.055, 0.34]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.0} metalness={0.96} roughness={0.05} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.4} metalness={0.45} roughness={0.42} />
       </mesh>
       {/* Gold bottom rail */}
       <mesh position={[0, 5.50, 1.84]}>
         <boxGeometry args={[13.18, 0.055, 0.34]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.0} metalness={0.96} roughness={0.05} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.4} metalness={0.45} roughness={0.42} />
       </mesh>
       {/* Gold left/right end caps */}
       {[-6.56, 6.56].map((x, i) => (
         <mesh key={`ffront-${i}`} position={[x, 6.12, 1.84]}>
           <boxGeometry args={[0.055, 1.18, 0.34]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.88} metalness={0.96} roughness={0.05} toneMapped={false} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} metalness={0.45} roughness={0.42} />
         </mesh>
       ))}
 
       {/* Ceiling-to-fascia join cap */}
       <mesh position={[0, 6.545, 1.84]}>
         <boxGeometry args={[13.2, 0.12, 0.34]} />
-        <meshStandardMaterial color="#07070e" metalness={0.95} roughness={0.08} />
-      </mesh>
-
-      {/* Underside LED strip */}
-      <mesh position={[0, 5.49, 1.9]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[12.8, 0.06]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={4.5} toneMapped={false} />
+        <meshStandardMaterial color="#07070e" metalness={0.25} roughness={0.7} envMapIntensity={0.08} />
       </mesh>
 
       {/* ── VERTEX ELITE sign on front face of fascia, protrudes toward aisle ── */}
@@ -917,11 +998,11 @@ export function VertexEliteBooth({
       <group position={[0, 3.2, -4.25]}>
         <mesh>
           <boxGeometry args={[8.5, 4.5, 0.12]} />
-          <meshStandardMaterial color="#030308" metalness={0.96} roughness={0.05} />
+          <meshStandardMaterial color="#030308" metalness={0.35} roughness={0.55} envMapIntensity={0.1} />
         </mesh>
         <mesh position={[0, 0, 0.02]}>
           <boxGeometry args={[8.7, 4.7, 0.01]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.85} transparent opacity={0.38} toneMapped={false} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} transparent opacity={0.28} roughness={0.9} metalness={0} />
         </mesh>
         <group position={[0, 0, 0.07]}>
           <Suspense fallback={<meshBasicMaterial color="#000" />}>
@@ -934,22 +1015,22 @@ export function VertexEliteBooth({
       <group position={[0, 0.55, 0.8]}>
         <mesh>
           <boxGeometry args={[5, 1.1, 0.9]} />
-          <meshStandardMaterial color="#111118" roughness={0.1} metalness={0.85} />
+          <meshStandardMaterial color="#111118" roughness={0.65} metalness={0.25} envMapIntensity={0.1} />
         </mesh>
         <mesh position={[0, 0.56, 0]}>
           <boxGeometry args={[5.2, 0.06, 1.0]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.8} metalness={0.6} roughness={0.2} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} metalness={0.2} roughness={0.7} />
         </mesh>
         {/* Desk front LED strip */}
         <mesh position={[0, 0, 0.46]}>
           <boxGeometry args={[5, 0.04, 0.01]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3.5} toneMapped={false} />
+          {ledStrip(0.95)}
         </mesh>
         {/* Counter tablet display */}
         <group position={[1.5, 0.9, -0.1]} rotation={[-0.25, -0.2, 0]}>
           <mesh>
             <boxGeometry args={[1.4, 0.9, 0.06]} />
-            <meshStandardMaterial color="#05050a" metalness={0.92} roughness={0.06} />
+            <meshStandardMaterial color="#05050a" metalness={0.3} roughness={0.55} envMapIntensity={0.08} />
           </mesh>
         </group>
         {/* Hostess */}
@@ -969,15 +1050,18 @@ export function VertexEliteBooth({
       />
 
       <VertexEliteProximityPanels
+        boothId={id}
         glow={glow}
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
+        unitLayoutUrl={unitLayoutUrl}
         siteMapUrls={siteMapUrls}
         videoUrl={videoUrl}
         media={media}
         placedImages={placedImages}
         company={company}
         cmsPreview={cmsPreview}
+        entranceLocal={[0, 0, 2.2]}
       />
 
       {/* No invisible “open booth card” hitbox: canopy / interior clicks should not open the legacy center modal (HUD + kiosk handle CTAs). */}
@@ -1048,16 +1132,12 @@ export function VertexEliteBooth({
         </Cylinder>
         <mesh position={[0, 0.91, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.55, 0.68, 32]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3} toneMapped={false} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.85} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
         </mesh>
         <Box args={[0.45, 1.4, 0.45]} position={[0, 1.6, 0]}>
           <meshStandardMaterial color="#fff" roughness={0.1} metalness={0.1} />
         </Box>
       </group>
-
-      {/* ── Lighting — 2 lights only (no castShadow here, global light casts shadow) ── */}
-      <pointLight position={[0, 5.5, -1.5]} intensity={lighting.spotlightIntensity * 0.55} color={lighting.spotlightColor} distance={18} decay={2} />
-      <pointLight position={[0, 5.0, -4.0]} intensity={8} color={glow} distance={12} decay={2} />
 
       {placedImages.map((img) => (
         <Suspense key={img.id} fallback={null}>
@@ -1078,7 +1158,7 @@ export function VertexEliteBooth({
 }
 
 /** Roll-up style stand facing visitors approaching from the hall center */
-function BoothStandee({ name, accent }: { name: string; accent: string }) {
+export function BoothStandee({ name, accent }: { name: string; accent: string }) {
   const w = 0.95;
   const h = 1.55;
   const frameT = 0.04;
@@ -1238,11 +1318,11 @@ function TickerRing({ radius, height, yPos, text, speed, reverse, color, bgColor
       <cylinderGeometry args={[radius, radius, height, 64]} />
       <meshStandardMaterial
         map={texture}
-        emissiveMap={texture}
-        emissive="#ffffff"
-        emissiveIntensity={0.8}
-        roughness={0.2}
-        metalness={0.8}
+        roughness={0.92}
+        metalness={0.06}
+        emissive="#d4af37"
+        emissiveIntensity={0.12}
+        envMapIntensity={0.08}
       />
     </mesh>
   );
@@ -1277,7 +1357,7 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
           {/* Champagne Gold Mid-Belt Detail */}
           <mesh position={[0, 0.55, 0]}>
             <cylinderGeometry args={[5.82, 5.82, 0.3, 128, 1, true, 0, Math.PI * 2]} />
-            <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.1} side={THREE.DoubleSide} />
+            <meshStandardMaterial color="#d4af37" metalness={0.25} roughness={0.65} envMapIntensity={0.08} side={THREE.DoubleSide} />
           </mesh>
 
           {/* Desk Top Surface (Premium Marble) */}
@@ -1289,7 +1369,7 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
           {/* Under-counter LED Glow */}
           <mesh position={[0, 1.05, 0]} rotation={[Math.PI / 2, 0, 0]}>
             <ringGeometry args={[5.7, 5.8, 128, 1, 0, Math.PI * 2]} />
-            <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={1.5} side={THREE.DoubleSide} />
+            <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.35} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
           </mesh>
 
           {/* Front Branding & Concierge Panel */}
@@ -1370,7 +1450,7 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
           {/* Clean upper crown ring (text removed) */}
           <mesh position={[0, 3.5, 0]}>
             <cylinderGeometry args={[9.5, 9.5, 1.0, 96]} />
-            <meshStandardMaterial color="#d4af37" metalness={0.95} roughness={0.2} />
+            <meshStandardMaterial color="#d4af37" metalness={0.2} roughness={0.75} envMapIntensity={0.08} />
           </mesh>
 
           {/* Main Displays (8-Sided) */}
@@ -1425,19 +1505,73 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
             bgColor="#111111"
           />
 
-          <pointLight position={[0, -5, 0]} intensity={150} color="#d4af37" distance={40} decay={2} />
+          {/* --- BOTTOM DECORATION (Option 5: Combination) --- */}
+          <group position={[0, -4.58, 0]}>
+            {/* Main Bottom Plate */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[8.5, 64]} />
+              <meshStandardMaterial color="#111111" roughness={0.3} metalness={0.8} />
+            </mesh>
+
+            {/* Outer Decorative Gold Ring */}
+            <mesh position={[0, -0.01, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[8.2, 8.5, 64]} />
+              <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.2} />
+            </mesh>
+
+            {/* Inner Decorative Gold Ring */}
+            <mesh position={[0, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[6.5, 6.7, 64]} />
+              <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.2} />
+            </mesh>
+
+            {/* Subtle Backlighting / Glow Ring */}
+            <mesh position={[0, -0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[4.8, 5.2, 64]} />
+              <meshStandardMaterial 
+                color="#fff5e6" 
+                emissive="#fff5e6" 
+                emissiveIntensity={0.8} 
+                transparent 
+                opacity={0.6} 
+              />
+            </mesh>
+
+            {/* Central Medallion */}
+            <mesh position={[0, -0.04, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[4.5, 64]} />
+              <meshStandardMaterial color="#1a1a1a" roughness={0.2} metalness={0.9} />
+            </mesh>
+
+            {/* Central Logo / Text */}
+            <Text
+              position={[0, -0.06, 0]}
+              rotation={[Math.PI / 2, 0, Math.PI]} // Rotated to be readable from below looking up
+              fontSize={0.8}
+              color="#d4af37"
+              font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
+              anchorX="center"
+              anchorY="middle"
+              letterSpacing={0.1}
+            >
+              PREMIUM EXPO
+              <meshStandardMaterial attach="material" color="#d4af37" emissive="#d4af37" emissiveIntensity={0.4} />
+            </Text>
+
+            {/* Radial Spoke Pattern */}
+            {Array.from({ length: 12 }).map((_, i) => (
+              <mesh 
+                key={i} 
+                position={[0, -0.02, 0]} 
+                rotation={[Math.PI / 2, 0, (i * Math.PI) / 6]}
+              >
+                <boxGeometry args={[0.05, 1.8, 0.01]} />
+                <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.2} />
+              </mesh>
+            ))}
+          </group>
         </group>
       </group>
-
-      {/* Main Center Area Spotlight */}
-      <spotLight
-        position={[0, 17, 0]}
-        angle={0.9}
-        penumbra={0.6}
-        intensity={250}
-        color="#ffffff"
-        castShadow
-      />
     </group>
   );
 }
@@ -1689,7 +1823,7 @@ function ExpoHostessAvatar({
 /**
  * Behind the procedural reception counter (parent = desk group). Faces +Z booth local (aisle).
  */
-function BoothHostessGreeter({
+export function BoothHostessGreeter({
   boothId,
   cmsPreview,
   hostessQuickReplies,

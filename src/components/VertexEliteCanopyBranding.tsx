@@ -19,47 +19,44 @@ export function VertexEliteCanopyBranding({
 
   return (
     <group position={position}>
-      {/* Single cheap point light — no rectAreaLight */}
-      <pointLight position={[0, 0.1, 0.8]} intensity={3.5} color="#fff4e0" distance={6} decay={2} />
-
       {/* Fascia slab */}
       <mesh castShadow>
         <boxGeometry args={[aw, ah, depth]} />
-        <meshStandardMaterial color="#010108" metalness={0.95} roughness={0.08} />
+        <meshStandardMaterial color="#010108" metalness={0.3} roughness={0.55} envMapIntensity={0.08} />
       </mesh>
 
       {/* Gold rails — top, bottom, left, right */}
       <mesh position={[0,  ah / 2 + rail / 2, zR]}>
         <boxGeometry args={[aw + rail * 2.8, rail, 0.034]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.0} metalness={0.97} roughness={0.04} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.4} metalness={0.4} roughness={0.45} />
       </mesh>
       <mesh position={[0, -ah / 2 - rail / 2, zR]}>
         <boxGeometry args={[aw + rail * 2.8, rail, 0.034]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.0} metalness={0.97} roughness={0.04} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.4} metalness={0.4} roughness={0.45} />
       </mesh>
       <mesh position={[-aw / 2 - rail / 2, 0, zR]}>
         <boxGeometry args={[rail, ah + rail * 2.8, 0.034]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.88} metalness={0.97} roughness={0.04} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} metalness={0.4} roughness={0.45} />
       </mesh>
       <mesh position={[ aw / 2 + rail / 2, 0, zR]}>
         <boxGeometry args={[rail, ah + rail * 2.8, 0.034]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.88} metalness={0.97} roughness={0.04} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} metalness={0.4} roughness={0.45} />
       </mesh>
 
       {/* Face panel */}
       <mesh position={[0, 0, zF + 0.005]}>
         <planeGeometry args={[aw * 0.984, ah * 0.984]} />
-        <meshStandardMaterial color="#04041c" metalness={0.92} roughness={0.1} />
+        <meshStandardMaterial color="#04041c" metalness={0.15} roughness={0.75} envMapIntensity={0.08} />
       </mesh>
 
       {/* Inner warm LED lines */}
       <mesh position={[0,  ah * 0.37, zF + 0.01]}>
         <planeGeometry args={[aw * 0.935, 0.024]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3.2} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.9} roughness={0.9} metalness={0} />
       </mesh>
       <mesh position={[0, -ah * 0.37, zF + 0.01]}>
         <planeGeometry args={[aw * 0.935, 0.024]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={3.2} toneMapped={false} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.9} roughness={0.9} metalness={0} />
       </mesh>
 
       {/* VERTEX ELITE */}

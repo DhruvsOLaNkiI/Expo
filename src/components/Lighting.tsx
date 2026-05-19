@@ -39,38 +39,8 @@ export function Lighting() {
       <directionalLight position={[-28, 34, -22]} intensity={0.72} color="#e8f0ff" />
       <directionalLight position={[0, 22, -42]} intensity={0.45} color="#ffeedd" />
 
-      {/* Center hero wash — no cast shadow (was washing floor with 1024 map noise) */}
-      <spotLight
-        position={[0, 28, 0]}
-        angle={0.9}
-        penumbra={0.85}
-        intensity={280}
-        color="#ffffff"
-        distance={90}
-        decay={2}
-      />
 
-      <spotLight
-        position={[0, 15, 0]}
-        angle={1.15}
-        penumbra={0.9}
-        intensity={120}
-        color="#ffd9a0"
-        distance={70}
-        decay={2}
-      />
-
-      <spotLight
-        position={[0, 18, 45]}
-        angle={0.52}
-        penumbra={0.88}
-        intensity={95}
-        color="#ffd9a0"
-        distance={85}
-        decay={2}
-      />
-
-      <Environment preset="city" environmentIntensity={0.38} />
+      <Environment preset="city" environmentIntensity={0.22} />
     </>
   );
 }

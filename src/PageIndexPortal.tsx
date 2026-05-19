@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { uploadAssetToR2 } from './api/cmsUpload';
 import { useStore } from './store';
 
 type IndexResponse = { ok: true; outputPath: string; tree: unknown } | { ok: false; error: string };
@@ -15,6 +16,8 @@ export function PageIndexPortal() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [loadingAsk, setLoadingAsk] = useState(false);
+  const [boothId, setBoothId] = useState('vertex-elite');
+  const [documentType, setDocumentType] = useState<'brochure' | 'priceList' | 'siteLayout' | 'unitLayout'>('brochure');
 
   const onPickFile = useCallback(() => {
     const f = fileRef.current?.files?.[0];
@@ -41,9 +44,12 @@ export function PageIndexPortal() {
     setStatus('Indexing (text + vision on sparse pages; may take several minutes)…');
     setAnswer('');
     try {
+      const r2 = await uploadAssetToR2(file, boothId, 'pageindex');
       const fd = new FormData();
       fd.append('pdf', file, file.name);
-      const res = await fetch('/api/pageindex/index', { method: 'POST', body: fd });
+      const qs = new URLSearchParams({ boothId, documentType });
+      if (r2?.url) qs.set('pdfUrl', r2.url);
+      const res = await fetch(`/api/pageindex/index?${qs}`, { method: 'POST', body: fd });
       const data = (await res.json()) as IndexResponse;
       if (!res.ok || !data.ok) {
         setStatus(`Error: ${!data.ok ? data.error : res.statusText}`);
@@ -51,13 +57,17 @@ export function PageIndexPortal() {
       }
       setTree(data.tree);
       setOutputPath(data.outputPath);
-      setStatus(`Indexed. Saved: ${data.outputPath}`);
+      setStatus(
+        r2
+          ? `Indexed. PDF on R2: ${r2.url.slice(0, 72)}…`
+          : `Indexed. Saved: ${data.outputPath} (add R2_* to .env to store PDF in cloud)`,
+      );
     } catch (e) {
       setStatus(e instanceof Error ? e.message : 'Request failed (is dev server running?)');
     } finally {
       setLoadingIndex(false);
     }
-  }, [file]);
+  }, [file, boothId, documentType]);
 
   const runAsk = useCallback(async () => {
     if (!tree) {
@@ -112,9 +122,33 @@ export function PageIndexPortal() {
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#d4af37]">1. PDF</h2>
-            <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-100/90 leading-relaxed">
-              <strong className="text-amber-200">Floor plan PDFs:</strong> many slides are pictures, not selectable text. The index may only list section titles and pages — that is why answers often say to open the full file. Re-run <strong>Run PageIndex</strong> after our latest update to pull longer text excerpts when the PDF does contain text.
-            </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-[10px] uppercase tracking-wider text-white/45">
+              Booth id
+              <input
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+                value={boothId}
+                onChange={(e) => setBoothId(e.target.value)}
+                placeholder="vertex-elite"
+              />
+            </label>
+            <label className="block text-[10px] uppercase tracking-wider text-white/45">
+              Document type
+              <select
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
+                value={documentType}
+                onChange={(e) => setDocumentType(e.target.value as typeof documentType)}
+              >
+                <option value="brochure">brochure</option>
+                <option value="priceList">priceList</option>
+                <option value="siteLayout">siteLayout</option>
+                <option value="unitLayout">unitLayout</option>
+              </select>
+            </label>
+          </div>
+          <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-100/90 leading-relaxed">
+            <strong className="text-amber-200">Floor plan PDFs:</strong> many slides are pictures, not selectable text. The index may only list section titles and pages — that is why answers often say to open the full file. Re-run <strong>Run PageIndex</strong> after our latest update to pull longer text excerpts when the PDF does contain text.
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <input ref={fileRef} type="file" accept="application/pdf" className="text-sm" onChange={onPickFile} />
             {pdfUrl && (
@@ -139,7 +173,7 @@ export function PageIndexPortal() {
           {status && <p className="mt-3 text-xs text-white/60 whitespace-pre-wrap">{status}</p>}
           <p className="mt-2 text-[10px] text-white/35">
             Requires <code className="rounded bg-black/40 px-1">npm run dev</code>, <code className="rounded bg-black/40 px-1">npm run pageindex:install</code>, and{' '}
-            <code className="rounded bg-black/40 px-1">VITE_GEMINI_API_KEY</code> in <code className="rounded bg-black/40 px-1">.env</code>.
+            <code className="rounded bg-black/40 px-1">OPENROUTER_API_KEY</code> in <code className="rounded bg-black/40 px-1">.env</code> (free models at openrouter.ai).
           </p>
         </div>
 

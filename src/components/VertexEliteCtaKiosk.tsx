@@ -1,6 +1,7 @@
 import { Text } from '@react-three/drei';
 import { useState } from 'react';
 import * as THREE from 'three';
+import { buildCtaOpenPayload, normalizeCtaUrl } from '../api/boothCta';
 import { useStore } from '../store';
 
 const FONT =
@@ -67,20 +68,25 @@ function CtaButton({
       document.exitPointerLock();
     }
     if (row.label === 'VIEW SITE MAP') {
-      const slides = (row.siteMapUrls ?? []).map((u) => u.trim()).filter(Boolean);
+      const slides = (row.siteMapUrls ?? []).map((u) => normalizeCtaUrl(u)).filter(Boolean);
       if (slides.length === 0) return;
+      const payload = buildCtaOpenPayload(row.label, slides[0], slides);
+      if (!payload) return;
       useStore.getState().setCtaResourcePopup({
-        title: row.label,
-        url: slides[0],
-        variant: 'image',
-        imageGallery: slides.length > 1 ? slides : undefined,
+        title: payload.title,
+        url: payload.url,
+        variant: payload.variant,
+        imageGallery: payload.imageGallery,
       });
       return;
     }
+    const payload = buildCtaOpenPayload(row.label, row.url);
+    if (!payload) return;
     useStore.getState().setCtaResourcePopup({
-      title: row.label,
-      url: row.url,
-      variant: 'document',
+      title: payload.title,
+      url: payload.url,
+      variant: payload.variant,
+      imageGallery: payload.imageGallery,
     });
   };
 
@@ -178,9 +184,13 @@ export function VertexEliteCtaKiosk({
   rotation?: [number, number, number];
 }) {
   const rows: CtaRow[] = [
-    { label: 'VIEW BROCHURE',   url: brochureUrl },
-    { label: 'VIEW PRICE LIST', url: priceListUrl },
-    { label: 'VIEW SITE MAP',   url: siteMapUrls[0] ?? '', siteMapUrls },
+    { label: 'VIEW BROCHURE', url: normalizeCtaUrl(brochureUrl) },
+    { label: 'VIEW PRICE LIST', url: normalizeCtaUrl(priceListUrl) },
+    {
+      label: 'VIEW SITE MAP',
+      url: normalizeCtaUrl(siteMapUrls[0] ?? ''),
+      siteMapUrls: siteMapUrls.map(normalizeCtaUrl).filter(Boolean),
+    },
   ];
 
   const kW = 1.92;

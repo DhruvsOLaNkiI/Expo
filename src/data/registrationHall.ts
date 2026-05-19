@@ -1,25 +1,32 @@
 /** Registration lobby world (separate from main 90×90 expo hall). */
 
+/** Boutique luxury registration lobby — compact, human-scale proportions. */
 export const REG_HALL = {
-  halfW: 24,
-  halfD: 28,
-  height: 12,
+  halfW: 13,
+  halfD: 17,
+  height: 9,
   /** World-space center of the lobby volume */
   centerZ: -82,
 } as const;
 
-export const REG_SPAWN: [number, number, number] = [0, 1.7, -58];
+/** South entry — visitor approaches reception to the north. */
+export const REG_SPAWN: [number, number, number] = [
+  0,
+  1.7,
+  REG_HALL.centerZ + REG_HALL.halfD - 7,
+];
+
 export const REG_MAIN_EXPO_SPAWN: [number, number, number] = [0, 1.7, 38];
 
-/** Default world Z anchor for the movable reception zone (north end of lobby). */
-export const REG_RECEPTION_Z = REG_HALL.centerZ - 18;
+/** North end of lobby — reception desk + LED backdrop anchor. */
+export const REG_RECEPTION_Z = REG_HALL.centerZ - REG_HALL.halfD + 7;
 
 export function regBounds() {
   const { halfW, halfD, centerZ } = REG_HALL;
   return {
-    minX: -halfW + 2,
-    maxX: halfW - 2,
-    minZ: centerZ - halfD + 2,
-    maxZ: centerZ + halfD - 2,
+    minX: -halfW + 1.5,
+    maxX: halfW - 1.5,
+    minZ: centerZ - halfD + 1.5,
+    maxZ: centerZ + halfD - 1.5,
   };
 }

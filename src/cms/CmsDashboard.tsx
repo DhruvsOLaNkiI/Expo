@@ -18,8 +18,243 @@ import {
 import { CmsPreview3D } from './CmsPreview3D';
 import { CmsScenePanel } from './CmsScenePanel';
 import { CtaResourcePopupView } from '../components/CtaResourcePopup';
+import { uploadCmsFile, type UploadResult } from '../api/cmsUpload';
+import { normalizeR2PublicUrl } from '../api/r2Urls';
+import {
+  autoIndexPdf,
+  fetchBoothPageIndexStatus,
+  getPageIndexStatus,
+  indexPdfFromUrl,
+  isPdfUrl,
+  PAGEINDEX_STATUS_REFRESH,
+  type PageIndexDbDocStatus,
+} from '../api/pageindexAutoIndex';
 
 function num(v: string, fb: number) { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; }
+
+const PAGEINDEX_DOC_LABELS: Record<string, string> = {
+  brochure: 'Brochure',
+  priceList: 'Price list',
+  siteLayout: 'Site layout',
+  unitLayout: 'Unit layout',
+};
+
+function formatIndexedAt(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
+}
+
+function PageIndexBoothTracker({
+  boothId,
+  brochureUrl,
+  priceListUrl,
+}: {
+  boothId: string;
+  brochureUrl: string;
+  priceListUrl: string;
+}) {
+  const [rows, setRows] = useState<PageIndexDbDocStatus[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const docs = await fetchBoothPageIndexStatus(boothId, { brochureUrl, priceListUrl });
+      setRows(docs.filter((d) => d.documentType === 'brochure' || d.documentType === 'priceList'));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [boothId, brochureUrl, priceListUrl]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const onRefresh = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ boothId: string }>).detail;
+      if (!detail?.boothId || detail.boothId === boothId) void load();
+    };
+    window.addEventListener(PAGEINDEX_STATUS_REFRESH, onRefresh);
+    return () => window.removeEventListener(PAGEINDEX_STATUS_REFRESH, onRefresh);
+  }, [boothId, load]);
+
+  const cmsRows = [
+    { type: 'brochure' as const, url: brochureUrl },
+    { type: 'priceList' as const, url: priceListUrl },
+  ];
+
+  return (
+    <div className="mb-3 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4af37]/90">AI index status (MongoDB)</span>
+        <button
+          type="button"
+          className="text-[9px] font-semibold uppercase tracking-wide text-white/40 hover:text-[#d4af37]"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          {loading ? 'Checking…' : 'Refresh'}
+        </button>
+      </div>
+      {error && (
+        <p className="mb-2 text-[9px] leading-relaxed text-red-300/90">{error}</p>
+      )}
+      <ul className="space-y-1.5">
+        {cmsRows.map(({ type, url }) => {
+          const db = rows.find((r) => r.documentType === type);
+          const live = getPageIndexStatus(boothId, type);
+          const label = PAGEINDEX_DOC_LABELS[type] || type;
+          const hasPdf = isPdfUrl(url);
+
+          let badge = '—';
+          let badgeClass = 'bg-white/10 text-white/40';
+          let hint = '';
+
+          if (live?.status === 'indexing' || db?.indexStatus === 'indexing') {
+            badge = '⟳ Indexing…';
+            badgeClass = 'bg-blue-500/20 text-blue-300';
+            hint = 'MongoDB row created — building tree…';
+          } else if (live?.status === 'error') {
+            badge = 'Error';
+            badgeClass = 'bg-red-500/20 text-red-300';
+            hint = live.error || '';
+          } else if (!hasPdf) {
+            badge = url.trim() ? 'Image (no AI index)' : 'No file';
+            badgeClass = 'bg-white/10 text-white/35';
+          } else if (db?.slotExists && db?.indexStatus === 'pending') {
+            badge = '◌ Slot in MongoDB';
+            badgeClass = 'bg-white/10 text-white/50';
+            hint = 'Row exists — click Run PageIndex to build the tree.';
+          } else if (db?.indexStatus === 'failed') {
+            badge = '✗ Index failed';
+            badgeClass = 'bg-red-500/20 text-red-300';
+            hint = 'Click Run PageIndex again after fixing the PDF URL.';
+          } else if (db?.readyForChat) {
+            badge = '✓ Ready for AI chat';
+            badgeClass = 'bg-green-500/20 text-green-300';
+            hint = db.indexedAt ? `Indexed ${formatIndexedAt(db.indexedAt)}` : '';
+          } else if (db?.stale) {
+            badge = '⚠ Stale — re-index';
+            badgeClass = 'bg-amber-500/20 text-amber-200';
+            hint = 'PDF URL changed since last index. Run PageIndex again.';
+          } else if (db?.indexed) {
+            badge = 'Indexed (check URL)';
+            badgeClass = 'bg-amber-500/15 text-amber-100/80';
+          } else {
+            badge = '✗ Not indexed';
+            badgeClass = 'bg-red-500/15 text-red-300/90';
+            hint = 'Upload is not enough — click Run PageIndex below.';
+          }
+
+          return (
+            <li
+              key={type}
+              className="flex items-start justify-between gap-2 rounded-md border border-white/[0.05] bg-black/20 px-2 py-1.5"
+            >
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold text-white/70">{label}</span>
+                {url.trim() && (
+                  <p className="truncate text-[8px] font-mono text-white/25" title={url}>
+                    {url.length > 48 ? `…${url.slice(-44)}` : url}
+                  </p>
+                )}
+                {hint && (
+                  <p className="mt-0.5 text-[8px] leading-snug text-white/35" title={hint}>
+                    {hint}
+                  </p>
+                )}
+              </div>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${badgeClass}`}>
+                {badge}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function PageIndexStatusIcon({ boothId, documentType }: { boothId: string; documentType: string }) {
+  const [, tick] = useState(0);
+  const status = getPageIndexStatus(boothId, documentType);
+
+  useEffect(() => {
+    if (status?.status !== 'indexing') return;
+    const id = window.setInterval(() => tick((n) => n + 1), 800);
+    return () => window.clearInterval(id);
+  }, [status?.status]);
+
+  if (!status) return null;
+
+  const baseClass = 'inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide';
+
+  if (status.status === 'indexing') {
+    return <span className={`${baseClass} text-blue-400`}>⟳ Indexing…</span>;
+  }
+  if (status.status === 'indexed') {
+    return <span className={`${baseClass} text-green-400`}>✓ Indexed</span>;
+  }
+  if (status.status === 'error') {
+    return (
+      <span title={status.error} className={`${baseClass} text-red-400`}>
+        ✗ Error
+      </span>
+    );
+  }
+  return null;
+}
+
+function PageIndexDocControls({
+  boothId,
+  documentType,
+  pdfUrl,
+  enabled,
+  onEnabledChange,
+  enableLabel,
+}: {
+  boothId: string;
+  documentType: 'brochure' | 'priceList';
+  pdfUrl: string;
+  enabled: boolean;
+  onEnabledChange: (v: boolean) => void;
+  enableLabel: string;
+}) {
+  const canIndex = isPdfUrl(pdfUrl);
+
+  return (
+    <div className="space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input type="checkbox" checked={enabled} onChange={(e) => onEnabledChange(e.target.checked)} className="h-4 w-4" />
+          <span className="text-[10px] uppercase tracking-wide text-white/45">{enableLabel}</span>
+        </label>
+        <PageIndexStatusIcon boothId={boothId} documentType={documentType} />
+      </div>
+      {canIndex ? (
+        <button
+          type="button"
+          className="w-full rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-[#f5e6bc] hover:bg-[#d4af37]/20"
+          onClick={() => void indexPdfFromUrl(pdfUrl, boothId, documentType)}
+        >
+          Run PageIndex on current PDF
+        </button>
+      ) : (
+        <p className="text-[9px] leading-relaxed text-white/30">Upload a PDF first, then run PageIndex (required for AI Chat on this document).</p>
+      )}
+    </div>
+  );
+}
 
 function readFile(file: File): Promise<string> {
   return new Promise((res, rej) => {
@@ -75,6 +310,7 @@ export function CmsDashboard() {
   const [brochureUrl, setBrochureUrl] = useState('');
   const [siteMapSlides, setSiteMapSlides] = useState<string[]>([]);
   const [priceListUrl, setPriceListUrl] = useState('');
+  const [unitLayoutUrl, setUnitLayoutUrl] = useState('');
   const [company, setCompany] = useState<CompanyProfile>({ companyName: '', tagline: '', website: '', phone: '', email: '', whatsapp: '', facebook: '', instagram: '', twitter: '', brandPrimary: '#d4af37', brandSecondary: '#1a1a1a' });
   const [lighting, setLighting] = useState<BoothLighting>({ spotlightIntensity: 55, spotlightColor: '#ffe7bf', ledStripColor: '#d4af37', ledStripIntensity: 2, emissiveGlow: 0.15, ambientIntensity: 0.35 });
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -84,6 +320,9 @@ export function CmsDashboard() {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [hostessQuickReplies, setHostessQuickReplies] = useState<HostessQuickReply[]>([]);
 
+  const [enablePageIndexBrochure, setEnablePageIndexBrochure] = useState(false);
+  const [enablePageIndexPriceList, setEnablePageIndexPriceList] = useState(false);
+
   const loadForm = useCallback((b: BoothLayoutConfig) => {
     setPx(String(b.position[0])); setPy(String(b.position[1])); setPz(String(b.position[2]));
     const [dx, dy, dz] = rad3ToDeg3(b.rotation[0], b.rotation[1], b.rotation[2]);
@@ -91,10 +330,16 @@ export function CmsDashboard() {
     setSx(String(b.scale[0])); setSy(String(b.scale[1])); setSz(String(b.scale[2]));
     setName(b.name); setColor(b.color); setAccent(b.accent); setCounterColor(b.counterColor);
     setVideoUrl(b.videoUrl); setHeaderLogoUrl(b.headerLogoUrl ?? '');
-    setDescription(b.description); setBrochureUrl(b.brochureUrl); setSiteMapSlides(siteMapUrlsFromConfig(b)); setPriceListUrl(b.priceListUrl);
+    setDescription(b.description);
+    setBrochureUrl(b.brochureUrl);
+    setSiteMapSlides(siteMapUrlsFromConfig(b));
+    setPriceListUrl(b.priceListUrl);
+    setUnitLayoutUrl(b.unitLayoutUrl ?? '');
     setCompany({ ...b.company }); setLighting({ ...b.lighting }); setMedia([...b.media]);
     setPlacedImages([...(b.placedImages || [])]);
     setHostessQuickReplies([...(b.hostessQuickReplies ?? [])]);
+    setEnablePageIndexBrochure(b.pageIndexBrochure !== false);
+    setEnablePageIndexPriceList(b.pageIndexPriceList !== false);
     setPlacingImageUrl(null); setSelectedImageId(null);
   }, []);
 
@@ -115,13 +360,55 @@ export function CmsDashboard() {
     setTimeout(() => setToast(''), 2400);
   }, []);
 
-  const persistDocumentField = useCallback(
-    async (field: 'brochureUrl' | 'priceListUrl', url: string, label: string) => {
-      const ok = await patch(selectedId, { [field]: url } as BoothLayoutPatch);
-      if (ok) showToast(`${label} saved to expo`);
-      else showToast('Could not save (browser storage full). Try /maps/… in public/ or remove large Media gallery items.');
+  const toastUploadResult = useCallback(
+    (result: UploadResult, label: string) => {
+      if (result.storage === 'r2') showToast(`${label} → Cloudflare R2`);
+      else showToast(`${label} saved locally (set R2_* in .env for cloud URLs)`);
     },
-    [patch, selectedId, showToast],
+    [showToast],
+  );
+
+  const persistDocumentField = useCallback(
+    async (
+      field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl',
+      url: string,
+      label: string,
+    ) => {
+      const normalized =
+        field === 'videoUrl' || url.startsWith('data:') || url.startsWith('/')
+          ? url.trim()
+          : normalizeR2PublicUrl(url);
+      const ok = await patch(selectedId, { [field]: normalized } as BoothLayoutPatch);
+      if (ok) {
+        showToast(`${label} saved to expo`);
+        if (field === 'priceListUrl' && isPdfUrl(normalized) && enablePageIndexPriceList) {
+          void indexPdfFromUrl(normalized, selectedId, 'priceList');
+        }
+        if (field === 'brochureUrl' && isPdfUrl(normalized) && enablePageIndexBrochure) {
+          void indexPdfFromUrl(normalized, selectedId, 'brochure');
+        }
+      } else showToast('Could not save (browser storage full). Try /maps/… in public/ or remove large Media gallery items.');
+    },
+    [patch, selectedId, showToast, enablePageIndexPriceList, enablePageIndexBrochure],
+  );
+
+  const persistPageIndexFlag = useCallback(
+    async (field: 'pageIndexBrochure' | 'pageIndexPriceList', enabled: boolean) => {
+      if (field === 'pageIndexBrochure') setEnablePageIndexBrochure(enabled);
+      else setEnablePageIndexPriceList(enabled);
+      const ok = await patch(selectedId, { [field]: enabled });
+      if (ok) {
+        showToast(enabled ? 'PageIndex auto-index on upload (saved)' : 'PageIndex auto-index off (saved)');
+        if (enabled) {
+          const url = field === 'pageIndexBrochure' ? brochureUrl : priceListUrl;
+          const docType = field === 'pageIndexBrochure' ? 'brochure' : 'priceList';
+          if (isPdfUrl(url)) void indexPdfFromUrl(url, selectedId, docType);
+        }
+      } else {
+        showToast('Could not save PageIndex setting — browser storage may be full.');
+      }
+    },
+    [patch, selectedId, showToast, brochureUrl, priceListUrl],
   );
 
   const persistSiteMapSlides = useCallback(
@@ -153,7 +440,13 @@ export function CmsDashboard() {
       videoUrl: videoUrl.trim() || undefined,
       headerLogoUrl: headerLogoUrl.trim() || undefined,
       description,
-      brochureUrl, siteMapUrl: sm.siteMapUrl, siteMapGallery: sm.siteMapGallery, priceListUrl,
+      brochureUrl,
+      siteMapUrl: sm.siteMapUrl,
+      siteMapGallery: sm.siteMapGallery,
+      priceListUrl,
+      unitLayoutUrl: unitLayoutUrl.trim() || undefined,
+      pageIndexBrochure: enablePageIndexBrochure,
+      pageIndexPriceList: enablePageIndexPriceList,
       company, lighting, media, placedImages,
       hostessQuickReplies: hqFiltered,
     });
@@ -234,8 +527,9 @@ export function CmsDashboard() {
   };
 
   const addMediaItem = async (file: File, type: MediaItem['type']) => {
-    const url = await readFile(file);
-    setMedia((prev) => [...prev, { id: `m-${Date.now()}`, type, url, label: file.name }]);
+    const uploaded = await uploadCmsFile(file, selectedId, 'media');
+    setMedia((prev) => [...prev, { id: `m-${Date.now()}`, type, url: uploaded.url, label: file.name }]);
+    toastUploadResult(uploaded, file.name);
   };
 
   const removeMediaItem = (id: string) => { setMedia((prev) => prev.filter((m) => m.id !== id)); };
@@ -375,22 +669,48 @@ export function CmsDashboard() {
                   setDescription={setDescription}
                   hostessQuickReplies={hostessQuickReplies}
                   setHostessQuickReplies={setHostessQuickReplies}
+                  boothId={selectedId}
+                  toastUploadResult={toastUploadResult}
                 />
               )}
-              {tab === 'images' && <ImagesTab placedImages={placedImages} placingImageUrl={placingImageUrl} setPlacingImageUrl={setPlacingImageUrl} setPlacingLabel={setPlacingLabel} selectedImageId={selectedImageId} setSelectedImageId={setSelectedImageId} removePlacedImage={removePlacedImage} updatePlacedImage={updatePlacedImage} />}
+              {tab === 'images' && (
+                <ImagesTab
+                  boothId={selectedId}
+                  toastUploadResult={toastUploadResult}
+                  placedImages={placedImages}
+                  placingImageUrl={placingImageUrl}
+                  setPlacingImageUrl={setPlacingImageUrl}
+                  setPlacingLabel={setPlacingLabel}
+                  selectedImageId={selectedImageId}
+                  setSelectedImageId={setSelectedImageId}
+                  removePlacedImage={removePlacedImage}
+                  updatePlacedImage={updatePlacedImage}
+                />
+              )}
               {tab === 'media' && (
                 <MediaTab
+                  boothId={selectedId}
+                  toastUploadResult={toastUploadResult}
                   media={media}
                   addMediaItem={addMediaItem}
                   removeMediaItem={removeMediaItem}
                   brochureUrl={brochureUrl}
                   setBrochureUrl={setBrochureUrl}
+                  enablePageIndexBrochure={enablePageIndexBrochure}
+                  setEnablePageIndexBrochure={setEnablePageIndexBrochure}
                   siteMapSlides={siteMapSlides}
                   setSiteMapSlides={setSiteMapSlides}
                   persistSiteMapSlides={persistSiteMapSlides}
                   priceListUrl={priceListUrl}
                   setPriceListUrl={setPriceListUrl}
+                  enablePageIndexPriceList={enablePageIndexPriceList}
+                  setEnablePageIndexPriceList={setEnablePageIndexPriceList}
+                  videoUrl={videoUrl}
+                  setVideoUrl={setVideoUrl}
+                  unitLayoutUrl={unitLayoutUrl}
+                  setUnitLayoutUrl={setUnitLayoutUrl}
                   persistDocumentField={persistDocumentField}
+                  persistPageIndexFlag={persistPageIndexFlag}
                   onUseBundledSiteMapPath={switchSiteMapToBundledPublicPath}
                 />
               )}
@@ -426,7 +746,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-2">{children}</h3>;
 }
 
-function CmsField({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
+function CmsField({ label, value, onChange, type = 'text', placeholder }: { label: React.ReactNode; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <div>
       <label className="mb-1 block text-[10px] uppercase tracking-wide text-white/35">{label}</label>
@@ -591,13 +911,15 @@ function HostessQuickRepliesEditor({
 /* ─── BRANDING TAB ─── */
 function BrandingTab({
   name, setName, color, setColor, accent, setAccent, counterColor, setCounterColor, videoUrl, setVideoUrl, headerLogoUrl, setHeaderLogoUrl, description, setDescription,
-  hostessQuickReplies, setHostessQuickReplies,
+  hostessQuickReplies, setHostessQuickReplies, boothId, toastUploadResult,
 }: {
   name: string; setName: (v: string) => void; color: string; setColor: (v: string) => void; accent: string; setAccent: (v: string) => void;
   counterColor: string; setCounterColor: (v: string) => void; videoUrl: string; setVideoUrl: (v: string) => void;
   headerLogoUrl: string; setHeaderLogoUrl: (v: string) => void; description: string; setDescription: (v: string) => void;
   hostessQuickReplies: HostessQuickReply[];
   setHostessQuickReplies: (next: HostessQuickReply[]) => void;
+  boothId: string;
+  toastUploadResult: (result: UploadResult, label: string) => void;
 }) {
   return (
     <>
@@ -616,10 +938,27 @@ function BrandingTab({
       </div>
       <SectionTitle>Screen Content</SectionTitle>
       <CmsField label="LED Screen URL (video/image)" value={videoUrl} onChange={setVideoUrl} />
-      <UploadButton label="Upload screen image" accept="image/*" onFile={async (f) => setVideoUrl(await readFile(f))} />
+      <p className="-mt-1 text-[9px] text-white/30">Walkthrough booth button: upload in <strong className="text-white/45">Media</strong> tab → “Walkthrough — booth button”.</p>
+      <UploadButton
+        label="Upload screen image"
+        accept="image/*"
+        onFile={async (f) => {
+          const up = await uploadCmsFile(f, boothId, 'screen');
+          setVideoUrl(up.url);
+          toastUploadResult(up, 'Screen image');
+        }}
+      />
       <SectionTitle>Header Logo</SectionTitle>
       <CmsField label="Logo URL" value={headerLogoUrl} onChange={setHeaderLogoUrl} placeholder="/assets/logo.png" />
-      <UploadButton label="Upload logo" accept="image/*" onFile={async (f) => setHeaderLogoUrl(await readFile(f))} />
+      <UploadButton
+        label="Upload logo"
+        accept="image/*"
+        onFile={async (f) => {
+          const up = await uploadCmsFile(f, boothId, 'logo');
+          setHeaderLogoUrl(up.url);
+          toastUploadResult(up, 'Logo');
+        }}
+      />
       {headerLogoUrl && (
         <div className="mt-2 rounded-lg border border-white/[0.08] bg-white/[0.04] p-2">
           <img src={headerLogoUrl} alt="logo" className="mx-auto max-h-16 object-contain" />
@@ -692,7 +1031,7 @@ function CmsMediaPreviewThumb({ url }: { url: string }) {
 function CmsDocFieldWithPreview({
   label, value, onChange, placeholder, uploadLabel, uploadAccept, onUploadFile, previewColumnTitle = 'View image',
 }: {
-  label: string;
+  label: React.ReactNode;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -771,14 +1110,65 @@ function MediaGalleryThumb({ m, onOpen }: { m: MediaItem; onOpen: () => void }) 
 }
 
 /* ─── MEDIA TAB ─── */
-function MediaTab({ media, addMediaItem, removeMediaItem, brochureUrl, setBrochureUrl, siteMapSlides, setSiteMapSlides, persistSiteMapSlides, priceListUrl, setPriceListUrl, persistDocumentField, onUseBundledSiteMapPath }: {
-  media: MediaItem[]; addMediaItem: (f: File, t: MediaItem['type']) => void; removeMediaItem: (id: string) => void;
-  brochureUrl: string; setBrochureUrl: (v: string) => void;
+function BoothCtaBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded border border-[#d4af37]/35 bg-[#d4af37]/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#d4af37]">
+      {label}
+    </span>
+  );
+}
+
+function MediaTab({
+  boothId,
+  toastUploadResult,
+  media,
+  addMediaItem,
+  removeMediaItem,
+  brochureUrl,
+  setBrochureUrl,
+  enablePageIndexBrochure,
+  setEnablePageIndexBrochure,
+  siteMapSlides,
+  setSiteMapSlides,
+  persistSiteMapSlides,
+  priceListUrl,
+  setPriceListUrl,
+  enablePageIndexPriceList,
+  setEnablePageIndexPriceList,
+  videoUrl,
+  setVideoUrl,
+  unitLayoutUrl,
+  setUnitLayoutUrl,
+  persistDocumentField,
+  persistPageIndexFlag,
+  onUseBundledSiteMapPath,
+}: {
+  boothId: string;
+  toastUploadResult: (result: UploadResult, label: string) => void;
+  media: MediaItem[];
+  addMediaItem: (f: File, t: MediaItem['type']) => void;
+  removeMediaItem: (id: string) => void;
+  brochureUrl: string;
+  setBrochureUrl: (v: string) => void;
+  enablePageIndexBrochure: boolean;
+  setEnablePageIndexBrochure: (v: boolean) => void;
   siteMapSlides: string[];
   setSiteMapSlides: (v: string[] | ((prev: string[]) => string[])) => void;
   persistSiteMapSlides: (urls: string[]) => Promise<void>;
-  priceListUrl: string; setPriceListUrl: (v: string) => void;
-  persistDocumentField: (field: 'brochureUrl' | 'priceListUrl', url: string, label: string) => Promise<void>;
+  priceListUrl: string;
+  setPriceListUrl: (v: string) => void;
+  enablePageIndexPriceList: boolean;
+  setEnablePageIndexPriceList: (v: boolean) => void;
+  videoUrl: string;
+  setVideoUrl: (v: string) => void;
+  unitLayoutUrl: string;
+  setUnitLayoutUrl: (v: string) => void;
+  persistDocumentField: (
+    field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl',
+    url: string,
+    label: string,
+  ) => Promise<void>;
+  persistPageIndexFlag: (field: 'pageIndexBrochure' | 'pageIndexPriceList', enabled: boolean) => Promise<void>;
   onUseBundledSiteMapPath: () => void;
 }) {
   const [galleryPreview, setGalleryPreview] = useState<MediaItem | null>(null);
@@ -794,7 +1184,123 @@ function MediaTab({ media, addMediaItem, removeMediaItem, brochureUrl, setBrochu
 
   return (
     <>
-      <SectionTitle>Media Gallery</SectionTitle>
+      <SectionTitle>Booth side menu — visitor buttons</SectionTitle>
+      <p className="mb-3 text-[10px] leading-relaxed text-white/40">
+        Upload here for each gold button at your booth. Uses Cloudflare R2 when <span className="font-mono text-white/50">R2_*</span> is set in <span className="font-mono text-white/50">.env</span>.
+      </p>
+
+      <div className="mb-4 space-y-3 rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/5 p-3">
+        <CmsDocFieldWithPreview
+          label="Brochure — booth button"
+          value={brochureUrl}
+          onChange={setBrochureUrl}
+          placeholder="https://…/brochure.pdf"
+          uploadLabel="Upload brochure (PDF)"
+          uploadAccept=".pdf,application/pdf"
+          onUploadFile={async (f) => {
+            const up = await uploadCmsFile(f, boothId, 'brochure');
+            setBrochureUrl(up.url);
+            toastUploadResult(up, 'Brochure');
+            await persistDocumentField('brochureUrl', up.url, 'Brochure');
+            if (enablePageIndexBrochure) void autoIndexPdf(f, boothId, 'brochure', up.url);
+          }}
+        />
+        <CmsDocFieldWithPreview
+          label="Price list — booth button"
+          value={priceListUrl}
+          onChange={setPriceListUrl}
+          placeholder="https://…/price-list.pdf"
+          uploadLabel="Upload price list (PDF or image)"
+          uploadAccept=".pdf,application/pdf,image/*"
+          onUploadFile={async (f) => {
+            const up = await uploadCmsFile(f, boothId, 'price-list');
+            setPriceListUrl(up.url);
+            toastUploadResult(up, 'Price list');
+            await persistDocumentField('priceListUrl', up.url, 'Price list');
+            const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+            if (enablePageIndexPriceList && isPdf) void autoIndexPdf(f, boothId, 'priceList', up.url);
+          }}
+        />
+
+        <SectionTitle>PageIndex — AI document tree</SectionTitle>
+        <p className="mb-2 text-[10px] leading-relaxed text-white/40">
+          Builds a searchable tree in MongoDB so <strong className="text-white/55">Ask AI</strong> answers from your PDFs only.
+          Turn on auto-index, upload a PDF above, or click <strong className="text-white/55">Run PageIndex</strong>.
+          Requires <span className="font-mono text-white/50">MONGODB_URI</span> and dev server running.
+        </p>
+        <PageIndexBoothTracker boothId={boothId} brochureUrl={brochureUrl} priceListUrl={priceListUrl} />
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <PageIndexDocControls
+            boothId={boothId}
+            documentType="brochure"
+            pdfUrl={brochureUrl}
+            enabled={enablePageIndexBrochure}
+            enableLabel="Auto-index brochure on upload"
+            onEnabledChange={(v) => {
+              setEnablePageIndexBrochure(v);
+              void persistPageIndexFlag('pageIndexBrochure', v);
+            }}
+          />
+          <PageIndexDocControls
+            boothId={boothId}
+            documentType="priceList"
+            pdfUrl={priceListUrl}
+            enabled={enablePageIndexPriceList}
+            enableLabel="Auto-index price list on upload"
+            onEnabledChange={(v) => {
+              setEnablePageIndexPriceList(v);
+              void persistPageIndexFlag('pageIndexPriceList', v);
+            }}
+          />
+        </div>
+
+        <CmsDocFieldWithPreview
+          label="Walkthrough — booth button (video)"
+          value={videoUrl}
+          onChange={setVideoUrl}
+          placeholder="/13391496_3840_2160_60fps.mp4"
+          uploadLabel="Upload walkthrough video"
+          uploadAccept="video/*,.mp4,.webm"
+          onUploadFile={async (f) => {
+            const up = await uploadCmsFile(f, boothId, 'walkthrough');
+            setVideoUrl(up.url);
+            toastUploadResult(up, 'Walkthrough');
+            await persistDocumentField('videoUrl', up.url, 'Walkthrough');
+          }}
+          previewColumnTitle="Preview"
+        />
+        <CmsDocFieldWithPreview
+          label="Unit layout — booth button"
+          value={unitLayoutUrl}
+          onChange={setUnitLayoutUrl}
+          placeholder="https://…/unit-layout.pdf"
+          uploadLabel="Upload unit layout (PDF or image)"
+          uploadAccept=".pdf,application/pdf,image/*"
+          onUploadFile={async (f) => {
+            const up = await uploadCmsFile(f, boothId, 'unit-layout');
+            setUnitLayoutUrl(up.url);
+            toastUploadResult(up, 'Unit layout');
+            await persistDocumentField('unitLayoutUrl', up.url, 'Unit layout');
+          }}
+        />
+      </div>
+
+      <SectionTitle>Images — booth button</SectionTitle>
+      <p className="mb-2 text-[10px] text-white/35">
+        Upload gallery photos below ({media.filter((m) => m.type === 'image').length} image(s) in media list). Then click Apply Changes.
+      </p>
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <UploadFilesButton
+          label="Add booth images"
+          accept="image/*"
+          onFiles={async (files) => {
+            for (const f of files) addMediaItem(f, 'image');
+          }}
+        />
+      </div>
+
+      <SectionTitle>Extra media library (optional)</SectionTitle>
+      <p className="mb-2 text-[10px] text-white/35">Additional videos, PDFs, or 3D models — booth buttons above use the dedicated fields.</p>
       <div className="grid grid-cols-2 gap-2">
         <UploadButton label="Image" accept="image/*" onFile={(f) => addMediaItem(f, 'image')} />
         <UploadButton label="Video" accept="video/*" onFile={(f) => addMediaItem(f, 'video')} />
@@ -877,29 +1383,15 @@ function MediaTab({ media, addMediaItem, removeMediaItem, brochureUrl, setBrochu
           </div>
         </div>
       )}
-      <SectionTitle>Documents</SectionTitle>
+      <SectionTitle>Site layout slides</SectionTitle>
       <p className="mb-2 text-[10px] leading-relaxed text-white/35">
-        Site map: add multiple images (carousel at the kiosk). Put files in <span className="font-mono text-white/45">public/maps/</span> and use paths like <span className="font-mono text-white/45">/maps/a.png</span>. If <span className="font-mono text-white/45">localStorage</span> is full, booth data uses <span className="font-mono text-white/45">IndexedDB</span>. Uploads save immediately; other tabs need <span className="text-[#d4af37]/80">Apply Changes</span>.
+        Powers the <strong className="text-white/55">Site layout</strong> booth button and kiosk “View site map”. Saves immediately to R2 when configured.
       </p>
       <div className="space-y-3">
-        <CmsDocFieldWithPreview
-          label="Brochure URL"
-          value={brochureUrl}
-          onChange={setBrochureUrl}
-          placeholder="/assets/brochure.pdf"
-          uploadLabel="Upload brochure"
-          uploadAccept=".pdf"
-          onUploadFile={async (f) => {
-            const url = await readFile(f);
-            setBrochureUrl(url);
-            await persistDocumentField('brochureUrl', url, 'Brochure');
-          }}
-          previewColumnTitle="Preview"
-        />
         <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
           <div className="mb-2">
-            <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-white/45">Site map images</span>
-            <p className="text-[9px] leading-relaxed text-white/30">Order = carousel order. Use <span className="font-mono text-white/40">Add image(s)</span> for multi-upload, or paste paths; click <span className="font-mono text-white/40">Apply Changes</span> after editing URLs.</p>
+            <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-white/45">Site layout slides</span>
+            <p className="text-[9px] leading-relaxed text-white/30">Order = carousel order. Use Add image(s) for multi-upload.</p>
           </div>
           {siteMapSlides.length === 0 ? (
             <p className="mb-2 text-[10px] text-white/35">No images yet — add one or use the bundled SVG.</p>
@@ -934,8 +1426,14 @@ function MediaTab({ media, addMediaItem, removeMediaItem, brochureUrl, setBrochu
               label="Add image(s)"
               accept="image/*"
               onFiles={async (files) => {
-                const urls = await Promise.all(files.map((f) => readFile(f)));
-                await persistSiteMapSlides([...siteMapSlides, ...urls]);
+                const uploaded = await Promise.all(
+                  files.map(async (f) => {
+                    const up = await uploadCmsFile(f, boothId, 'site-map');
+                    toastUploadResult(up, f.name);
+                    return up.url;
+                  }),
+                );
+                await persistSiteMapSlides([...siteMapSlides, ...uploaded]);
               }}
             />
             <button
@@ -961,19 +1459,6 @@ function MediaTab({ media, addMediaItem, removeMediaItem, brochureUrl, setBrochu
             </button>
           </div>
         )}
-        <CmsDocFieldWithPreview
-          label="Price List URL"
-          value={priceListUrl}
-          onChange={setPriceListUrl}
-          placeholder="/assets/pricelist.png"
-          uploadLabel="Upload price list"
-          uploadAccept="image/*"
-          onUploadFile={async (f) => {
-            const url = await readFile(f);
-            setPriceListUrl(url);
-            await persistDocumentField('priceListUrl', url, 'Price list');
-          }}
-        />
       </div>
     </>
   );
@@ -1006,9 +1491,11 @@ function CompanyTab({ company, setCompany }: { company: CompanyProfile; setCompa
 
 /* ─── IMAGES TAB (click-to-place) ─── */
 function ImagesTab({
-  placedImages, placingImageUrl, setPlacingImageUrl, setPlacingLabel,
+  boothId, toastUploadResult, placedImages, placingImageUrl, setPlacingImageUrl, setPlacingLabel,
   selectedImageId, setSelectedImageId, removePlacedImage, updatePlacedImage,
 }: {
+  boothId: string;
+  toastUploadResult: (result: UploadResult, label: string) => void;
   placedImages: PlacedImage[];
   placingImageUrl: string | null;
   setPlacingImageUrl: (url: string | null) => void;
@@ -1035,11 +1522,16 @@ function ImagesTab({
           </button>
         </div>
       ) : (
-        <UploadButton label="Upload image to place" accept="image/*" onFile={async (f) => {
-          const url = await readFile(f);
-          setPlacingImageUrl(url);
-          setPlacingLabel(f.name);
-        }} />
+        <UploadButton
+          label="Upload image to place"
+          accept="image/*"
+          onFile={async (f) => {
+            const up = await uploadCmsFile(f, boothId, 'placed-images');
+            setPlacingImageUrl(up.url);
+            setPlacingLabel(f.name);
+            toastUploadResult(up, f.name);
+          }}
+        />
       )}
 
       <SectionTitle>Placed Images ({placedImages.length})</SectionTitle>

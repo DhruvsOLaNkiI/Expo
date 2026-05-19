@@ -86,6 +86,12 @@ export type BoothLayoutConfig = {
   siteMapGallery?: string[];
   /** Price list image URL */
   priceListUrl: string;
+  /** Unit layout PDF or image (booth “Unit layout” button) */
+  unitLayoutUrl: string;
+  /** CMS: auto-run PageIndex when uploading brochure PDF */
+  pageIndexBrochure?: boolean;
+  /** CMS: auto-run PageIndex when uploading price list PDF */
+  pageIndexPriceList?: boolean;
   /** Quick-reply options when the visitor stands near the booth hostess */
   hostessQuickReplies?: HostessQuickReply[];
 };
@@ -195,18 +201,18 @@ export const DEFAULT_REGISTRATION_LAYOUT: RegistrationLayoutConfig = {
   backdropOffset: [0, 0, 0],
   queueOffset: [0, 0, 0],
   totemsOffset: [0, 0, 0],
-  loungeOffset: [0, 0, 10],
-  sectionalOffset: [0, 0, -1.5],
-  chairLeftOffset: [-4, 0, 2.5],
-  chairRightOffset: [4, 0, 2.5],
-  coffeeTableOffset: [0, 0, 1],
-  lampLeftOffset: [-5.6, 0, -1.5],
-  lampRightOffset: [5.6, 0, -1.5],
+  loungeOffset: [0, 0, 5.5],
+  sectionalOffset: [0, 0, -1.2],
+  chairLeftOffset: [-2.8, 0, 1.6],
+  chairRightOffset: [2.8, 0, 1.6],
+  coffeeTableOffset: [0, 0, 0.6],
+  lampLeftOffset: [-4.2, 0, -1.1],
+  lampRightOffset: [4.2, 0, -1.1],
   loungePlantOffsets: [
-    [-6, 0, -2],
-    [6, 0, -2],
-    [-6.2, 0, 3.5],
-    [6.2, 0, 3.5],
+    [-4.5, 0, -1.4],
+    [4.5, 0, -1.4],
+    [-4.6, 0, 2.2],
+    [4.6, 0, 2.2],
   ],
   loungeRotations: {
     'reg-lobby-chair-left': [0, 0.4, 0],
@@ -366,6 +372,9 @@ function makeDefaultBooth(
     siteMapUrl: '',
     siteMapGallery: [],
     priceListUrl: '',
+    unitLayoutUrl: '',
+    pageIndexBrochure: true,
+    pageIndexPriceList: true,
     hostessQuickReplies: [],
   };
 }
@@ -380,6 +389,12 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
       brochureUrl: vertex.brochureUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       priceListUrl: vertex.priceListUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       siteMapUrl: vertex.siteMapUrl || '/maps/site-map.svg',
+      company: {
+        ...vertex.company,
+        companyName: vertex.company.companyName || 'Vertex Elite',
+        email: vertex.company.email || 'sales@vertexelite.example',
+        phone: vertex.company.phone || '+91 98765 43210',
+      },
       hostessQuickReplies: [
         { id: 'vertex-hq-1', label: 'Project timeline', response: 'We are targeting completion in late twenty twenty-six. I can walk you through the milestones.' },
         { id: 'vertex-hq-ai', label: 'Ask AI', response: '', action: 'askAi' },

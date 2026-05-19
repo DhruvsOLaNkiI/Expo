@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { isPdfUrl } from '../api/pageindexAutoIndex';
+import { normalizeCtaUrl } from '../api/boothCta';
 import type { CtaResourcePopup } from '../store';
 
 function isSvgSiteMapUrl(url: string): boolean {
@@ -68,7 +70,217 @@ function useDisplayImageSrc(url: string, isRasterImage: boolean): string {
   return src;
 }
 
+function pdfEmbedSrc(url: string): string {
+  const u = normalizeCtaUrl(url);
+  if (!u) return u;
+  if (u.includes('#')) return u;
+  return `${u}#toolbar=1&navpanes=0&view=FitH`;
+}
+
+function EmbeddedVideoPanel({
+  title,
+  url,
+  onClose,
+  overlayClassName,
+}: {
+  title: string;
+  url: string;
+  onClose: () => void;
+  overlayClassName?: string;
+}) {
+  const src = useMemo(() => normalizeCtaUrl(url), [url]);
+  const overlay = overlayClassName?.trim() || DEFAULT_OVERLAY;
+  const openTab = () => window.open(src, '_blank', 'noopener,noreferrer');
+
+  return (
+    <div role="presentation" className={overlay} onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cta-video-title"
+        className="flex h-[min(92dvh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#d4af37]/40 bg-[#0a0a10]/98 text-[#fffef8] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3 md:px-5">
+          <h2 id="cta-video-title" className="text-sm font-bold uppercase tracking-[0.18em] text-[#d4af37] md:text-base">
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="relative min-h-0 flex-1 bg-black">
+          <video
+            key={src}
+            src={src}
+            className="absolute inset-0 h-full w-full object-contain"
+            controls
+            playsInline
+            autoPlay
+            title={title}
+          />
+        </div>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-2.5 md:px-5">
+          <button type="button" onClick={openTab} className="text-[10px] font-semibold uppercase tracking-wider text-white/50 hover:text-white/80">
+            Open in new tab
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/90 hover:bg-white/10"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmbeddedPdfPanel({
+  title,
+  url,
+  onClose,
+  overlayClassName,
+}: {
+  title: string;
+  url: string;
+  onClose: () => void;
+  overlayClassName?: string;
+}) {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const embedSrc = useMemo(() => pdfEmbedSrc(url), [url]);
+
+  useLayoutEffect(() => {
+    setLoadFailed(false);
+  }, [url]);
+
+  const overlay = overlayClassName?.trim() || DEFAULT_OVERLAY;
+  const openTab = () => window.open(url, '_blank', 'noopener,noreferrer');
+
+  return (
+    <div role="presentation" className={overlay} onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cta-pdf-title"
+        className="flex h-[min(92dvh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#d4af37]/40 bg-[#0a0a10]/98 text-[#fffef8] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3 md:px-5">
+          <h2 id="cta-pdf-title" className="text-sm font-bold uppercase tracking-[0.18em] text-[#d4af37] md:text-base">
+            {title}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openTab}
+              className="hidden rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/80 hover:bg-white/10 sm:inline-block"
+            >
+              New tab
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="relative min-h-0 flex-1 bg-[#1a1a22]">
+          {!loadFailed ? (
+            <iframe
+              key={embedSrc}
+              title={title}
+              src={embedSrc}
+              className="absolute inset-0 h-full w-full border-0 bg-white"
+              onError={() => setLoadFailed(true)}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+              <p className="text-sm text-amber-200/90">
+                This PDF could not be embedded here. Open it in a new tab instead.
+              </p>
+              <button
+                type="button"
+                className="rounded-lg bg-[#d4af37] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-black hover:bg-[#c9a43a]"
+                onClick={openTab}
+              >
+                Open PDF
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-2.5 md:px-5">
+          <p className="truncate text-[10px] text-white/40">Scroll inside the viewer · Close to keep exploring</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/90 hover:bg-white/10"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CtaResourcePopupView({
+  popup,
+  onClose,
+  overlayClassName,
+}: {
+  popup: CtaResourcePopup;
+  onClose: () => void;
+  overlayClassName?: string;
+}) {
+  const variant = popup.variant ?? 'document';
+  const docUrl = normalizeCtaUrl(popup.url);
+  const showEmbeddedVideo = variant === 'video' && Boolean(docUrl);
+  const showEmbeddedPdf = variant === 'document' && docUrl && isPdfUrl(docUrl);
+
+  if (showEmbeddedVideo) {
+    return (
+      <EmbeddedVideoPanel
+        title={popup.title}
+        url={docUrl}
+        onClose={onClose}
+        overlayClassName={overlayClassName}
+      />
+    );
+  }
+
+  if (showEmbeddedPdf) {
+    return (
+      <EmbeddedPdfPanel
+        title={popup.title}
+        url={docUrl}
+        onClose={onClose}
+        overlayClassName={overlayClassName}
+      />
+    );
+  }
+
+  return (
+    <CtaResourcePopupContent
+      popup={popup}
+      onClose={onClose}
+      overlayClassName={overlayClassName}
+    />
+  );
+}
+
+function CtaResourcePopupContent({
   popup,
   onClose,
   overlayClassName,
@@ -138,7 +350,6 @@ export function CtaResourcePopupView({
     return () => window.removeEventListener('keydown', onKey);
   }, [isImage, imageUrls.length]);
 
-  /* ─── Site map: full-viewport lightbox — carousel when multiple URLs ─── */
   if (isImage && !imageError && imageUrls.length > 0) {
     return (
       <div
@@ -240,7 +451,7 @@ export function CtaResourcePopupView({
         {isImage && imageError ? (
           <>
             <p className="mb-4 text-sm text-amber-200/90">
-              This URL could not be shown as an image (wrong format, blocked hotlink, or unavailable). Use &quot;Open in new tab&quot;, or set Site Map URL in CMS to a PNG, JPG, WebP, SVG, or a data URL.
+              This URL could not be shown as an image. Use &quot;Open in new tab&quot;, or set Site Map URL in CMS to a PNG, JPG, WebP, or SVG.
             </p>
             <p className="mb-6 max-h-32 overflow-auto break-all rounded-lg bg-black/40 px-3 py-2 font-mono text-xs text-[#f5d060]">
               {(currentUrl || popup.url).length > 400 ? `${(currentUrl || popup.url).slice(0, 400)}…` : (currentUrl || popup.url)}
@@ -249,7 +460,7 @@ export function CtaResourcePopupView({
         ) : (
           <>
             <p className="mb-4 text-sm text-white/70">
-              Preview opens in a new tab, or use the button below. Close this panel to keep exploring the hall.
+              Open the resource below, or close this panel to keep exploring the hall.
             </p>
             <p className="mb-6 max-h-32 overflow-auto break-all rounded-lg bg-black/40 px-3 py-2 font-mono text-xs text-[#f5d060]">
               {popup.url.length > 400 ? `${popup.url.slice(0, 400)}…` : popup.url}

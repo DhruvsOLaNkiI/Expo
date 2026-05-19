@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
+import { buildCtaOpenPayload, resolveBoothCta } from '../api/boothCta';
 import { useStore, type VertexEliteHudContext } from '../store';
 
 function unlockPointer() {
@@ -93,65 +94,34 @@ function SidePanel({
   );
 }
 
-function useDerived(ctx: VertexEliteHudContext | null) {
-  return useMemo(() => {
-    if (!ctx) return null;
-    const fromMedia = ctx.media.filter((m) => m.type === 'image' && m.url?.trim()).map((m) => m.url.trim());
-    const fromPlaced = ctx.placedImages.map((p) => p.url.trim()).filter(Boolean);
-    const imageGalleryUrls = [...new Set([...fromMedia, ...fromPlaced])];
-    const v = ctx.media.find((m) => m.type === 'video' && m.url?.trim());
-    const walkthroughUrl = (v?.url ?? ctx.videoUrl ?? '').trim();
-    const pdf = ctx.media.find(
-      (m) =>
-        m.type === 'pdf' &&
-        m.url?.trim() &&
-        /layout|floor|plan|unit/i.test(`${m.label} ${m.url}`),
-    );
-    let unitLayoutUrl = '';
-    if (pdf?.url) unitLayoutUrl = pdf.url.trim();
-    else {
-      const anyPdf = ctx.media.find((m) => m.type === 'pdf' && m.url?.trim());
-      unitLayoutUrl = anyPdf?.url.trim() ?? '';
-    }
-    if (!unitLayoutUrl && imageGalleryUrls[1]) unitLayoutUrl = imageGalleryUrls[1];
-    const siteSlides = ctx.siteMapUrls.map((u) => u.trim()).filter(Boolean);
-    return {
-      imageGalleryUrls,
-      walkthroughUrl,
-      unitLayoutUrl,
-      siteSlides,
-      brochureOk: Boolean(ctx.brochureUrl?.trim()),
-      walkOk: Boolean(walkthroughUrl),
-      imagesOk: imageGalleryUrls.length > 0,
-      unitOk: Boolean(unitLayoutUrl),
-      siteOk: siteSlides.length > 0,
-      priceOk: Boolean(ctx.priceListUrl?.trim()),
-      quoteOk: Boolean((ctx.company.email || '').trim()) || Boolean(ctx.brochureUrl?.trim()),
-    };
-  }, [ctx]);
-}
-
 /** Screen-space Vertex Elite booth controls — fades with `vertexEliteHudAlpha`. */
 export function VertexEliteScreenHud() {
   const ctx = useStore((s) => s.vertexEliteHudContext);
   const alpha = useStore((s) => s.vertexEliteHudAlpha);
-  const d = useDerived(ctx);
 
-  const openDocument = useCallback((title: string, url: string) => {
-    if (!url.trim()) return;
-    unlockPointer();
-    useStore.getState().setCtaResourcePopup({ title, url: url.trim(), variant: 'document' });
-  }, []);
+  const d = useMemo(() => {
+    if (!ctx) return null;
+    return resolveBoothCta({
+      brochureUrl: ctx.brochureUrl,
+      priceListUrl: ctx.priceListUrl,
+      unitLayoutUrl: ctx.unitLayoutUrl,
+      siteMapUrls: ctx.siteMapUrls,
+      videoUrl: ctx.videoUrl,
+      media: ctx.media,
+      placedImages: ctx.placedImages,
+      company: ctx.company,
+    });
+  }, [ctx]);
 
-  const openImageGallery = useCallback((title: string, urls: string[]) => {
-    const clean = urls.filter(Boolean);
-    if (clean.length === 0) return;
+  const openCta = useCallback((title: string, url: string, gallery?: string[]) => {
+    const payload = buildCtaOpenPayload(title, url, gallery);
+    if (!payload) return;
     unlockPointer();
     useStore.getState().setCtaResourcePopup({
-      title,
-      url: clean[0],
-      variant: 'image',
-      imageGallery: clean.length > 1 ? clean : undefined,
+      title: payload.title,
+      url: payload.url,
+      variant: payload.variant,
+      imageGallery: payload.imageGallery,
     });
   }, []);
 
@@ -159,14 +129,25 @@ export function VertexEliteScreenHud() {
     (c: VertexEliteHudContext) => {
       unlockPointer();
       const email = (c.company.email || '').trim();
+      const phone = (c.company.phone || '').trim();
+      const whatsapp = (c.company.whatsapp || '').trim();
+      const subject = encodeURIComponent(`${c.company.companyName || 'Booth'} — quote request`);
       if (email) {
-        const q = encodeURIComponent('Vertex Elite — quote request');
-        window.open(`mailto:${email}?subject=${q}`, '_blank', 'noopener,noreferrer');
+        window.open(`mailto:${email}?subject=${subject}`, '_blank', 'noopener,noreferrer');
         return;
       }
-      if (c.brochureUrl.trim()) openDocument('QUOTE — PROJECT PDF', c.brochureUrl);
+      if (whatsapp) {
+        const digits = whatsapp.replace(/\D/g, '');
+        window.open(`https://wa.me/${digits}?text=${subject}`, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      if (phone) {
+        window.open(`tel:${phone.replace(/\s/g, '')}`, '_self');
+        return;
+      }
+      if (c.brochureUrl.trim()) openCta('QUOTE — PROJECT PDF', c.brochureUrl);
     },
-    [openDocument],
+    [openCta],
   );
 
   const openChat = useCallback(() => {
@@ -192,15 +173,15 @@ export function VertexEliteScreenHud() {
   return (
     <>
       <SidePanel side="left" alpha={alpha} glow={glow}>
-        <GlassCircleButton label="Brochure" enabled={d.brochureOk} glow={glow} onClick={() => openDocument('BROCHURE', ctx.brochureUrl)} />
-        <GlassCircleButton label={'Walk\nthrough'} enabled={d.walkOk} glow={glow} onClick={() => openDocument('WALKTHROUGH', d.walkthroughUrl)} />
-        <GlassCircleButton label="Images" enabled={d.imagesOk} glow={glow} onClick={() => openImageGallery('IMAGES', d.imageGalleryUrls)} />
-        <GlassCircleButton label={'Unit\nlayout'} enabled={d.unitOk} glow={glow} onClick={() => openDocument('UNIT LAYOUT', d.unitLayoutUrl)} />
+        <GlassCircleButton label="Brochure" enabled={d.brochureOk} glow={glow} onClick={() => openCta('BROCHURE', d.brochureUrl)} />
+        <GlassCircleButton label={'Walk\nthrough'} enabled={d.walkOk} glow={glow} onClick={() => openCta('WALKTHROUGH', d.walkthroughUrl)} />
+        <GlassCircleButton label="Images" enabled={d.imagesOk} glow={glow} onClick={() => openCta('IMAGES', d.imageGalleryUrls[0], d.imageGalleryUrls)} />
+        <GlassCircleButton label={'Unit\nlayout'} enabled={d.unitOk} glow={glow} onClick={() => openCta('UNIT LAYOUT', d.unitLayoutUrl)} />
       </SidePanel>
 
       <SidePanel side="right" alpha={alpha} glow={glow}>
-        <GlassCircleButton label={'Site\nlayout'} enabled={d.siteOk} glow={glow} onClick={() => openImageGallery('SITE LAYOUT', d.siteSlides)} />
-        <GlassCircleButton label={'Price\nlist'} enabled={d.priceOk} glow={glow} onClick={() => openDocument('PRICE LIST', ctx.priceListUrl)} />
+        <GlassCircleButton label={'Site\nlayout'} enabled={d.siteOk} glow={glow} onClick={() => openCta('SITE LAYOUT', d.siteSlides[0], d.siteSlides)} />
+        <GlassCircleButton label={'Price\nlist'} enabled={d.priceOk} glow={glow} onClick={() => openCta('PRICE LIST', d.priceListUrl)} />
         <GlassCircleButton label="Quote" enabled={d.quoteOk} glow={glow} onClick={() => openQuote(ctx)} />
         <GlassCircleButton label="Chat" enabled glow={glow} onClick={openChat} />
       </SidePanel>

@@ -10,11 +10,11 @@ export function Effects() {
   return (
     <EffectComposer multisampling={0} frameBufferType={HalfFloatType}>
       <Bloom
-        luminanceThreshold={1.85}
-        luminanceSmoothing={0.22}
+        luminanceThreshold={2.35}
+        luminanceSmoothing={0.18}
         mipmapBlur={false}
-        intensity={0.15}
-        radius={0.3}
+        intensity={0.08}
+        radius={0.22}
       />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} whitePoint={3.6} middleGrey={0.6} />
       <Vignette eskil={false} offset={0.22} darkness={0.32} />

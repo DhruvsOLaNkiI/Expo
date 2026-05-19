@@ -6,8 +6,7 @@ Loads, in order (later overrides earlier):
   1. Project root `.env` (optional)
   2. `pageindex/.env` (optional)
 
-Maps `VITE_GEMINI_API_KEY` → `GEMINI_API_KEY` when the latter is unset, so the
-same key as the Vite app works for `python3 run_pageindex.py` via LiteLLM.
+Maps `OPENROUTER_API_KEY` (preferred) or `VITE_GEMINI_API_KEY` → `GEMINI_API_KEY` for LiteLLM.
 
 Usage:
   python3 scripts/pageindex_run.py --pdf_path examples/documents/2023-annual-report.pdf
@@ -68,17 +67,24 @@ def main() -> None:
         if k not in os.environ or not os.environ.get(k, "").strip():
             os.environ[k] = v
 
+    if not os.environ.get("OPENROUTER_API_KEY", "").strip():
+        or_vite = os.environ.get("VITE_OPENROUTER_API_KEY", "").strip()
+        if or_vite:
+            os.environ["OPENROUTER_API_KEY"] = or_vite
+
     if not os.environ.get("GEMINI_API_KEY", "").strip() and not os.environ.get("GOOGLE_API_KEY", "").strip():
         vite = os.environ.get("VITE_GEMINI_API_KEY", "").strip()
         if vite:
             os.environ["GEMINI_API_KEY"] = vite
 
-    if not os.environ.get("GEMINI_API_KEY", "").strip() and not os.environ.get("GOOGLE_API_KEY", "").strip():
+    has_openrouter = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
+    has_gemini = bool(os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip())
+
+    if not has_openrouter and not has_gemini:
         print(
-            "error: No Gemini API key found. Set one of:\n"
-            "  GEMINI_API_KEY or GOOGLE_API_KEY in pageindex/.env or project root .env\n"
-            "  or VITE_GEMINI_API_KEY in project root .env (mapped automatically for PageIndex).\n"
-            "Get a key: https://aistudio.google.com/app/apikey",
+            "error: No LLM API key found. Set one of:\n"
+            "  OPENROUTER_API_KEY in project root .env (recommended — https://openrouter.ai/keys)\n"
+            "  or GEMINI_API_KEY / VITE_GEMINI_API_KEY for Google Gemini.\n",
             file=sys.stderr,
         )
         sys.exit(1)

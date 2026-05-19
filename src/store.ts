@@ -11,10 +11,41 @@ import { mergeSceneConfig } from './data/boothLayouts';
 import { persistBoothOverridesWithFallback, readPersistedBoothOverrides } from './boothCmsPersist';
 import { commitHallLayoutTransform } from './hallLayoutPersist';
 import { REG_MAIN_EXPO_SPAWN, REG_SPAWN } from './data/registrationHall';
+import {
+  CAMERA_MODE_ORDER,
+  type CameraMode,
+} from './camera/cameraModes';
+import {
+  clearVisitorProfile as clearVisitorProfileStorage,
+  persistVisitorProfile,
+  readVisitorProfile,
+  type VisitorAvatar,
+  type VisitorProfile,
+} from './visitorProfile';
 
 const SCENE_CMS_LS_KEY = 'virtual-expo-scene-config';
 const INTRO_DISMISSED_LS_KEY = 'virtual-expo-intro-dismissed';
 const REG_PASS_LS_KEY = 'virtual-expo-registration-pass';
+const CAMERA_MODE_LS_KEY = 'virtual-expo-camera-mode';
+
+function readCameraMode(): CameraMode {
+  if (typeof window === 'undefined') return 'head';
+  try {
+    const raw = localStorage.getItem(CAMERA_MODE_LS_KEY);
+    if (raw && (CAMERA_MODE_ORDER as string[]).includes(raw)) return raw as CameraMode;
+  } catch {
+    /* */
+  }
+  return 'head';
+}
+
+function persistCameraMode(mode: CameraMode) {
+  try {
+    localStorage.setItem(CAMERA_MODE_LS_KEY, mode);
+  } catch {
+    /* */
+  }
+}
 
 function readIntroDismissed(): boolean {
   if (typeof window === 'undefined') return false;
@@ -42,17 +73,19 @@ function persistSceneConfig(config: SceneOverridesInput) {
 export type CtaResourcePopup = {
   title: string;
   url: string;
-  /** `image` = embedded preview (site map); `document` = link-style panel (brochure / PDF). */
-  variant?: 'document' | 'image';
+  /** `image` = gallery; `document` = PDF / link; `video` = embedded walkthrough. */
+  variant?: 'document' | 'image' | 'video';
   /** Full site map carousel (includes first URL). When length > 1, lightbox shows prev/next. */
   imageGallery?: string[];
 };
 
-/** Payload for the screen-fixed Vertex Elite booth HUD (not world-space HTML). */
+/** Payload for the screen-fixed booth HUD (not world-space HTML). */
 export type VertexEliteHudContext = {
+  boothId: string;
   glow: string;
   brochureUrl: string;
   priceListUrl: string;
+  unitLayoutUrl: string;
   siteMapUrls: string[];
   videoUrl: string;
   media: MediaItem[];
@@ -75,6 +108,9 @@ interface AppState {
   setVertexEliteHudAlpha: (alpha: number) => void;
   vertexEliteHudContext: VertexEliteHudContext | null;
   setVertexEliteHudContext: (ctx: VertexEliteHudContext | null) => void;
+  /** Per-booth proximity reports; nearest / strongest wins for HUD. */
+  reportBoothHudProximity: (boothId: string, alpha: number, ctx: VertexEliteHudContext | null) => void;
+  _boothHudReports: Record<string, { alpha: number; ctx: VertexEliteHudContext }>;
   playerPosition: [number, number, number] | null;
   setPlayerPosition: (pos: [number, number, number] | null) => void;
   joystickData: { x: number; y: number };
@@ -111,17 +147,41 @@ interface AppState {
   hallLayoutRotationAxis: 'X' | 'Y' | 'Z' | 'E' | null;
   setHallLayoutRotationAxis: (axis: 'X' | 'Y' | 'Z' | 'E' | null) => void;
 
+  /** First-time visitor profile (name, temp ID, avatar colors). Null until onboarding completes. */
+  visitorProfile: VisitorProfile | null;
+  completeVisitorOnboarding: (input: {
+    id: string;
+    displayName: string;
+    avatar: VisitorAvatar;
+  }) => void;
+  clearVisitorProfile: () => void;
+
   /** `registration` = arrival lobby; `expo` = main 90×90 hall. */
   expoPhase: 'registration' | 'expo';
   registrationUi: 'none' | 'register' | 'granted';
   registrationPass: boolean;
   openRegistrationPopup: () => void;
   closeRegistrationUi: () => void;
-  confirmRegistration: () => void;
+  confirmRegistration: (input: {
+    displayName: string;
+    email: string;
+    phone: string;
+  }) => void;
   enterMainExpo: () => void;
   enterRegistrationLobby: () => void;
   /** Instant move (expo or lobby); releases pointer lock for UI safety. */
   teleportPlayer: (position: [number, number, number]) => void;
+
+  /** Head POV, full-body third person, or wide-angle first person. */
+  cameraMode: CameraMode;
+  setCameraMode: (mode: CameraMode) => void;
+  cycleCameraMode: () => void;
+  /** Horizontal facing for third-person avatar (radians). */
+  playerFacingYaw: number;
+  setPlayerFacingYaw: (yaw: number) => void;
+  /** Current walking speed magnitude (m/s) for animation. */
+  playerSpeed: number;
+  setPlayerSpeed: (speed: number) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -150,6 +210,33 @@ export const useStore = create<AppState>((set, get) => ({
   },
   vertexEliteHudContext: null,
   setVertexEliteHudContext: (ctx) => set({ vertexEliteHudContext: ctx }),
+  _boothHudReports: {},
+  reportBoothHudProximity: (boothId, alpha, ctx) => {
+    const reports = { ...get()._boothHudReports };
+    if (!ctx || alpha < 0.001) {
+      delete reports[boothId];
+    } else {
+      reports[boothId] = { alpha, ctx };
+    }
+    let bestAlpha = 0;
+    let bestCtx: VertexEliteHudContext | null = null;
+    for (const r of Object.values(reports)) {
+      if (r.alpha > bestAlpha) {
+        bestAlpha = r.alpha;
+        bestCtx = r.ctx;
+      }
+    }
+    const prev = get().vertexEliteHudAlpha;
+    const snapLow = prev > 0.06 && bestAlpha <= 0.02;
+    const snapHigh = prev < 0.94 && bestAlpha >= 0.98;
+    const alphaChanged = snapLow || snapHigh || Math.abs(bestAlpha - prev) >= 0.028;
+    const ctxChanged = get().vertexEliteHudContext?.boothId !== bestCtx?.boothId;
+    if (alphaChanged || ctxChanged) {
+      set({ _boothHudReports: reports, vertexEliteHudAlpha: bestAlpha, vertexEliteHudContext: bestCtx });
+    } else {
+      set({ _boothHudReports: reports });
+    }
+  },
   playerPosition: null,
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
   joystickData: { x: 0, y: 0 },
@@ -187,9 +274,35 @@ export const useStore = create<AppState>((set, get) => ({
   hallLayoutRotationAxis: 'E',
   setHallLayoutRotationAxis: (axis) => set({ hallLayoutRotationAxis: axis }),
 
+  visitorProfile: readVisitorProfile(),
+  completeVisitorOnboarding: (input) => {
+    const profile: VisitorProfile = {
+      id: input.id,
+      displayName: input.displayName,
+      avatar: input.avatar,
+      createdAt: Date.now(),
+    };
+    persistVisitorProfile(profile);
+    set({
+      visitorProfile: profile,
+      expoPhase: 'registration',
+      registrationUi: 'none',
+      showInstructions: true,
+    });
+    get().teleportPlayer(REG_SPAWN);
+  },
+  clearVisitorProfile: () => {
+    clearVisitorProfileStorage();
+    set({ visitorProfile: null });
+  },
+
   registrationUi: 'none',
   registrationPass: readRegistrationPass(),
-  expoPhase: readRegistrationPass() ? 'expo' : 'registration',
+  expoPhase: readVisitorProfile()
+    ? readRegistrationPass()
+      ? 'expo'
+      : 'registration'
+    : 'registration',
   openRegistrationPopup: () => {
     if (typeof document !== 'undefined' && document.pointerLockElement) {
       document.exitPointerLock();
@@ -197,7 +310,18 @@ export const useStore = create<AppState>((set, get) => ({
     set({ registrationUi: 'register' });
   },
   closeRegistrationUi: () => set({ registrationUi: 'none' }),
-  confirmRegistration: () => {
+  confirmRegistration: (input) => {
+    const profile = get().visitorProfile;
+    if (profile) {
+      const updated: VisitorProfile = {
+        ...profile,
+        displayName: input.displayName.trim(),
+        email: input.email.trim(),
+        phone: input.phone.trim(),
+      };
+      persistVisitorProfile(updated);
+      set({ visitorProfile: updated });
+    }
     try {
       localStorage.setItem(REG_PASS_LS_KEY, '1');
     } catch {
@@ -224,6 +348,22 @@ export const useStore = create<AppState>((set, get) => ({
     set({ expoPhase: 'registration', registrationUi: 'none' });
     get().teleportPlayer(REG_SPAWN);
   },
+
+  cameraMode: readCameraMode(),
+  setCameraMode: (mode) => {
+    persistCameraMode(mode);
+    set({ cameraMode: mode });
+  },
+  cycleCameraMode: () => {
+    const i = CAMERA_MODE_ORDER.indexOf(get().cameraMode);
+    const next = CAMERA_MODE_ORDER[(i + 1) % CAMERA_MODE_ORDER.length];
+    persistCameraMode(next);
+    set({ cameraMode: next });
+  },
+  playerFacingYaw: 0,
+  setPlayerFacingYaw: (yaw) => set({ playerFacingYaw: yaw }),
+  playerSpeed: 0,
+  setPlayerSpeed: (speed) => set({ playerSpeed: speed }),
 
   initBoothCms: async () => {
     if (get()._boothCmsHydrated) return;

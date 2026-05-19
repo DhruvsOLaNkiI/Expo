@@ -15,6 +15,7 @@ export function FastTravelHud() {
   const registrationUi = useStore((s) => s.registrationUi);
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const activeBooth = useStore((s) => s.activeBooth);
+  const visitorProfile = useStore((s) => s.visitorProfile);
 
   const [open, setOpen] = useState(true);
 
@@ -23,7 +24,7 @@ export function FastTravelHud() {
     [boothOverrides],
   );
 
-  if (showInstructions || registrationUi !== 'none' || ctaResourcePopup || activeBooth) {
+  if (!visitorProfile || showInstructions || registrationUi !== 'none' || ctaResourcePopup || activeBooth) {
     return null;
   }
 

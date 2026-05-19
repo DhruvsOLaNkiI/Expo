@@ -20,6 +20,9 @@ import { HallLayoutEditHud } from './components/HallLayoutEditHud';
 import { RegistrationHall } from './components/RegistrationHall';
 import { RegistrationLobbyHud } from './components/RegistrationLobbyHud';
 import { FastTravelHud } from './components/FastTravelHud';
+import { VisitorOnboarding } from './components/VisitorOnboarding';
+import { VisitorBadge } from './components/VisitorBadge';
+import { CameraModeHud } from './components/CameraModeHud';
 
 function Joystick() {
   const setJoystickData = useStore((state) => state.setJoystickData);
@@ -64,8 +67,6 @@ function Joystick() {
 }
 
 export default function App() {
-  const activeBooth = useStore((s) => s.activeBooth);
-  const setActiveBooth = useStore((s) => s.setActiveBooth);
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
   const setAiChatOpen = useStore((s) => s.setAiChatOpen);
@@ -85,12 +86,15 @@ export default function App() {
   const expoPhase = useStore((s) => s.expoPhase);
   const registrationUi = useStore((s) => s.registrationUi);
   const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
+  const visitorProfile = useStore((s) => s.visitorProfile);
   const [isTouch, setIsTouch] = useState(false);
+
+  const needsOnboarding = !visitorProfile;
 
   const inRegistration = expoPhase === 'registration';
   const sceneBg = inRegistration ? '#0f0f12' : '#fdfbf2';
-  const sceneFogNear = inRegistration ? 25 : 25;
-  const sceneFogFar = inRegistration ? 100 : 120;
+  const sceneFogNear = inRegistration ? 12 : 25;
+  const sceneFogFar = inRegistration ? 42 : 120;
 
   const glConfig = useMemo(
     () => ({ antialias: postProcessing, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance' as const }),
@@ -134,7 +138,7 @@ export default function App() {
   return (
     <div
       className="w-full h-screen bg-black overflow-hidden select-none font-sans"
-      onClick={() => { if (showInstructions) setShowInstructions(false); }}
+      onClick={() => { if (showInstructions && !needsOnboarding) setShowInstructions(false); }}
     >
       <KeyboardControls
         map={[
@@ -171,7 +175,11 @@ export default function App() {
         </Canvas>
       </KeyboardControls>
 
-      {inRegistration && registrationUi === 'none' && !showInstructions && !hallLayoutEditMode && (
+      {needsOnboarding && <VisitorOnboarding />}
+
+      {visitorProfile && <VisitorBadge />}
+
+      {inRegistration && registrationUi === 'none' && !showInstructions && !hallLayoutEditMode && !needsOnboarding && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[45] pointer-events-none text-center px-4">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.35em] text-[#d4af37] mb-1">Event registration</p>
           <p className="text-sm md:text-base font-semibold text-[#e8e4dc] tracking-wide">
@@ -184,11 +192,13 @@ export default function App() {
 
       <FastTravelHud />
 
+      <CameraModeHud />
+
       {!inRegistration && <VertexEliteScreenHud />}
 
       <HallLayoutEditHud />
 
-      {inRegistration && !showInstructions && registrationUi === 'none' && (
+      {inRegistration && !showInstructions && registrationUi === 'none' && !needsOnboarding && (
         <button
           type="button"
           className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md pointer-events-auto hover:bg-black transition-all"
@@ -198,6 +208,8 @@ export default function App() {
         </button>
       )}
 
+      {!needsOnboarding && (
+      <>
       {/* Move hall props / booths in-world; saves to localStorage (scene + booth overrides). */}
       <button
         type="button"
@@ -240,59 +252,29 @@ export default function App() {
 
       {/* AI Chatbox */}
       <AiChatbox />
+      </>
+      )}
 
-      {isTouch && !showInstructions && !ctaResourcePopup && <Joystick />}
+      {isTouch && !showInstructions && !ctaResourcePopup && !needsOnboarding && <Joystick />}
 
       {ctaResourcePopup && (
         <CtaResourcePopupView popup={ctaResourcePopup} onClose={() => setCtaResourcePopup(null)} />
       )}
 
-      {activeBooth && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-96 bg-white/90 border border-[#d4af37]/50 p-6 rounded-xl text-black shadow-2xl backdrop-blur-md z-50 pointer-events-auto">
-          <div className="flex justify-between items-center mb-4 border-b border-black/10 pb-4">
-            <h2 className="text-xl font-bold tracking-widest text-[#d4af37]">{activeBooth}</h2>
-            <button onClick={() => setActiveBooth(null)} className="text-black/50 hover:text-black transition-colors p-1">✕</button>
-          </div>
-          <p className="text-sm text-gray-700 leading-relaxed mb-6">
-            Welcome to the luxury showcase of {activeBooth}. Explore our latest visionary developments redefining the skyline.
-          </p>
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Starting Price</span>
-              <span className="font-semibold text-black">₹ 15.5 Cr*</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Configuration</span>
-              <span className="font-semibold text-black">4, 5 & 6 BHK</span>
-            </div>
-          </div>
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => {
-                if (useStore.getState().activeBoothPosition) {
-                  useStore.getState().setPlayerPosition(useStore.getState().activeBoothPosition);
-                  setActiveBooth(null);
-                }
-              }}
-              className="flex-1 bg-black/5 hover:bg-black/10 text-black font-semibold py-3 rounded tracking-wide transition-colors border border-black/10 text-xs"
-            >
-              MOVE HERE
-            </button>
-            <button className="flex-1 bg-[#d4af37] hover:bg-[#b08d29] text-black font-semibold py-3 rounded tracking-wide transition-colors text-xs">
-              BROCHURE
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showInstructions && (
+      {showInstructions && !needsOnboarding && (
         <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-40 backdrop-blur-sm pointer-events-auto">
           <div className="text-center px-4">
             <h1 className="text-3xl md:text-5xl font-bold tracking-widest text-[#d4af37] mb-4">VIRTUAL EXPO</h1>
             <h2 className="text-lg md:text-2xl font-light text-black tracking-[0.2em] mb-4 md:mb-6">LUXURY RESIDENCES</h2>
+            {visitorProfile && (
+              <p className="text-sm text-[#8a7a5a] tracking-wide mb-2">
+                Welcome, <span className="font-semibold text-black">{visitorProfile.displayName}</span>
+                {' '}· <span className="font-mono text-xs text-[#d4af37]">{visitorProfile.id}</span>
+              </p>
+            )}
             {inRegistration && (
               <p className="text-sm text-gray-600 tracking-wide mb-8 md:mb-10 max-w-md mx-auto">
-                You will arrive in the registration lobby first, then enter the main exhibition hall.
+                You are in the registration lobby. Check in at the counter, then enter the main exhibition hall.
               </p>
             )}
             {!inRegistration && <div className="mb-8 md:mb-12" />}
@@ -306,6 +288,10 @@ export default function App() {
                 <div className="flex flex-col items-center">
                   <div className="p-2 md:p-3 border border-black/20 rounded-lg mb-2 text-black font-semibold text-xs md:text-sm">{isTouch ? "DRAG" : "MOUSE"}</div>
                   <span className="text-[10px] md:text-xs uppercase tracking-widest">Look</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="p-2 md:p-3 border border-black/20 rounded-lg mb-2 text-black font-semibold text-xs md:text-sm">V</div>
+                  <span className="text-[10px] md:text-xs uppercase tracking-widest">Camera</span>
                 </div>
               </div>
             </div>
