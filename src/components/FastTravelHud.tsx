@@ -10,6 +10,8 @@ export function FastTravelHud() {
   const boothOverrides = useStore((s) => s.boothOverrides);
   const teleportPlayer = useStore((s) => s.teleportPlayer);
   const enterMainExpo = useStore((s) => s.enterMainExpo);
+  const skipToMainExpo = useStore((s) => s.skipToMainExpo);
+  const registrationPass = useStore((s) => s.registrationPass);
   const enterRegistrationLobby = useStore((s) => s.enterRegistrationLobby);
   const showInstructions = useStore((s) => s.showInstructions);
   const registrationUi = useStore((s) => s.registrationUi);
@@ -66,9 +68,18 @@ export function FastTravelHud() {
           ) : (
             <>
               <TravelBtn label="Enter main expo hall" highlight="gold" onClick={() => enterMainExpo()} />
-              <p className="text-[10px] text-white/45 mt-2 leading-snug">
-                Register at the counter to access the main expo
-              </p>
+              {!registrationPass ? (
+                <>
+                  <TravelBtn label="Skip registration" onClick={() => skipToMainExpo()} />
+                  <p className="text-[10px] text-white/45 mt-2 leading-snug">
+                    Or register at the counter for a full visitor pass
+                  </p>
+                </>
+              ) : (
+                <p className="text-[10px] text-white/45 mt-2 leading-snug">
+                  You have expo access
+                </p>
+              )}
             </>
           )}
         </div>

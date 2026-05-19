@@ -68,6 +68,7 @@ function SwatchRow({
 
 export function VisitorOnboarding() {
   const completeVisitorOnboarding = useStore((s) => s.completeVisitorOnboarding);
+  const skipToMainExpo = useStore((s) => s.skipToMainExpo);
   const [step, setStep] = useState<Step>('name');
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<VisitorAvatar>({ ...DEFAULT_AVATAR });
@@ -127,6 +128,13 @@ export function VisitorOnboarding() {
             >
               Continue
             </button>
+            <button
+              type="button"
+              onClick={skipToMainExpo}
+              className="w-full mt-3 py-2.5 rounded-lg border border-black/10 text-black/60 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors"
+            >
+              Skip — enter expo without registration
+            </button>
           </>
         ) : (
           <>
@@ -169,6 +177,13 @@ export function VisitorOnboarding() {
                 Enter lobby
               </button>
             </div>
+            <button
+              type="button"
+              onClick={skipToMainExpo}
+              className="w-full mt-3 py-2.5 rounded-lg border border-black/10 text-black/60 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors"
+            >
+              Skip — enter expo without registration
+            </button>
           </>
         )}
       </div>

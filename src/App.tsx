@@ -86,6 +86,7 @@ export default function App() {
   const expoPhase = useStore((s) => s.expoPhase);
   const registrationUi = useStore((s) => s.registrationUi);
   const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
+  const skipToMainExpo = useStore((s) => s.skipToMainExpo);
   const visitorProfile = useStore((s) => s.visitorProfile);
   const [isTouch, setIsTouch] = useState(false);
 
@@ -199,13 +200,22 @@ export default function App() {
       <HallLayoutEditHud />
 
       {inRegistration && !showInstructions && registrationUi === 'none' && !needsOnboarding && (
-        <button
-          type="button"
-          className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md pointer-events-auto hover:bg-black transition-all"
-          onClick={() => openRegistrationPopup()}
-        >
-          Register Now
-        </button>
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] flex flex-col sm:flex-row items-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            className="rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md hover:bg-black transition-all"
+            onClick={() => openRegistrationPopup()}
+          >
+            Register Now
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-white/20 bg-[#1a1a22]/80 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white/80 shadow-xl backdrop-blur-md hover:bg-black/90 transition-all"
+            onClick={() => skipToMainExpo()}
+          >
+            Skip to expo
+          </button>
+        </div>
       )}
 
       {!needsOnboarding && (

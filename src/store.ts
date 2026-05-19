@@ -17,6 +17,8 @@ import {
 } from './camera/cameraModes';
 import {
   clearVisitorProfile as clearVisitorProfileStorage,
+  DEFAULT_AVATAR,
+  generateVisitorId,
   persistVisitorProfile,
   readVisitorProfile,
   type VisitorAvatar,
@@ -168,6 +170,8 @@ interface AppState {
     phone: string;
   }) => void;
   enterMainExpo: () => void;
+  /** Guest profile + local pass — no MongoDB / registration API. */
+  skipToMainExpo: () => void;
   enterRegistrationLobby: () => void;
   /** Instant move (expo or lobby); releases pointer lock for UI safety. */
   teleportPlayer: (position: [number, number, number]) => void;
@@ -342,6 +346,34 @@ export const useStore = create<AppState>((set, get) => ({
       return;
     }
     set({ expoPhase: 'expo', registrationUi: 'none' });
+    get().teleportPlayer(REG_MAIN_EXPO_SPAWN);
+  },
+  skipToMainExpo: () => {
+    let profile = get().visitorProfile;
+    if (!profile) {
+      profile = {
+        id: generateVisitorId(),
+        displayName: 'Guest',
+        avatar: { ...DEFAULT_AVATAR },
+        createdAt: Date.now(),
+      };
+      persistVisitorProfile(profile);
+    }
+    try {
+      localStorage.setItem(REG_PASS_LS_KEY, '1');
+    } catch {
+      /* */
+    }
+    if (typeof document !== 'undefined' && document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    set({
+      visitorProfile: profile,
+      registrationPass: true,
+      registrationUi: 'none',
+      expoPhase: 'expo',
+      showInstructions: false,
+    });
     get().teleportPlayer(REG_MAIN_EXPO_SPAWN);
   },
   enterRegistrationLobby: () => {

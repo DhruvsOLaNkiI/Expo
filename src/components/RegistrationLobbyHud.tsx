@@ -53,6 +53,7 @@ function PanelShell({ title, children }: { title: string; children: ReactNode })
 function RegisterForm({ onClose }: { onClose: () => void }) {
   const visitorProfile = useStore((s) => s.visitorProfile);
   const confirmRegistration = useStore((s) => s.confirmRegistration);
+  const skipToMainExpo = useStore((s) => s.skipToMainExpo);
 
   const [name, setName] = useState(visitorProfile?.displayName ?? '');
   const [email, setEmail] = useState(visitorProfile?.email ?? '');
@@ -172,11 +173,11 @@ function RegisterForm({ onClose }: { onClose: () => void }) {
         <div className="flex gap-3 pt-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => skipToMainExpo()}
             disabled={submitting}
             className="flex-1 py-3 rounded-lg border border-black/10 text-black/70 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-50"
           >
-            Later
+            Skip to expo
           </button>
           <button
             type="submit"
