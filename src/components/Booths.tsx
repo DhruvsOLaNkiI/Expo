@@ -1,4 +1,4 @@
-import { Html, Text, Box, Cylinder, Torus, useGLTF, useTexture } from '@react-three/drei';
+import { Html, Text, Box, Cylinder, useGLTF, useTexture } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useStore } from '../store';
 import { Suspense, useRef, useMemo, useLayoutEffect, useEffect, useState } from 'react';
@@ -9,8 +9,15 @@ import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { HallAisleStandees } from './HallAisleStandees';
+import { HallSuspendedCanopies } from './HallSuspendedCanopy.tsx';
+import { SideExpoBooths } from './SideExpoBooths';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
 import { applyBoothOverrides, buildDefaultBoothLayoutList, DEFAULT_SCENE_CONFIG, siteMapUrlsFromConfig, mergeHallLayout, type PlacedImage, type HostessQuickReply, type MediaItem, type CompanyProfile } from '../data/boothLayouts';
+import {
+  buildExpoTeleportDestinations,
+  buildHelpDeskTeleportReplies,
+  REGISTRATION_LOBBY_DESTINATION,
+} from '../data/expoTeleportDestinations';
 import { MonarchBooth } from './MonarchBooth';
 import { HorizonVistasBooth } from './HorizonVistasBooth';
 import { CrownEstatesBooth } from './CrownEstatesBooth';
@@ -114,15 +121,28 @@ function HostessGreetingBubble({
   const activeBooth = useStore((s) => s.activeBooth);
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setAiChatOpen = useStore((s) => s.setAiChatOpen);
+  const teleportPlayer = useStore((s) => s.teleportPlayer);
+  const enterRegistrationLobby = useStore((s) => s.enterRegistrationLobby);
+  const boothOverrides = useStore((s) => s.boothOverrides);
+  const teleportDestinations = useMemo(
+    () => buildExpoTeleportDestinations(boothOverrides),
+    [boothOverrides],
+  );
   const [visible, setVisible] = useState(false);
   const wasNearRef = useRef(false);
   const showRef = useRef(false);
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
 
   const shownOptions = useMemo(
-    () => quickReplies.filter((r) => r.label.trim() && (r.response.trim() || r.action === 'askAi')),
+    () =>
+      quickReplies.filter(
+        (r) =>
+          r.label.trim() &&
+          (r.response.trim() || r.action === 'askAi' || (r.action === 'teleport' && r.teleportId)),
+      ),
     [quickReplies],
   );
+  const hasTeleportOptions = shownOptions.some((r) => r.action === 'teleport');
 
   useFrame(() => {
     if (activeBooth || ctaResourcePopup) {
@@ -158,7 +178,7 @@ function HostessGreetingBubble({
         style={{
           opacity: visible ? 1 : 0,
           transition: 'opacity 0.22s ease',
-          pointerEvents: 'none',
+          pointerEvents: visible && shownOptions.length > 0 ? 'auto' : 'none',
           userSelect: 'none',
         }}
       >
@@ -193,11 +213,21 @@ function HostessGreetingBubble({
               alignSelf: 'center',
             }}
           >
-            How can I help you?
+            {hasTeleportOptions ? 'Where would you like to go?' : 'How can I help you?'}
           </div>
 
           {shownOptions.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, pointerEvents: 'auto' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                pointerEvents: 'auto',
+                maxHeight: hasTeleportOptions ? 220 : undefined,
+                overflowY: hasTeleportOptions ? 'auto' : undefined,
+                paddingRight: hasTeleportOptions ? 4 : 0,
+              }}
+            >
               {shownOptions.map((opt) => (
                 <button
                   key={opt.id}
@@ -206,6 +236,16 @@ function HostessGreetingBubble({
                     e.stopPropagation();
                     if (opt.action === 'askAi') {
                       setAiChatOpen(true);
+                      setActiveReplyId(null);
+                      return;
+                    }
+                    if (opt.action === 'teleport' && opt.teleportId) {
+                      if (opt.teleportId === REGISTRATION_LOBBY_DESTINATION.id) {
+                        enterRegistrationLobby();
+                      } else {
+                        const dest = teleportDestinations.find((d) => d.id === opt.teleportId);
+                        if (dest) teleportPlayer(dest.position);
+                      }
                       setActiveReplyId(null);
                       return;
                     }
@@ -271,6 +311,9 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
   const initBoothCms = useStore((s) => s.initBoothCms);
 
   const showStandardBooths = sceneOverrides.showStandardBooths ?? DEFAULT_SCENE_CONFIG.showStandardBooths;
+  const showHallCanopy = sceneOverrides.showHallCanopy ?? DEFAULT_SCENE_CONFIG.showHallCanopy;
+  const hiddenBoothIds = sceneOverrides.hiddenBooths ?? DEFAULT_SCENE_CONFIG.hiddenBooths;
+  const hiddenBooths = useMemo(() => new Set(hiddenBoothIds), [hiddenBoothIds]);
 
   useEffect(() => {
     void initBoothCms();
@@ -282,8 +325,11 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
   );
 
   const layoutsToRender = useMemo(
-    () => (showStandardBooths ? layouts : layouts.filter((b) => b.id === 'vertex-elite')),
-    [layouts, showStandardBooths],
+    () => {
+      const base = showStandardBooths ? layouts : layouts.filter((b) => b.id === 'vertex-elite');
+      return base.filter((b) => !hiddenBooths.has(b.id));
+    },
+    [layouts, showStandardBooths, hiddenBooths],
   );
 
   return (
@@ -299,6 +345,12 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
       </Suspense>
 
       <HallAisleStandees layouts={layouts} />
+
+      {/* Single suspended LED ring above help desk */}
+      {showHallCanopy && <HallSuspendedCanopies />}
+
+      {/* Side expo booths (6 total) — using full luxury booth shell */}
+      <SideExpoBooths layouts={layouts} showVideos={showVideos} BoothComponent={StandardLuxuryBooth} hiddenBooths={hiddenBooths} />
 
       {layoutsToRender.map((b) => {
         if (b.id === 'vertex-elite') {
@@ -406,7 +458,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
           );
         } else {
           return (
-            <Booth
+            <StandardLuxuryBooth
               key={b.id}
               position={b.position}
               rotation={b.rotation}
@@ -601,7 +653,7 @@ export function BoothHeaderLogo({
   );
 }
 
-function Booth({
+export function StandardLuxuryBooth({
   position,
   rotation,
   boothScale,
@@ -1278,73 +1330,7 @@ function Plant({
   );
 }
 
-function TickerRing({ radius, height, yPos, text, speed, reverse, color, bgColor }: any) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return new THREE.Texture();
-
-    const fullText = `${text} • ${text} • ${text} • ${text} • `;
-    canvas.width = 8192;
-    canvas.height = 200;
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = '#d4af37';
-    ctx.fillRect(0, 0, canvas.width, 10);
-    ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
-
-    ctx.font = 'bold 118px "Inter", sans-serif';
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 28;
-
-    ctx.fillText(fullText, canvas.width / 2, canvas.height / 2 + 2);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(2, 1);
-    tex.anisotropy = 16;
-    return tex;
-  }, [text, color, bgColor]);
-
-  useFrame((state, delta) => {
-    texture.offset.x += delta * speed * (reverse ? -1 : 1);
-  });
-
-  return (
-    <mesh position={[0, yPos, 0]}>
-      <cylinderGeometry args={[radius, radius, height, 64]} />
-      <meshStandardMaterial
-        map={texture}
-        roughness={0.92}
-        metalness={0.06}
-        emissive="#d4af37"
-        emissiveIntensity={0.12}
-        envMapIntensity={0.08}
-      />
-    </mesh>
-  );
-}
-
 function FeaturedProperty({ position }: { position: [number, number, number] }) {
-  const textGroupRef = useRef<any>(null);
-  const graphicRingRef = useRef<any>(null);
-
-  useFrame((state, delta) => {
-    const time = state.clock.getElapsedTime();
-    if (textGroupRef.current) {
-      textGroupRef.current.rotation.y += delta * 0.15;
-    }
-    if (graphicRingRef.current) {
-      graphicRingRef.current.rotation.y += delta * 0.5;
-    }
-  });
-
   return (
     <group position={position}>
       {/* --- CIRCULAR HELP DESK (on main hall floor — recessed stage disc removed) --- */}
@@ -1441,153 +1427,6 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
               </group>
             );
           })}
-        </group>
-      </group>
-
-      {/* --- GIANT SUSPENDED JUMBOTRON --- */}
-      <group position={[0, 14, 0]}>
-        {/* Support Cables */}
-        <mesh position={[-5, 3, -5]}>
-          <cylinderGeometry args={[0.03, 0.03, 15, 8]} />
-          <meshStandardMaterial color="#d4af37" metalness={1} />
-        </mesh>
-        <mesh position={[5, 3, -5]}>
-          <cylinderGeometry args={[0.03, 0.03, 15, 8]} />
-          <meshStandardMaterial color="#d4af37" metalness={1} />
-        </mesh>
-        <mesh position={[-5, 3, 5]}>
-          <cylinderGeometry args={[0.03, 0.03, 15, 8]} />
-          <meshStandardMaterial color="#d4af37" metalness={1} />
-        </mesh>
-        <mesh position={[5, 3, 5]}>
-          <cylinderGeometry args={[0.03, 0.03, 15, 8]} />
-          <meshStandardMaterial color="#d4af37" metalness={1} />
-        </mesh>
-
-        <group>
-          {/* Clean upper crown ring (text removed) */}
-          <mesh position={[0, 3.5, 0]}>
-            <cylinderGeometry args={[9.5, 9.5, 1.0, 96]} />
-            <meshStandardMaterial color="#d4af37" metalness={0.2} roughness={0.75} envMapIntensity={0.08} />
-          </mesh>
-
-          {/* Main Displays (8-Sided) */}
-          <group>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <group key={i} rotation={[0, (i * Math.PI) / 4, 0]}>
-                <group rotation={[0, Math.PI, 0]}>
-                  <mesh position={[0, 0, 8.2]}>
-                    <boxGeometry args={[6.27, 4.8, 0.2]} />
-                    <meshStandardMaterial color="#111" metalness={0.5} roughness={0.2} />
-                  </mesh>
-                  <Suspense fallback={<meshBasicMaterial color="#000" />}>
-                    <LedScreenSurface
-                      args={[6.1, 4.5]}
-                      url="/13391496_3840_2160_60fps.mp4"
-                      position={[0, 0, 8.31]}
-                    />
-                  </Suspense>
-                  <mesh position={[3.5, 0, 8.1]}>
-                    <boxGeometry args={[0.2, 4.8, 0.3]} />
-                    <meshStandardMaterial color="#d4af37" />
-                  </mesh>
-                </group>
-              </group>
-            ))}
-          </group>
-
-          {/* DIGITAL GRAPHIC RING - Re-aligned & Centered */}
-          <group position={[0, -2.6, 0]}>
-            <group ref={graphicRingRef}>
-              <Torus args={[8.5, 0.03, 16, 128]} rotation={[Math.PI / 2, 0, 0]}>
-                <meshStandardMaterial 
-                  color="#d4af37" 
-                  emissive="#d4af37" 
-                  emissiveIntensity={1.5} 
-                  transparent 
-                  opacity={0.3} 
-                  wireframe 
-                />
-              </Torus>
-            </group>
-          </group>
-
-          <TickerRing
-            radius={8.5}
-            height={1.55}
-            yPos={-3.8}
-            text="FUTURE OF SMART LIVING • DIGITAL PROPERTY SHOWCASE • INVEST IN PREMIUM LIVING • FUTURISTIC REAL ESTATE EXPERIENCE"
-            speed={0.06}
-            reverse={false}
-            color="#d4af37"
-            bgColor="#111111"
-          />
-
-          {/* --- BOTTOM DECORATION (Option 5: Combination) --- */}
-          <group position={[0, -4.58, 0]}>
-            {/* Main Bottom Plate */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <circleGeometry args={[8.5, 64]} />
-              <meshStandardMaterial color="#111111" roughness={0.3} metalness={0.8} />
-            </mesh>
-
-            {/* Outer Decorative Gold Ring */}
-            <mesh position={[0, -0.01, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[8.2, 8.5, 64]} />
-              <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.2} />
-            </mesh>
-
-            {/* Inner Decorative Gold Ring */}
-            <mesh position={[0, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[6.5, 6.7, 64]} />
-              <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.2} />
-            </mesh>
-
-            {/* Subtle Backlighting / Glow Ring */}
-            <mesh position={[0, -0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[4.8, 5.2, 64]} />
-              <meshStandardMaterial 
-                color="#fff5e6" 
-                emissive="#fff5e6" 
-                emissiveIntensity={0.8} 
-                transparent 
-                opacity={0.6} 
-              />
-            </mesh>
-
-            {/* Central Medallion */}
-            <mesh position={[0, -0.04, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <circleGeometry args={[4.5, 64]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.2} metalness={0.9} />
-            </mesh>
-
-            {/* Central Logo / Text */}
-            <Text
-              position={[0, -0.06, 0]}
-              rotation={[Math.PI / 2, 0, Math.PI]} // Rotated to be readable from below looking up
-              fontSize={0.8}
-              color="#d4af37"
-              font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-              anchorX="center"
-              anchorY="middle"
-              letterSpacing={0.1}
-            >
-              PREMIUM EXPO
-              <meshStandardMaterial attach="material" color="#d4af37" emissive="#d4af37" emissiveIntensity={0.4} />
-            </Text>
-
-            {/* Radial Spoke Pattern */}
-            {Array.from({ length: 12 }).map((_, i) => (
-              <mesh 
-                key={i} 
-                position={[0, -0.02, 0]} 
-                rotation={[Math.PI / 2, 0, (i * Math.PI) / 6]}
-              >
-                <boxGeometry args={[0.05, 1.8, 0.01]} />
-                <meshStandardMaterial color="#d4af37" metalness={1} roughness={0.2} />
-              </mesh>
-            ))}
-          </group>
         </group>
       </group>
     </group>
@@ -1917,6 +1756,8 @@ const CONCIERGE_HOSTESS_ROT: [number, number, number] = [0, CONCIERGE_PANEL_YAW,
 const CONCIERGE_HOSTESS_BUBBLE_Y = 1.82;
 
 function HelpDeskCustomGirl() {
+  const boothOverrides = useStore((s) => s.boothOverrides);
+  const teleportReplies = useMemo(() => buildHelpDeskTeleportReplies(boothOverrides), [boothOverrides]);
   const [px, , pz] = CONCIERGE_HOSTESS_POS;
   const bubblePos: [number, number, number] = [px, CONCIERGE_HOSTESS_BUBBLE_Y, pz];
 
@@ -1940,8 +1781,7 @@ function HelpDeskCustomGirl() {
         idlePhase={stringToPhase('concierge-desk')}
         navyOutfit
       />
-      {/* Shows when you walk close — not the old always-on blue label */}
-      <HostessGreetingBubble localPosition={bubblePos} quickReplies={EMPTY_HOSTESS_REPLIES} />
+      <HostessGreetingBubble localPosition={bubblePos} quickReplies={teleportReplies} />
     </group>
   );
 }

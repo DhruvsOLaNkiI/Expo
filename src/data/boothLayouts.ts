@@ -52,10 +52,12 @@ export type HostessQuickReply = {
   id: string;
   /** Short chip shown to the visitor */
   label: string;
-  /** Answer text + optional voice (speech synthesis). Ignored when {@link action} is `askAi`. */
+  /** Answer text + optional voice (speech synthesis). Ignored when {@link action} is `askAi` or `teleport`. */
   response: string;
   /** Opens the Ask AI chat panel instead of showing / speaking a canned reply. */
-  action?: 'askAi';
+  action?: 'askAi' | 'teleport';
+  /** When {@link action} is `teleport`, id from {@link buildExpoTeleportDestinations} or registration lobby. */
+  teleportId?: string;
 };
 
 export type BoothLayoutConfig = {
@@ -275,6 +277,10 @@ export type SceneConfig = {
   showRoamingExecutive: boolean;
   /** Show video planes (expensive video decoding). */
   showVideos: boolean;
+  /** Suspended hall LED ring above help desk — heavy (8 screens + ticker). */
+  showHallCanopy: boolean;
+  /** Array of booth IDs to hide (for selective performance tuning). */
+  hiddenBooths: string[];
   /** Google Gemini API key for Ask AI chatbox. */
   aiApiKey?: string;
   /**
@@ -308,6 +314,8 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showBallroom: false,
   showRoamingExecutive: false,
   showVideos: false,
+  showHallCanopy: true,
+  hiddenBooths: [],
   aiApiKey: '',
   aiDeckContext: '',
   aiGeminiModel: 'gemini-3.1-flash-lite-preview',

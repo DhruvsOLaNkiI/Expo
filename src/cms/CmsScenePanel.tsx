@@ -1,6 +1,7 @@
 import { useStore } from '../store';
-import { DEFAULT_SCENE_CONFIG, mergeSceneConfig, type SceneConfig } from '../data/boothLayouts';
+import { DEFAULT_SCENE_CONFIG, mergeSceneConfig, type SceneConfig, buildDefaultBoothLayoutList, applyBoothOverrides } from '../data/boothLayouts';
 import React, { useMemo } from 'react';
+import { linkedBoothIdsForHide, SIDE_SPECS } from '../components/SideExpoBooths';
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-2">{children}</h3>;
@@ -32,10 +33,26 @@ function CmsSlider({ label, value, onChange, min, max, step = 0.01, unit = '' }:
 
 export function CmsScenePanel() {
   const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const boothOverrides = useStore((s) => s.boothOverrides);
   const patchScene = useStore((s) => s.patchSceneOverride);
   const resetScene = useStore((s) => s.resetSceneOverrides);
   const cfg: SceneConfig = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
   const [showApiKey, setShowApiKey] = React.useState(false);
+
+  // Get all booths (main + side)
+  const allBooths = useMemo(() => {
+    const mainBooths = applyBoothOverrides(buildDefaultBoothLayoutList(), boothOverrides);
+    const sideBooths = SIDE_SPECS.map(spec => {
+      const template = mainBooths.find(b => b.id === spec.templateId);
+      return template ? {
+        id: spec.sideId,
+        name: template.name + ' (Side)',
+      } : null;
+    }).filter((b): b is { id: string; name: string } => b !== null);
+    return [...mainBooths.map(b => ({ id: b.id, name: b.name })), ...sideBooths];
+  }, [boothOverrides]);
+
+  const hiddenBoothIds = cfg.hiddenBooths ?? [];
 
   return (
     <>
@@ -114,6 +131,77 @@ export function CmsScenePanel() {
           </span>
         </span>
       </label>
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showHallCanopy}
+          onChange={(e) => patchScene({ showHallCanopy: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">Show suspended hall canopy (LED ring)</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Uncheck to hide the center ceiling jumbotron (8 LED screens + ticker animation) for better FPS on old phones and integrated GPUs. Help desk and booths stay.
+          </span>
+        </span>
+      </label>
+
+      <SectionTitle>Booth Visibility ({allBooths.length} booths)</SectionTitle>
+      <div className="mb-2 p-2 bg-white/[0.02] border border-white/[0.06] rounded-lg">
+        <p className="text-[9px] text-white/40 mb-2">
+          Hide specific booths to reduce GPU load. Unchecked booths will not be rendered. Hiding a main booth (e.g. THE MONARCH) also hides its matching side-aisle copy.
+        </p>
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={() => patchScene({ hiddenBooths: [] })}
+            className="px-2 py-1 text-[9px] bg-[#d4af37]/20 hover:bg-[#d4af37]/30 text-[#d4af37] rounded transition-colors"
+          >
+            Show All
+          </button>
+          <button
+            onClick={() => {
+              const allIds = new Set<string>();
+              allBooths.forEach((b) => linkedBoothIdsForHide(b.id).forEach((id) => allIds.add(id)));
+              patchScene({ hiddenBooths: [...allIds] });
+            }}
+            className="px-2 py-1 text-[9px] bg-white/[0.06] hover:bg-white/[0.08] text-white/60 rounded transition-colors"
+          >
+            Hide All
+          </button>
+        </div>
+      </div>
+      <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+        {allBooths.map((booth) => {
+          const linkedIds = linkedBoothIdsForHide(booth.id);
+          const isVisible = !linkedIds.some((id) => hiddenBoothIds.includes(id));
+          return (
+            <label
+              key={booth.id}
+              className="flex cursor-pointer items-center gap-2.5 rounded border border-white/[0.06] bg-white/[0.02] p-2 hover:bg-white/[0.04] transition-colors"
+            >
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+                checked={isVisible}
+                onChange={(e) => {
+                  const newHidden = e.target.checked
+                    ? hiddenBoothIds.filter((id) => !linkedIds.includes(id))
+                    : [...new Set([...hiddenBoothIds, ...linkedIds])];
+                  patchScene({ hiddenBooths: newHidden });
+                }}
+              />
+              <div className="flex-1">
+                <span className="block text-[10px] font-medium text-white/80">{booth.name}</span>
+                <span className="block text-[8px] text-white/30 font-mono">{booth.id}</span>
+              </div>
+              <span className={`text-[8px] px-1.5 py-0.5 rounded ${isVisible ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                {isVisible ? 'Visible' : 'Hidden'}
+              </span>
+            </label>
+          );
+        })}
+      </div>
 
       <SectionTitle>AI Settings</SectionTitle>
       <div>

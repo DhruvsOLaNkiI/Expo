@@ -3,6 +3,7 @@ import {
   buildDefaultBoothLayoutList,
   defaultEntranceLobbyZ,
   type BoothLayoutPatch,
+  type HostessQuickReply,
 } from './boothLayouts';
 import { REG_MAIN_EXPO_SPAWN, REG_SPAWN } from './registrationHall';
 
@@ -62,3 +63,27 @@ export const REGISTRATION_LOBBY_DESTINATION: TeleportDestination = {
   label: 'Registration lobby',
   position: [...REG_SPAWN],
 };
+
+/** Help-desk hostess quick picks — same destinations as Fast Travel HUD. */
+export function buildHelpDeskTeleportReplies(
+  boothOverrides: Record<string, BoothLayoutPatch> = {},
+): HostessQuickReply[] {
+  const destinations = buildExpoTeleportDestinations(boothOverrides);
+  const reg: HostessQuickReply = {
+    id: REGISTRATION_LOBBY_DESTINATION.id,
+    label: REGISTRATION_LOBBY_DESTINATION.label,
+    response: '',
+    action: 'teleport',
+    teleportId: REGISTRATION_LOBBY_DESTINATION.id,
+  };
+  return [
+    reg,
+    ...destinations.map((d) => ({
+      id: d.id,
+      label: d.label,
+      response: '',
+      action: 'teleport' as const,
+      teleportId: d.id,
+    })),
+  ];
+}
