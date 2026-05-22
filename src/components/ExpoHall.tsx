@@ -3,11 +3,15 @@ import * as THREE from 'three';
 import { useStore } from '../store';
 import { useState, Suspense, useRef, useLayoutEffect, useMemo } from 'react';
 import { LedVideoPlane } from './LedVideoPlane';
-import { mergeHallLayout } from '../data/boothLayouts';
+import { mergeHallLayout, mergeSceneConfig } from '../data/boothLayouts';
 
 export function ExpoHall({ showVideos = true }: { showVideos?: boolean }) {
   const setPlayerPosition = useStore((state) => state.setPlayerPosition);
   const hallLayoutOv = useStore((state) => state.sceneOverrides.hallLayout);
+  const sceneOverrides = useStore((state) => state.sceneOverrides);
+  const sceneCfg = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
+  const compressModels = sceneCfg.modelCompression === '30fps';
+  const perfLite = compressModels || sceneCfg.fogEnabled === true;
   const hallLayout = useMemo(() => mergeHallLayout(hallLayoutOv), [hallLayoutOv]);
   const [hoverPos, setHoverPos] = useState<THREE.Vector3 | null>(null);
   const hallSize = 90;
@@ -43,8 +47,8 @@ export function ExpoHall({ showVideos = true }: { showVideos?: boolean }) {
         />
       </mesh>
 
-      {/* Subtle carpet nap / panel lines (darker pile) */}
-      {Array.from({ length: gridLineCount }).map((_, i) => (
+      {/* Subtle carpet nap / panel lines (darker pile) — simplified in compressed mode */}
+      {!compressModels && Array.from({ length: gridLineCount }).map((_, i) => (
         <group key={`floor-grid-${i}`}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-halfHall + i * gridStep, 0.002, 0]}>
             <planeGeometry args={[0.045, hallSize]} />
@@ -78,24 +82,28 @@ export function ExpoHall({ showVideos = true }: { showVideos?: boolean }) {
         />
       </mesh>
 
-      {/* Architectural Ceiling Rings (Bharat Mandapam vibe) */}
-      <group position={[0, ceilingY - 1.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <Torus args={[12, 0.25, 12, 48]}>
-          <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} emissive="#d4af37" emissiveIntensity={0.2} />
-        </Torus>
-        <Torus args={[18.5, 0.25, 12, 48]}>
-          <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} emissive="#d4af37" emissiveIntensity={0.1} />
-        </Torus>
-        <Torus args={[25.5, 0.25, 12, 48]}>
-          <meshStandardMaterial color="#fdfaf5" metalness={0.1} roughness={0.4} />
-        </Torus>
-      </group>
+      {/* Architectural Ceiling Rings — skip in perf mode (heavy torus meshes) */}
+      {!perfLite && (
+        <group position={[0, ceilingY - 1.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <Torus args={[12, 0.25, 12, 48]}>
+            <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} emissive="#d4af37" emissiveIntensity={0.2} />
+          </Torus>
+          <Torus args={[18.5, 0.25, 12, 48]}>
+            <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} emissive="#d4af37" emissiveIntensity={0.1} />
+          </Torus>
+          <Torus args={[25.5, 0.25, 12, 48]}>
+            <meshStandardMaterial color="#fdfaf5" metalness={0.1} roughness={0.4} />
+          </Torus>
+        </group>
+      )}
 
       {/* Recessed Ceiling Cove Light Ring */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ceilingY - 0.45, 0]}>
-        <ringGeometry args={[11.5, 12.3, 64]} />
-        <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.6} />
-      </mesh>
+      {!perfLite && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ceilingY - 0.45, 0]}>
+          <ringGeometry args={[11.5, 12.3, 64]} />
+          <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.6} />
+        </mesh>
+      )}
 
       {/* Hidden warm LED cove — strip sits in ceiling recess; only soft wash reads on panels */}
       <HallPerimeterCoveWash
@@ -103,13 +111,14 @@ export function ExpoHall({ showVideos = true }: { showVideos?: boolean }) {
         ceilingY={ceilingY}
         wallHeight={wallHeight}
         hallSize={hallSize}
+        lite={perfLite}
       />
 
       {/* ======= OUTER WALLS ======= */}
-      <Wall position={[0, wallHeight / 2, -halfHall]} rotation={[0, 0, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
-      <Wall position={[0, wallHeight / 2, halfHall]} rotation={[0, Math.PI, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
-      <Wall position={[-halfHall, wallHeight / 2, 0]} rotation={[0, Math.PI / 2, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
-      <Wall position={[halfHall, wallHeight / 2, 0]} rotation={[0, -Math.PI / 2, 0]} wallWidth={hallSize} wallHeight={wallHeight} />
+      <Wall position={[0, wallHeight / 2, -halfHall]} rotation={[0, 0, 0]} wallWidth={hallSize} wallHeight={wallHeight} lite={perfLite} />
+      <Wall position={[0, wallHeight / 2, halfHall]} rotation={[0, Math.PI, 0]} wallWidth={hallSize} wallHeight={wallHeight} lite={perfLite} />
+      <Wall position={[-halfHall, wallHeight / 2, 0]} rotation={[0, Math.PI / 2, 0]} wallWidth={hallSize} wallHeight={wallHeight} lite={perfLite} />
+      <Wall position={[halfHall, wallHeight / 2, 0]} rotation={[0, -Math.PI / 2, 0]} wallWidth={hallSize} wallHeight={wallHeight} lite={perfLite} />
 
       {/* ======= ENTRANCE LOBBY ======= */}
       <group name="hall-entrance-lobby" position={[ox, oy, entranceZ + oz]}>
@@ -192,24 +201,41 @@ const COVE_LIP_MAT = {
   metalness: 0.03,
 } as const;
 
+/** Satin gold wall trim — low specular so cove lights don't bloom on vertical plates. */
+const WALL_GOLD_PLATE_MAT = {
+  color: '#c9a227',
+  roughness: 0.82,
+  metalness: 0.18,
+  envMapIntensity: 0.12,
+} as const;
+
+const WALL_GOLD_TRIM_MAT = {
+  color: '#c9a227',
+  roughness: 0.78,
+  metalness: 0.2,
+  envMapIntensity: 0.1,
+} as const;
+
 /** Recessed perimeter cove + hidden RectAreaLights — warm wash on wall panels only */
 function HallPerimeterCoveWash({
   halfHall,
   ceilingY,
   wallHeight,
   hallSize,
+  lite = false,
 }: {
   halfHall: number;
   ceilingY: number;
   wallHeight: number;
   hallSize: number;
+  lite?: boolean;
 }) {
   const stripLen = hallSize - 2.4;
   const ly = ceilingY - 0.11;
   const inset = 0.095;
   const warm = '#ffecd8';
   /** Nits — was too low vs hall floods (300+ spot + 0.48 ambient); needs headroom to read on walls */
-  const intensity = 88;
+  const intensity = lite ? 52 : 88;
   const narrow = 0.14;
   const soffitT = 0.11;
   const soffitD = 0.42;
@@ -237,11 +263,13 @@ function HallPerimeterCoveWash({
         color={warm}
         intensity={intensity}
       />
-      <CoveWallSpot
-        position={[0, ceilingY - 0.14, -halfHall + 0.26]}
-        target={[0, ceilingY - 2.35, -halfHall]}
-        color={warm}
-      />
+      {!lite && (
+        <CoveWallSpot
+          position={[0, ceilingY - 0.14, -halfHall + 0.26]}
+          target={[0, ceilingY - 2.35, -halfHall]}
+          color={warm}
+        />
+      )}
 
       {/* South */}
       <mesh castShadow receiveShadow position={[0, ceilingY - soffitT / 2, halfHall - soffitD / 2 - 0.02]}>
@@ -260,11 +288,13 @@ function HallPerimeterCoveWash({
         color={warm}
         intensity={intensity}
       />
-      <CoveWallSpot
-        position={[0, ceilingY - 0.14, halfHall - 0.26]}
-        target={[0, ceilingY - 2.35, halfHall]}
-        color={warm}
-      />
+      {!lite && (
+        <CoveWallSpot
+          position={[0, ceilingY - 0.14, halfHall - 0.26]}
+          target={[0, ceilingY - 2.35, halfHall]}
+          color={warm}
+        />
+      )}
 
       {/* West */}
       <mesh castShadow receiveShadow position={[-halfHall + soffitD / 2 + 0.02, ceilingY - soffitT / 2, 0]}>
@@ -283,11 +313,13 @@ function HallPerimeterCoveWash({
         color={warm}
         intensity={intensity}
       />
-      <CoveWallSpot
-        position={[-halfHall + 0.26, ceilingY - 0.14, 0]}
-        target={[-halfHall, ceilingY - 2.35, 0]}
-        color={warm}
-      />
+      {!lite && (
+        <CoveWallSpot
+          position={[-halfHall + 0.26, ceilingY - 0.14, 0]}
+          target={[-halfHall, ceilingY - 2.35, 0]}
+          color={warm}
+        />
+      )}
 
       {/* East */}
       <mesh castShadow receiveShadow position={[halfHall - soffitD / 2 - 0.02, ceilingY - soffitT / 2, 0]}>
@@ -306,11 +338,13 @@ function HallPerimeterCoveWash({
         color={warm}
         intensity={intensity}
       />
-      <CoveWallSpot
-        position={[halfHall - 0.26, ceilingY - 0.14, 0]}
-        target={[halfHall, ceilingY - 2.35, 0]}
-        color={warm}
-      />
+      {!lite && (
+        <CoveWallSpot
+          position={[halfHall - 0.26, ceilingY - 0.14, 0]}
+          target={[halfHall, ceilingY - 2.35, 0]}
+          color={warm}
+        />
+      )}
     </group>
   );
 }
@@ -386,44 +420,46 @@ function Wall({
   rotation,
   wallWidth,
   wallHeight,
+  lite = false,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   wallWidth: number;
   wallHeight: number;
+  lite?: boolean;
 }) {
-  const panelCount = Math.floor(wallWidth / 10);
+  const panelCount = lite ? Math.max(5, Math.floor(wallWidth / 18)) : Math.floor(wallWidth / 10);
   const panelGap = wallWidth / panelCount;
   return (
     <group position={position} rotation={rotation}>
-      <mesh receiveShadow castShadow>
+      <mesh receiveShadow={!lite} castShadow={!lite}>
         <planeGeometry args={[wallWidth, wallHeight]} />
         <meshStandardMaterial
           color="#e4e0d8"
           roughness={0.96}
           metalness={0.02}
-          envMapIntensity={0.38}
+          envMapIntensity={lite ? 0.12 : 0.38}
         />
       </mesh>
 
       {/* Decorative Vertical Gold Panels */}
       {Array.from({ length: panelCount }).map((_, i) => (
-        <mesh key={i} position={[-wallWidth / 2 + panelGap / 2 + i * panelGap, 0, 0.1]} castShadow receiveShadow>
+        <mesh key={i} position={[-wallWidth / 2 + panelGap / 2 + i * panelGap, 0, 0.1]} castShadow={!lite} receiveShadow={!lite}>
           <boxGeometry args={[0.8, wallHeight - 2, 0.15]} />
-          <meshStandardMaterial color="#d4af37" metalness={0.85} roughness={0.15} envMapIntensity={1.1} />
+          <meshStandardMaterial {...WALL_GOLD_PLATE_MAT} />
         </mesh>
       ))}
 
       {/* Gold Trim */}
       <mesh position={[0, wallHeight / 2 - 0.5, 0.1]} castShadow receiveShadow>
         <boxGeometry args={[wallWidth, 0.5, 0.2]} />
-        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} envMapIntensity={1.05} />
+        <meshStandardMaterial {...WALL_GOLD_TRIM_MAT} />
       </mesh>
 
       {/* Bottom Gold Skirting */}
       <mesh position={[0, -wallHeight / 2 + 0.2, 0.1]} castShadow receiveShadow>
         <boxGeometry args={[wallWidth, 0.4, 0.15]} />
-        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} envMapIntensity={1.05} />
+        <meshStandardMaterial {...WALL_GOLD_TRIM_MAT} />
       </mesh>
     </group>
   );

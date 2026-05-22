@@ -7,6 +7,12 @@ import {
   tryAnswerExpoStatsQuestion,
   type ExpoLiveStats,
 } from '../data/expoStats';
+import { fetchJson, isBackendApiUnavailableError } from '../api/fetchJson';
+import {
+  clientOpenRouterChat,
+  getClientOpenRouterModel,
+  isClientOpenRouterConfigured,
+} from '../api/openRouterClient';
 import { useStore } from '../store';
 
 type Message = {
@@ -119,17 +125,18 @@ export function AiChatbox() {
       if (usePageIndex && chatBoothId) {
         setDebugInfo(`📚 Loading ${documentType} tree for ${chatBoothId}...`);
         
-        const response = await fetch('/api/pageindex/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: userMessage.content,
-            boothId: chatBoothId,
-            documentType,
-          }),
-        });
-
-        const data = (await response.json()) as { ok: boolean; answer?: string; error?: string };
+        const { response, data } = await fetchJson<{ ok: boolean; answer?: string; error?: string }>(
+          '/api/pageindex/ask',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: userMessage.content,
+              boothId: chatBoothId,
+              documentType,
+            }),
+          },
+        );
         
         if (!response.ok || !data.ok) {
           const errorMsg = data.error || `Failed to get answer from PageIndex (${response.status})`;
@@ -250,31 +257,57 @@ export function AiChatbox() {
         { role: 'user' as const, content: userMessage.content },
       ];
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemPrompt,
-          messages: chatMessages,
-          temperature: deckContext ? 0.35 : 0.65,
-          maxOutputTokens,
-        }),
-      });
-
-      const data = (await response.json()) as { ok: boolean; answer?: string; error?: string; model?: string };
-      if (!response.ok || !data.ok) {
-        const errorMsg = data.error || `Chat API error (${response.status})`;
-        if (errorMsg.includes('OPENROUTER_API_KEY')) {
-          throw new Error(
-            'OpenRouter is not configured.\n\n1. Get a key: https://openrouter.ai/keys\n2. Add OPENROUTER_API_KEY=sk-or-... to .env\n3. Restart npm run dev',
-          );
-        }
-        throw new Error(errorMsg);
+      const orMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
+      if (systemPrompt.trim()) orMessages.push({ role: 'system', content: systemPrompt.trim() });
+      for (const m of chatMessages) {
+        if (m.content?.trim()) orMessages.push({ role: m.role, content: m.content });
       }
 
-      setDebugInfo(`✅ OpenRouter (${data.model || 'free'})`);
+      let replyText: string;
+      let modelLabel: string;
 
-      const replyText = data.answer || 'Sorry, I could not generate a response.';
+      try {
+        const { response, data } = await fetchJson<{
+          ok: boolean;
+          answer?: string;
+          error?: string;
+          model?: string;
+        }>('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemPrompt,
+            messages: chatMessages,
+            temperature: deckContext ? 0.35 : 0.65,
+            maxOutputTokens,
+          }),
+        });
+        if (!response.ok || !data.ok) {
+          const errorMsg = data.error || `Chat API error (${response.status})`;
+          if (errorMsg.includes('OPENROUTER_API_KEY')) {
+            throw new Error(
+              'OpenRouter is not configured on the server.\n\nAdd OPENROUTER_API_KEY to .env and run npm run start:prod — or set VITE_OPENROUTER_API_KEY before npm run build for static hosting.',
+            );
+          }
+          throw new Error(errorMsg);
+        }
+        replyText = data.answer || 'Sorry, I could not generate a response.';
+        modelLabel = data.model || 'openrouter/free';
+        setDebugInfo(`✅ OpenRouter server (${modelLabel})`);
+      } catch (apiErr) {
+        const apiMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+        if (!isBackendApiUnavailableError(apiMsg) || !isClientOpenRouterConfigured()) {
+          throw apiErr;
+        }
+        setDebugInfo('🌐 OpenRouter browser fallback (static host — no /api/chat)…');
+        replyText = await clientOpenRouterChat({
+          messages: orMessages,
+          temperature: deckContext ? 0.35 : 0.65,
+          maxTokens: maxOutputTokens,
+        });
+        modelLabel = `${getClientOpenRouterModel()} (browser)`;
+        setDebugInfo(`✅ ${modelLabel}`);
+      }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),

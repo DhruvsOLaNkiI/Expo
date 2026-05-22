@@ -28,6 +28,11 @@
   "scene": {
     "showStandardBooths": true,
     "showHallCanopy": true,
+    "fogEnabled": true,
+    "fogNear": 18,
+    "fogFar": 62,
+    "fogColor": "#f5f0e8",
+    "modelCompression": "30fps",
     "hiddenBooths": [
       "side-west-luxe",
       "side-west-aurum",

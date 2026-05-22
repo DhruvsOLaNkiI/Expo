@@ -1,4 +1,6 @@
 import { useGLTF } from '@react-three/drei';
+import { useModelCompression } from '../hooks/useModelCompression';
+import { optimizeGlbRoot } from '../utils/glbPerformance';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useLayoutEffect, useEffect } from 'react';
 import * as THREE from 'three';
@@ -110,12 +112,16 @@ const tmpDir = new THREE.Vector3();
 export function RoamingExecutive() {
   const groupRef = useRef<THREE.Group>(null);
   const swayRef = useRef<THREE.Group>(null);
+  const modelCompression = useModelCompression();
   const { scene, animations } = useGLTF(ROAMING_NPC_MODEL_URL) as {
     scene: THREE.Object3D;
     animations: THREE.AnimationClip[];
   };
 
-  const model = useMemo(() => prepareExecutiveModel(scene), [scene]);
+  const model = useMemo(() => {
+    const root = prepareExecutiveModel(scene);
+    return optimizeGlbRoot(root, modelCompression);
+  }, [scene, modelCompression]);
 
   const destinations = useMemo(() => {
     const booths = buildBoothVisitPoints();

@@ -20,12 +20,10 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-/** Dev-only API: persist registration-hall visitors to MongoDB. */
-export function visitorsApiPlugin(rootDir: string): Plugin {
-  return {
-    name: 'virtual-expo-visitors-api',
-    configureServer(server) {
-      const env = loadEnv(server.config.mode, rootDir, '');
+type ApiConnectServer = { middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void } };
+
+function attachVisitorsApi(server: ApiConnectServer, rootDir: string, mode: string) {
+      const env = loadEnv(mode, rootDir, '');
       if (env.MONGODB_URI) process.env.MONGODB_URI = env.MONGODB_URI;
 
       server.middlewares.use((req, res, next) => {
@@ -169,6 +167,17 @@ export function visitorsApiPlugin(rootDir: string): Plugin {
 
         next();
       });
+}
+
+/** Dev + preview API: persist registration-hall visitors to MongoDB. */
+export function visitorsApiPlugin(rootDir: string): Plugin {
+  return {
+    name: 'virtual-expo-visitors-api',
+    configureServer(server) {
+      attachVisitorsApi(server, rootDir, server.config.mode);
+    },
+    configurePreviewServer(server) {
+      attachVisitorsApi(server, rootDir, 'production');
     },
   };
 }

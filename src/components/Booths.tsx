@@ -21,6 +21,8 @@ import {
 import { MonarchBooth } from './MonarchBooth';
 import { HorizonVistasBooth } from './HorizonVistasBooth';
 import { CrownEstatesBooth } from './CrownEstatesBooth';
+import { useModelCompression } from '../hooks/useModelCompression';
+import { optimizeGlbRoot, shouldHideDecorativeGlbInstances } from '../utils/glbPerformance';
 
 const EMPTY_HOSTESS_REPLIES: HostessQuickReply[] = [];
 
@@ -327,6 +329,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
 
   const showStandardBooths = sceneOverrides.showStandardBooths ?? DEFAULT_SCENE_CONFIG.showStandardBooths;
   const showHallCanopy = sceneOverrides.showHallCanopy ?? DEFAULT_SCENE_CONFIG.showHallCanopy;
+  const modelCompression = useModelCompression();
+  const hideDecorativeGlbs = shouldHideDecorativeGlbInstances(modelCompression);
   const hiddenBoothIds = sceneOverrides.hiddenBooths ?? DEFAULT_SCENE_CONFIG.hiddenBooths;
   const hiddenBooths = useMemo(() => new Set(hiddenBoothIds), [hiddenBoothIds]);
 
@@ -352,14 +356,16 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
       {/* Central Featured Help Desk Zone */}
       <FeaturedProperty position={[0, 0, 0]} />
 
-      {/* Main Path Decorative Plants (`tree.glb`) */}
-      <Suspense fallback={null}>
-        {hallLayout.plantPositions.map((pos, i) => (
-          <Plant key={`hall-plant-${i}`} name={`hall-plant-${i}`} position={pos} scale={hallLayout.plantScales[i] ?? 1} />
-        ))}
-      </Suspense>
+      {/* Main Path Decorative Plants (`tree.glb`) — hidden when model compression is on */}
+      {!hideDecorativeGlbs && (
+        <Suspense fallback={null}>
+          {hallLayout.plantPositions.map((pos, i) => (
+            <Plant key={`hall-plant-${i}`} name={`hall-plant-${i}`} position={pos} scale={hallLayout.plantScales[i] ?? 1} />
+          ))}
+        </Suspense>
+      )}
 
-      <HallAisleStandees layouts={layouts} />
+      {!hideDecorativeGlbs && <HallAisleStandees layouts={layouts} />}
 
       {/* Single suspended LED ring above help desk */}
       {showHallCanopy && <HallSuspendedCanopies />}
@@ -1336,8 +1342,12 @@ function Plant({
   position: [number, number, number];
   scale?: number;
 }) {
+  const modelCompression = useModelCompression();
   const { scene } = useGLTF(HALL_TREE_MODEL_URL) as { scene: THREE.Object3D };
-  const model = useMemo(() => prepareHallTreeModel(scene, scale), [scene, scale]);
+  const model = useMemo(() => {
+    const root = prepareHallTreeModel(scene, scale);
+    return optimizeGlbRoot(root, modelCompression);
+  }, [scene, scale, modelCompression]);
   return (
     <group name={name} position={position}>
       <primitive object={model} />
@@ -1418,9 +1428,6 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
               Powered By
             </Text>
           </group>
-
-          {/* Smart Help Desk AI kiosk + hologram ring */}
-          <HelpDeskAiKiosk />
 
           {/* Concierge hostess — desk-local coords, faces visitors at the CONCIERGE panel */}
           <Suspense fallback={null}>
@@ -1597,6 +1604,7 @@ function ExpoHostessAvatar({
   subtleIdleLoop?: boolean;
 }) {
   const breathingRef = useRef<THREE.Group>(null);
+  const modelCompression = useModelCompression();
   const { scene, animations } = useGLTF(HOSTESS_MODEL_URL) as {
     scene: THREE.Object3D;
     animations: THREE.AnimationClip[];
@@ -1606,8 +1614,8 @@ function ExpoHostessAvatar({
   const model = useMemo(() => {
     const root = prepareHostessModel(scene, { skipManualArmPose: animCount > 0 });
     if (navyOutfit) applyLuxuryNavyOutfit(root);
-    return root;
-  }, [scene, animCount, navyOutfit]);
+    return optimizeGlbRoot(root, modelCompression);
+  }, [scene, animCount, navyOutfit, modelCompression]);
 
   /** Hips_01 / Mixamo-style rig: without a baked clip, skip spine/forearm procedural idle. */
   const isScene3Hostess = useMemo(() => {
@@ -1772,82 +1780,6 @@ const CONCIERGE_HOSTESS_POS: [number, number, number] = [
 /** GLB forward is +Z — yaw aligns with radial line toward visitors (same as booth hostesses). */
 const CONCIERGE_HOSTESS_ROT: [number, number, number] = [0, CONCIERGE_PANEL_YAW, 0];
 const CONCIERGE_HOSTESS_BUBBLE_Y = 1.82;
-
-function HelpDeskAiKiosk() {
-  const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
-  const ringRef = useRef<THREE.Mesh>(null);
-
-  useFrame((state) => {
-    if (ringRef.current) {
-      ringRef.current.rotation.z = state.clock.elapsedTime * 0.35;
-    }
-  });
-
-  return (
-    <group position={[0, 1.15, 0]}>
-      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.35, 0.04, 16, 64]} />
-        <meshStandardMaterial
-          color="#d4af37"
-          emissive="#d4af37"
-          emissiveIntensity={1.2}
-          metalness={0.9}
-          roughness={0.15}
-        />
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.55, 0.02, 12, 48]} />
-        <meshStandardMaterial color="#0f1a3d" emissive="#1a2d52" emissiveIntensity={0.4} />
-      </mesh>
-      <mesh position={[0, 0.55, 0]} castShadow>
-        <boxGeometry args={[0.9, 1.1, 0.12]} />
-        <meshStandardMaterial color="#0a0a12" metalness={0.85} roughness={0.12} />
-      </mesh>
-      <mesh position={[0, 0.55, 0.07]}>
-        <planeGeometry args={[0.75, 0.85]} />
-        <meshStandardMaterial
-          color="#1a2d52"
-          emissive="#d4af37"
-          emissiveIntensity={0.25}
-          transparent
-          opacity={0.92}
-        />
-      </mesh>
-      <Html
-        position={[0, 1.35, 0]}
-        center
-        distanceFactor={6}
-        zIndexRange={[16777272, 16777272]}
-        style={{ pointerEvents: 'auto' }}
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setHelpDeskOpen(true);
-          }}
-          style={{
-            padding: '10px 18px',
-            borderRadius: 12,
-            border: '1.5px solid rgba(212,175,55,0.7)',
-            background: 'linear-gradient(135deg, rgba(15,26,61,0.95) 0%, rgba(26,45,82,0.92) 100%)',
-            color: '#f5e6c8',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-            boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          ✦ Open AI Concierge
-        </button>
-      </Html>
-      <pointLight position={[0, 1.2, 0]} intensity={18} color="#ffe8c8" distance={6} decay={2} />
-    </group>
-  );
-}
 
 function HelpDeskCustomGirl() {
   const hostessReplies = useMemo(() => buildHelpDeskHostessReplies(), []);

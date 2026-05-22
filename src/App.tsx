@@ -19,6 +19,7 @@ import { mergeSceneConfig } from './data/boothLayouts';
 import { HallLayoutGizmos } from './components/HallLayoutGizmos';
 import { HallLayoutEditHud } from './components/HallLayoutEditHud';
 import { RegistrationHall } from './components/RegistrationHall';
+import { RegistrationLobbyLighting } from './components/RegistrationLobbyLighting';
 import { RegistrationLobbyHud } from './components/RegistrationLobbyHud';
 import { FastTravelHud } from './components/FastTravelHud';
 import { VisitorOnboarding } from './components/VisitorOnboarding';
@@ -82,6 +83,7 @@ export default function App() {
   const showBallroom = sceneConfig.showBallroom;
   const showRoamingExecutive = sceneConfig.showRoamingExecutive;
   const showVideos = sceneConfig.showVideos;
+  const compressModels = sceneConfig.modelCompression === '30fps';
   const setHallLayoutEditMode = useStore((s) => s.setHallLayoutEditMode);
   const setHallLayoutSelection = useStore((s) => s.setHallLayoutSelection);
   const hallLayoutEditMode = useStore((s) => s.hallLayoutEditMode);
@@ -97,6 +99,9 @@ export default function App() {
   const inRegistration = expoPhase === 'registration';
   const sceneBg = inRegistration ? '#FAF7F0' : sceneConfig.bgColor || '#fdfbf2';
   const fogEnabled = sceneConfig.fogEnabled === true;
+  const cameraFar = fogEnabled
+    ? Math.min(sceneConfig.fogFar + 24, 140)
+    : 400;
 
   const glConfig = useMemo(
     () => ({ antialias: postProcessing, alpha: false, stencil: false, depth: true, powerPreference: 'high-performance' as const }),
@@ -151,24 +156,24 @@ export default function App() {
         ]}
       >
         <Canvas
-          shadows
-          camera={{ fov: 65, near: 0.1, far: fogEnabled ? 220 : 400 }}
+          shadows={!compressModels}
+          camera={{ fov: 65, near: 0.1, far: cameraFar }}
           dpr={[1, 1]}
           gl={glConfig}
         >
           <color attach="background" args={[sceneBg]} />
-          {fogEnabled && (
+          {fogEnabled && !inRegistration && (
             <fog
               attach="fog"
               args={[
                 sceneConfig.fogColor || sceneBg,
-                inRegistration ? 12 : sceneConfig.fogNear,
-                inRegistration ? 42 : sceneConfig.fogFar,
+                sceneConfig.fogNear,
+                sceneConfig.fogFar,
               ]}
             />
           )}
           <Suspense fallback={null}>
-            <Lighting />
+            {inRegistration ? <RegistrationLobbyLighting /> : <Lighting compressedMode={compressModels} />}
             {inRegistration ? (
               <RegistrationHall />
             ) : (

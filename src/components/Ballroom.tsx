@@ -1,4 +1,6 @@
-import { Box, useGLTF } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
+import { useModelCompression } from '../hooks/useModelCompression';
+import { optimizeGlbRoot } from '../utils/glbPerformance';
 import { Suspense, useMemo, useRef, useLayoutEffect, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import schoolChairUrl from '../../school-chair/school_chair.glb?url';
@@ -21,10 +23,19 @@ export const BALLROOM_MAIN_SCREEN = {
 
 /** Main center LED panel size (meters). */
 const MAIN_SCREEN = {
-  position: [0, 6, -8.32] as [number, number, number],
+  position: [0, 6, -14.32] as [number, number, number],
   width: 29.5,
   height: 9.5,
 };
+
+/** Stage + backdrop sit flush against north hall wall (hall edge z ≈ −45; ballroom group z = −30). */
+const STAGE_Z = -10;
+const BACKDROP_Z = -14.4;
+const SIDE_LED_Z = -14.18;
+const STAGE_TOP_Y = 1;
+const PODIUM_Z = STAGE_Z + 3.2;
+const CHAIR_FIRST_ROW_Z = -1.2;
+const CHAIR_ROW_SPACING = 2.15;
 
 function BallroomMainScreenSign({
   headline,
@@ -101,6 +112,7 @@ function BallroomMainScreenSign({
 }
 
 function ConferenceChair({ position }: { position: [number, number, number] }) {
+  const modelCompression = useModelCompression();
   const { scene } = useGLTF(schoolChairUrl);
   const chairScene = useMemo(() => {
     const cloned = scene.clone(true);
@@ -111,8 +123,10 @@ function ConferenceChair({ position }: { position: [number, number, number] }) {
         mesh.receiveShadow = true;
       }
     });
-    return cloned;
-  }, [scene]);
+    const box = new THREE.Box3().setFromObject(cloned);
+    cloned.position.y -= box.min.y;
+    return optimizeGlbRoot(cloned, modelCompression);
+  }, [scene, modelCompression]);
 
   return (
     <group position={position} scale={[0.18, 0.18, 0.18]} rotation={[0, 0, 0]}>
@@ -121,22 +135,57 @@ function ConferenceChair({ position }: { position: [number, number, number] }) {
   );
 }
 
+function StagePodium() {
+  const bodyH = 1.35;
+  const topH = 0.08;
+  const topY = bodyH + topH / 2;
+  const micPoleH = 1.28;
+
+  return (
+    <group position={[0, STAGE_TOP_Y, PODIUM_Z]}>
+      <mesh position={[0, bodyH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1, bodyH, 0.75]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.12} metalness={0.05} />
+      </mesh>
+      <mesh position={[0, topY, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.15, topH, 0.9]} />
+        <meshStandardMaterial color="#d4af37" roughness={0.55} metalness={0.35} envMapIntensity={0.1} />
+      </mesh>
+      {/* Mic stand — base flush on podium top, pole + head attached */}
+      <group position={[0, bodyH + topH, 0]}>
+        <mesh position={[0, 0.02, 0]} castShadow>
+          <cylinderGeometry args={[0.13, 0.15, 0.04, 18]} />
+          <meshStandardMaterial color="#1a1a1a" metalness={0.75} roughness={0.35} />
+        </mesh>
+        <mesh position={[0, micPoleH / 2 + 0.04, 0]} castShadow>
+          <cylinderGeometry args={[0.012, 0.016, micPoleH, 10]} />
+          <meshStandardMaterial color="#2a2a2a" metalness={0.88} roughness={0.22} />
+        </mesh>
+        <mesh position={[0, micPoleH + 0.08, 0.07]} castShadow>
+          <sphereGeometry args={[0.055, 12, 12]} />
+          <meshStandardMaterial color="#111111" metalness={0.9} roughness={0.18} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
   return (
     <group position={[0, 0, -30]}>
-      {/* Stage */}
-      <mesh position={[0, 0.5, -4]} receiveShadow castShadow>
+      {/* Stage — back edge flush with north wall */}
+      <mesh position={[0, 0.5, STAGE_Z]} receiveShadow castShadow>
         <boxGeometry args={[40, 1, 10]} />
         <meshStandardMaterial color="#fdfaf5" roughness={0.3} metalness={0.05} />
       </mesh>
 
       {/* Giant LED Wall */}
-      <mesh position={[0, 6, -8.5]}>
+      <mesh position={[0, 6, BACKDROP_Z - 0.1]}>
         <planeGeometry args={[30, 10]} />
         <meshStandardMaterial color="#fdfaf5" roughness={0.3} metalness={0.05} />
       </mesh>
       {/* Main stage backdrop — solid panel only; video plays on side LEDs */}
-      <mesh position={[0, 6, -8.4]}>
+      <mesh position={[0, 6, BACKDROP_Z]}>
         <planeGeometry args={[29.5, 9.5]} />
         <meshStandardMaterial color="#080808" roughness={0.4} metalness={0.2} />
       </mesh>
@@ -151,7 +200,7 @@ export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
 
       {/* Massive Side Wall LED Presentation Panels */}
       {[-1, 1].map((side) => (
-        <group key={`massive-side-led-${side}`} position={[side * 25, 6.1, -8.18]}>
+        <group key={`massive-side-led-${side}`} position={[side * 25, 6.1, SIDE_LED_Z]}>
           {/* Recessed architectural niche (near floor-to-ceiling proportion) */}
           <mesh position={[0, 0, -0.22]} receiveShadow>
             <boxGeometry args={[10.9, 7.8, 0.5]} />
@@ -206,19 +255,12 @@ export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
         </group>
       ))}
 
-      {/* Podium */}
-      <group position={[0, 1, -1]}>
-        <Box args={[1, 1.5, 0.8]} position={[0, 0.75, 0]} castShadow>
-          <meshStandardMaterial color="#ffffff" roughness={0.1} />
-        </Box>
-        <Box args={[1.2, 0.1, 1]} position={[0, 1.55, 0]} castShadow>
-          <meshStandardMaterial color="#d4af37" />
-        </Box>
-      </group>
+      {/* Podium + mic — parented to stage top so nothing floats */}
+      <StagePodium />
 
       {/* Premium conference seating with central aisle */}
       {Array.from({ length: 5 }).map((_, row) => {
-        const z = 4.8 + row * 2.25;
+        const z = CHAIR_FIRST_ROW_Z + row * CHAIR_ROW_SPACING;
         const leftCols = Array.from({ length: 5 }).map((__, col) => -9.5 + col * 1.55);
         const rightCols = Array.from({ length: 5 }).map((__, col) => 2.3 + col * 1.55);
         return (
@@ -234,17 +276,17 @@ export function Ballroom({ showVideos = true }: { showVideos?: boolean }) {
       })}
 
       {/* Soft fill on backdrop — reduces harsh under-screen shadows */}
-      <pointLight position={[0, 6.2, -6]} intensity={14} distance={22} decay={2} color="#f5f0e8" />
+      <pointLight position={[0, 6.2, BACKDROP_Z + 8.4]} intensity={14} distance={22} decay={2} color="#f5f0e8" />
 
       {/* Stage Lighting — aimed at screen (invalid target-position was ignored before) */}
       <BallroomSpot
         position={[-15, 12, 5]}
-        target={[0, 6, -8.2]}
+        target={[0, 6, BACKDROP_Z + 0.2]}
         intensity={38}
       />
       <BallroomSpot
         position={[15, 12, 5]}
-        target={[0, 6, -8.2]}
+        target={[0, 6, BACKDROP_Z + 0.2]}
         intensity={38}
       />
     </group>

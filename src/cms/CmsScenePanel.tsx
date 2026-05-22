@@ -1,5 +1,6 @@
 import { useStore } from '../store';
 import { DEFAULT_SCENE_CONFIG, mergeSceneConfig, type SceneConfig, buildDefaultBoothLayoutList, applyBoothOverrides } from '../data/boothLayouts';
+import { PERFORMANCE_30FPS_SCENE_PATCH } from '../utils/glbPerformance';
 import React, { useMemo } from 'react';
 import { SIDE_SPECS } from '../components/SideExpoBooths';
 
@@ -57,7 +58,73 @@ export function CmsScenePanel() {
   return (
     <>
       <SectionTitle>Performance</SectionTitle>
-      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/[0.04] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.modelCompression === '30fps'}
+          onChange={(e) => patchScene({ modelCompression: e.target.checked ? '30fps' : 'off' })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-[#d4af37]">Compress 3D models (30 FPS target)</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/40">
+            Decimates GLB triangle count (~65% fewer), switches heavy PBR to lighter Lambert materials, disables shadows &amp; HDR environment map, throttles proximity checks, and hides decorative GLBs (trees/standees). Major FPS boost for integrated GPUs.
+          </span>
+        </span>
+      </label>
+      <button
+        type="button"
+        className="mt-2 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/[0.07] transition-colors"
+        onClick={() => patchScene(PERFORMANCE_30FPS_SCENE_PATCH)}
+      >
+        Apply full 30 FPS preset
+      </button>
+      <p className="mt-1.5 mb-1 text-[9px] text-white/30 leading-relaxed">
+        Preset enables model compression plus turns off bloom, videos, ballroom, roaming executive, and hall canopy.
+      </p>
+
+      <SectionTitle>Distance fog</SectionTitle>
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.fogEnabled === true}
+          onChange={(e) => patchScene({ fogEnabled: e.target.checked })}
+        />
+        <span>
+          <span className="flex items-center gap-2">
+            <span className="block text-[11px] font-medium text-white/80">Enable distance fog</span>
+            <span
+              className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider ${
+                cfg.fogEnabled === true
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : 'bg-white/10 text-white/40'
+              }`}
+            >
+              {cfg.fogEnabled === true ? 'On' : 'Off'}
+            </span>
+          </span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Soft haze on the far end of the 90m hall — hides distant geometry and can improve FPS. Turn off for a fully clear view end-to-end.
+          </span>
+        </span>
+      </label>
+      {cfg.fogEnabled === true ? (
+        <div className="mt-2 space-y-3 rounded-lg border border-white/[0.06] bg-black/20 p-3">
+          <CmsSlider label="Fog starts (near, m)" value={cfg.fogNear} onChange={(v) => patchScene({ fogNear: v })} min={1} max={80} step={1} unit="m" />
+          <CmsSlider label="Fog full (far, m)" value={cfg.fogFar} onChange={(v) => patchScene({ fogFar: v })} min={15} max={120} step={1} unit="m" />
+          <CmsColor label="Fog color" value={cfg.fogColor} onChange={(v) => patchScene({ fogColor: v })} />
+          <p className="text-[9px] text-white/30 leading-relaxed">
+            Lower <strong className="text-white/50">Far</strong> = thicker fog. Changes apply live in the main expo hall (not the registration lobby).
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[9px] text-white/35 leading-relaxed">
+          Fog is disabled — the hall renders with full visibility to the walls.
+        </p>
+      )}
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
         <input
           type="checkbox"
           className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
@@ -300,24 +367,6 @@ export function CmsScenePanel() {
       <SectionTitle>Ceiling Light</SectionTitle>
       <CmsSlider label="Intensity" value={cfg.ceilingLightIntensity} onChange={(v) => patchScene({ ceilingLightIntensity: v })} min={0} max={500} step={1} />
       <CmsColor label="Color" value={cfg.ceilingLightColor} onChange={(v) => patchScene({ ceilingLightColor: v })} />
-
-      <SectionTitle>Fog</SectionTitle>
-      <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-        <input
-          type="checkbox"
-          checked={cfg.fogEnabled === true}
-          onChange={(e) => patchScene({ fogEnabled: e.target.checked })}
-          className="accent-[#d4af37]"
-        />
-        <span className="text-[11px] text-white/80">Enable distance fog</span>
-      </label>
-      {cfg.fogEnabled && (
-        <>
-          <CmsSlider label="Near" value={cfg.fogNear} onChange={(v) => patchScene({ fogNear: v })} min={1} max={100} step={1} />
-          <CmsSlider label="Far" value={cfg.fogFar} onChange={(v) => patchScene({ fogFar: v })} min={10} max={300} step={1} />
-          <CmsColor label="Fog Color" value={cfg.fogColor} onChange={(v) => patchScene({ fogColor: v })} />
-        </>
-      )}
 
       <SectionTitle>Post-Processing</SectionTitle>
       <CmsSlider label="Bloom Intensity" value={cfg.bloomIntensity} onChange={(v) => patchScene({ bloomIntensity: v })} min={0} max={2} />

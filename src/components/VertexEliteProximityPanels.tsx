@@ -94,12 +94,19 @@ export function VertexEliteProximityPanels({
     };
   }, [boothId, reportBoothHudProximity]);
 
+  const frameCount = useRef(0);
+  const worldPos = useRef(new THREE.Vector3());
+
   useFrame((_, delta) => {
     if (cmsPreview || !ctxRef.current) return;
     if (!anchorRef.current) return;
-    const wp = new THREE.Vector3();
-    anchorRef.current.getWorldPosition(wp);
-    const dist = wp.distanceTo(camera.position);
+    
+    // Throttle proximity checks to every 3 frames for better performance
+    frameCount.current++;
+    if (frameCount.current % 3 !== 0) return;
+    
+    anchorRef.current.getWorldPosition(worldPos.current);
+    const dist = worldPos.current.distanceTo(camera.position);
     const FULL = 4.2;
     const FAR = 9.5;
     const target = THREE.MathUtils.clamp((FAR - dist) / (FAR - FULL), 0, 1);

@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '../data/boothLayouts';
+import { BoothHostessGreeter } from './Booths';
 import { isScreenImageUrl, LedScreenSurface } from './LedVideoPlane';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
@@ -189,6 +190,9 @@ export function MonarchBooth({
           </mesh>
         </group>
 
+        <Suspense fallback={null}>
+          <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
+        </Suspense>
       </group>
 
       {/* Main Display Screen (Large TV) */}

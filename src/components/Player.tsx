@@ -93,9 +93,19 @@ export function Player() {
     spawnedRef.current = true;
     if (expoPhase === 'registration') {
       feetRef.current.set(REG_SPAWN[0], 0, REG_SPAWN[2]);
+      camera.rotation.set(0, 0, 0, 'YXZ');
       applyCameraFromFeet(camera, feetRef.current, cameraMode);
     }
   }, [camera, expoPhase, cameraMode]);
+
+  /* ── always snap to lobby when entering registration (hall is at z ≈ -82) ── */
+  useEffect(() => {
+    if (expoPhase !== 'registration') return;
+    feetRef.current.set(REG_SPAWN[0], 0, REG_SPAWN[2]);
+    velocityRef.current.set(0, 0, 0);
+    camera.rotation.set(0, 0, 0, 'YXZ');
+    applyCameraFromFeet(camera, feetRef.current, cameraMode);
+  }, [expoPhase, camera, cameraMode]);
 
   /* ── pointer lock (desktop) ───────────────────────────────── */
   useEffect(() => {

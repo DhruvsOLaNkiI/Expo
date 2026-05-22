@@ -10,6 +10,8 @@ import {
 import { LayoutEditableGroup } from './LayoutEditableGroup';
 import { LedScreenSurface } from './LedVideoPlane';
 import { Text, useGLTF } from '@react-three/drei';
+import { useModelCompression } from '../hooks/useModelCompression';
+import { optimizeGlbRoot } from '../utils/glbPerformance';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Suspense, useMemo } from 'react';
 import { useStore } from '../store';
@@ -27,6 +29,7 @@ const FLOOR_DARK = '#1a1a1a';
 const WALL_CREAM = '#FAF7F0';
 const BLACK_GRID = '#0a0a0a';
 const GOLD = '#d4af37';
+const WALL_TITLE_DARK = '#141418';
 const LED_WHITE = '#f0f8ff';
 const RECEPTION_Z = REG_RECEPTION_Z;
 const FONT =
@@ -34,6 +37,11 @@ const FONT =
 
 /** Imported reception desk GLB (FBX converted). */
 const RECEPTION_DESK_GLB_URL = '/assets/3d%20model/Reception_Desk_1_fbx.glb';
+/** Corner greenery — `public/assets/3d model/uploads_files_4779578_plant.glb` */
+const REG_CORNER_PLANT_GLB_URL = '/assets/3d%20model/uploads_files_4779578_plant.glb';
+const REG_CORNER_PLANT_TARGET_HEIGHT = 5.15;
+/** Inset from wall intersection (north = video wall side). */
+const REG_CORNER_INSET = 2.35;
 /** Visible span in meters (larger than legacy procedural desk so visitors can read the model clearly). */
 const RECEPTION_DESK_TARGET_WIDTH = DESK_W * 3.0;
 
@@ -54,6 +62,9 @@ export function RegistrationHall() {
       <DarkPolishedFloor />
       <PremiumWalls />
       <NorthWallVideoDisplays />
+      <Suspense fallback={null}>
+        <RegistrationCornerPlants />
+      </Suspense>
       <HexagonLEDCeiling />
       <PremiumEventReception />
     </group>
@@ -365,10 +376,42 @@ function NorthWallVideoDisplays() {
   const xRight = wallSpan / 2 - panelW / 2 - edgeInset;
   const panelArgs: [number, number] = [panelW, panelH];
 
+  const titleZ = wallFaceZ + 0.06;
+
   return (
     <group name="reg-north-wall-video-displays">
       <WallVideoPanel position={[xLeft, centerY, wallFaceZ]} args={panelArgs} url={videoUrl} />
       <WallVideoPanel position={[xRight, centerY, wallFaceZ]} args={panelArgs} url={videoUrl} />
+
+      {/* Center wall title — bold dark type, stacked */}
+      <Text
+        position={[0, centerY + 0.34, titleZ]}
+        fontSize={0.64}
+        fontWeight={700}
+        color={WALL_TITLE_DARK}
+        anchorX="center"
+        anchorY="middle"
+        letterSpacing={0.08}
+        textAlign="center"
+        font={FONT}
+      >
+        REGISTRATION
+        <meshStandardMaterial attach="material" color={WALL_TITLE_DARK} roughness={0.92} metalness={0} />
+      </Text>
+      <Text
+        position={[0, centerY - 0.26, titleZ]}
+        fontSize={0.5}
+        fontWeight={700}
+        color={WALL_TITLE_DARK}
+        anchorX="center"
+        anchorY="middle"
+        letterSpacing={0.12}
+        textAlign="center"
+        font={FONT}
+      >
+        DESK
+        <meshStandardMaterial attach="material" color={WALL_TITLE_DARK} roughness={0.92} metalness={0} />
+      </Text>
     </group>
   );
 }
@@ -556,8 +599,12 @@ function ReceptionDeskGlbModel({
 }: {
   onRegister: () => void;
 }) {
+  const modelCompression = useModelCompression();
   const { scene } = useGLTF(RECEPTION_DESK_GLB_URL) as { scene: THREE.Object3D };
-  const model = useMemo(() => prepareReceptionDeskModel(scene), [scene]);
+  const model = useMemo(() => {
+    const root = prepareReceptionDeskModel(scene);
+    return optimizeGlbRoot(root, modelCompression);
+  }, [scene, modelCompression]);
   const deskSize = useMemo(() => {
     const b = new THREE.Box3().setFromObject(model);
     const s = new THREE.Vector3();
@@ -811,7 +858,99 @@ function lobbyRotation(
   return layout.loungeRotations[name] ?? [0, 0, 0];
 }
 
+function prepareRegistrationCornerPlant(source: THREE.Object3D) {
+  const root = source.clone(true) as THREE.Object3D;
+  root.rotation.set(0, 0, 0);
+  root.scale.set(1, 1, 1);
+  root.updateMatrixWorld(true);
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (m.isMesh) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.frustumCulled = true;
+    }
+  });
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const h = Math.max(size.y, 1e-6);
+  root.scale.setScalar(REG_CORNER_PLANT_TARGET_HEIGHT / h);
+  root.updateMatrixWorld(true);
+  const box2 = new THREE.Box3().setFromObject(root);
+  const c = new THREE.Vector3();
+  box2.getCenter(c);
+  root.position.sub(c);
+  root.updateMatrixWorld(true);
+  const box3 = new THREE.Box3().setFromObject(root);
+  root.position.y -= box3.min.y;
+  root.updateMatrixWorld(true);
+  return root;
+}
+
+/** Twin video wall side — back-left / back-right where north meets east & west walls. */
+const REG_CORNER_PLANT_PLACEMENTS: Array<{
+  id: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+}> = [
+  {
+    id: 'corner-nw',
+    position: [-halfW + REG_CORNER_INSET, 0, cz - halfD + REG_CORNER_INSET],
+    rotation: [0, Math.PI / 4, 0],
+  },
+  {
+    id: 'corner-ne',
+    position: [halfW - REG_CORNER_INSET, 0, cz - halfD + REG_CORNER_INSET],
+    rotation: [0, -Math.PI / 4, 0],
+  },
+  {
+    id: 'corner-sw',
+    position: [-halfW + REG_CORNER_INSET, 0, cz + halfD - REG_CORNER_INSET],
+    rotation: [0, -Math.PI / 4, 0],
+  },
+  {
+    id: 'corner-se',
+    position: [halfW - REG_CORNER_INSET, 0, cz + halfD - REG_CORNER_INSET],
+    rotation: [0, Math.PI / 4, 0],
+  },
+];
+
+function RegistrationCornerPlant({
+  name,
+  position,
+  rotation,
+}: {
+  name: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+}) {
+  const modelCompression = useModelCompression();
+  const { scene } = useGLTF(REG_CORNER_PLANT_GLB_URL) as { scene: THREE.Object3D };
+  const model = useMemo(() => {
+    const root = prepareRegistrationCornerPlant(scene);
+    return optimizeGlbRoot(root, modelCompression);
+  }, [scene, modelCompression]);
+
+  return (
+    <group name={name} position={position} rotation={rotation}>
+      <primitive object={model} />
+    </group>
+  );
+}
+
+function RegistrationCornerPlants() {
+  return (
+    <group name="reg-corner-plants">
+      {REG_CORNER_PLANT_PLACEMENTS.map((p) => (
+        <RegistrationCornerPlant key={p.id} name={p.id} position={p.position} rotation={p.rotation} />
+      ))}
+    </group>
+  );
+}
+
 function RegistrationGlbMesh({ url }: { url: string }) {
+  const modelCompression = useModelCompression();
   const { scene } = useGLTF(url) as { scene: THREE.Object3D };
   const clone = useMemo(() => {
     const c = scene.clone(true);
@@ -822,8 +961,8 @@ function RegistrationGlbMesh({ url }: { url: string }) {
         mesh.receiveShadow = true;
       }
     });
-    return c;
-  }, [scene]);
+    return optimizeGlbRoot(c, modelCompression);
+  }, [scene, modelCompression]);
   return <primitive object={clone} />;
 }
 
@@ -1038,3 +1177,4 @@ function GoldAccents() {
 }
 
 useGLTF.preload(RECEPTION_DESK_GLB_URL);
+useGLTF.preload(REG_CORNER_PLANT_GLB_URL);

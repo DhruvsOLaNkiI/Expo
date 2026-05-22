@@ -115,12 +115,10 @@ async function reportPageIndexFailure(
   }
 }
 
-/** Dev-only API: run PageIndex on uploaded PDFs + Gemini Q&A over the generated tree. */
-export function pageindexApiPlugin(rootDir: string): Plugin {
-  return {
-    name: 'virtual-expo-pageindex-api',
-    configureServer(server) {
-      const env = loadEnv(server.config.mode, rootDir, '');
+type ApiConnectServer = { middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void } };
+
+function attachPageIndexApi(server: ApiConnectServer, rootDir: string, mode: string) {
+      const env = loadEnv(mode, rootDir, '');
       if (env.MONGODB_URI) process.env.MONGODB_URI = env.MONGODB_URI;
       if (env.OPENROUTER_API_KEY) process.env.OPENROUTER_API_KEY = env.OPENROUTER_API_KEY;
       if (env.VITE_OPENROUTER_API_KEY) process.env.VITE_OPENROUTER_API_KEY = env.VITE_OPENROUTER_API_KEY;
@@ -562,6 +560,17 @@ User question: ${q}`;
 
         next();
       });
+}
+
+/** Dev + preview API: run PageIndex on uploaded PDFs + OpenRouter Q&A over the generated tree. */
+export function pageindexApiPlugin(rootDir: string): Plugin {
+  return {
+    name: 'virtual-expo-pageindex-api',
+    configureServer(server) {
+      attachPageIndexApi(server, rootDir, server.config.mode);
+    },
+    configurePreviewServer(server) {
+      attachPageIndexApi(server, rootDir, 'production');
     },
   };
 }

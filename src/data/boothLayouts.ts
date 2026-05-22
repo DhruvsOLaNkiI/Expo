@@ -275,7 +275,7 @@ export type SceneConfig = {
   hallAmbientColor: string;
   ceilingLightIntensity: number;
   ceilingLightColor: string;
-  /** Distance fog — off by default so the hall stays sharp end-to-end. */
+/** Distance fog — hides far hall geometry and lowers effective draw distance for FPS. */
   fogEnabled: boolean;
   fogNear: number;
   fogFar: number;
@@ -298,6 +298,11 @@ export type SceneConfig = {
   showHallCanopy: boolean;
   /** Array of booth IDs to hide (for selective performance tuning). */
   hiddenBooths: string[];
+  /**
+   * Runtime GLB compression — decimates triangles, simplifies materials, disables model shadows.
+   * Use `30fps` for integrated GPUs / mobile; `off` keeps full mesh detail.
+   */
+  modelCompression: 'off' | '30fps';
   /** Google Gemini API key for Ask AI chatbox. */
   aiApiKey?: string;
   /**
@@ -318,10 +323,10 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   hallAmbientColor: '#fff8ef',
   ceilingLightIntensity: 280,
   ceilingLightColor: '#ffffff',
-  fogEnabled: false,
-  fogNear: 25,
-  fogFar: 120,
-  fogColor: '#fdfbf2',
+  fogEnabled: true,
+  fogNear: 18,
+  fogFar: 62,
+  fogColor: '#f5f0e8',
   bloomIntensity: 0.26,
   bloomThreshold: 1.72,
   vignetteIntensity: 0.42,
@@ -333,6 +338,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showVideos: false,
   showHallCanopy: true,
   hiddenBooths: [...DEFAULT_HIDDEN_SIDE_BOOTH_IDS],
+  modelCompression: '30fps',
   aiApiKey: '',
   aiDeckContext: '',
   aiGeminiModel: 'gemini-3.1-flash-lite-preview',

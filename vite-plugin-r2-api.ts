@@ -16,12 +16,10 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-/** Dev-only: upload booth assets (PDF, images, video) to Cloudflare R2. */
-export function r2ApiPlugin(rootDir: string): Plugin {
-  return {
-    name: 'virtual-expo-r2-api',
-    configureServer(server) {
-      const env = loadEnv(server.config.mode, rootDir, '');
+type ApiConnectServer = { middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void } };
+
+function attachR2Api(server: ApiConnectServer, rootDir: string, mode: string) {
+      const env = loadEnv(mode, rootDir, '');
       if (env.R2_ENDPOINT) process.env.R2_ENDPOINT = env.R2_ENDPOINT;
       if (env.R2_ACCESS_KEY_ID) process.env.R2_ACCESS_KEY_ID = env.R2_ACCESS_KEY_ID;
       if (env.R2_SECRET_ACCESS_KEY) process.env.R2_SECRET_ACCESS_KEY = env.R2_SECRET_ACCESS_KEY;
@@ -105,6 +103,17 @@ export function r2ApiPlugin(rootDir: string): Plugin {
 
         next();
       });
+}
+
+/** Dev + preview: upload booth assets (PDF, images, video) to Cloudflare R2. */
+export function r2ApiPlugin(rootDir: string): Plugin {
+  return {
+    name: 'virtual-expo-r2-api',
+    configureServer(server) {
+      attachR2Api(server, rootDir, server.config.mode);
+    },
+    configurePreviewServer(server) {
+      attachR2Api(server, rootDir, 'production');
     },
   };
 }
