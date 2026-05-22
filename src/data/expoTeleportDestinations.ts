@@ -1,5 +1,7 @@
 import {
   applyBoothOverrides,
+  BOOTH_ROW_X_EAST,
+  BOOTH_ROW_X_WEST,
   buildDefaultBoothLayoutList,
   defaultEntranceLobbyZ,
   type BoothLayoutPatch,
@@ -37,8 +39,8 @@ export function buildExpoTeleportDestinations(
     { id: 'reception', label: 'Reception & LED', position: [0, EYE_Y, entranceZ - 4] },
     { id: 'center', label: 'Center plaza', position: [0, EYE_Y, 2] },
     { id: 'ballroom', label: 'Ballroom stage', position: [0, EYE_Y, -26] },
-    { id: 'west-wing', label: 'West booths', position: [-16, EYE_Y, -8] },
-    { id: 'east-wing', label: 'East booths', position: [16, EYE_Y, 8] },
+    { id: 'west-wing', label: 'West booths', position: [BOOTH_ROW_X_WEST + 8, EYE_Y, -8] },
+    { id: 'east-wing', label: 'East booths', position: [BOOTH_ROW_X_EAST - 8, EYE_Y, 8] },
   ];
 
   const boothStops = [
@@ -64,26 +66,20 @@ export const REGISTRATION_LOBBY_DESTINATION: TeleportDestination = {
   position: [...REG_SPAWN],
 };
 
-/** Help-desk hostess quick picks — same destinations as Fast Travel HUD. */
-export function buildHelpDeskTeleportReplies(
-  boothOverrides: Record<string, BoothLayoutPatch> = {},
-): HostessQuickReply[] {
-  const destinations = buildExpoTeleportDestinations(boothOverrides);
-  const reg: HostessQuickReply = {
-    id: REGISTRATION_LOBBY_DESTINATION.id,
-    label: REGISTRATION_LOBBY_DESTINATION.label,
-    response: '',
-    action: 'teleport',
-    teleportId: REGISTRATION_LOBBY_DESTINATION.id,
-  };
+/** Help-desk hostess — opens Smart AI Help Desk concierge. */
+export function buildHelpDeskHostessReplies(): HostessQuickReply[] {
   return [
-    reg,
-    ...destinations.map((d) => ({
-      id: d.id,
-      label: d.label,
+    {
+      id: 'help-desk-smart',
+      label: 'Open Smart Help Desk',
       response: '',
-      action: 'teleport' as const,
-      teleportId: d.id,
-    })),
+      action: 'helpDesk',
+    },
+    {
+      id: 'help-desk-ai-chat',
+      label: 'Ask AI Assistant',
+      response: '',
+      action: 'askAi',
+    },
   ];
 }

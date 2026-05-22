@@ -104,7 +104,13 @@ interface AppState {
   ctaResourcePopup: CtaResourcePopup | null;
   setCtaResourcePopup: (popup: CtaResourcePopup | null) => void;
   aiChatOpen: boolean;
+  /** When set, Ask AI uses expo-wide live stats (Help Desk / registration hostess). */
+  aiChatContext: 'expo-concierge' | null;
   setAiChatOpen: (open: boolean) => void;
+  openAiChat: (context?: 'expo-concierge') => void;
+  /** Smart Help Desk concierge panel (center lobby). */
+  helpDeskOpen: boolean;
+  setHelpDeskOpen: (open: boolean) => void;
   /** 0–1 fade for Vertex Elite screen HUD (driven by distance to booth entrance). */
   vertexEliteHudAlpha: number;
   setVertexEliteHudAlpha: (alpha: number) => void;
@@ -202,7 +208,21 @@ export const useStore = create<AppState>((set, get) => ({
   ctaResourcePopup: null,
   setCtaResourcePopup: (popup) => set({ ctaResourcePopup: popup }),
   aiChatOpen: false,
-  setAiChatOpen: (open) => set({ aiChatOpen: open }),
+  aiChatContext: null,
+  setAiChatOpen: (open) =>
+    set(open ? { aiChatOpen: true } : { aiChatOpen: false, aiChatContext: null }),
+  openAiChat: (context) =>
+    set({
+      aiChatOpen: true,
+      aiChatContext: context === 'expo-concierge' ? 'expo-concierge' : null,
+    }),
+  helpDeskOpen: false,
+  setHelpDeskOpen: (open) => {
+    if (open && typeof document !== 'undefined' && document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    set({ helpDeskOpen: open });
+  },
   vertexEliteHudAlpha: 0,
   setVertexEliteHudAlpha: (alpha) => {
     const next = Math.max(0, Math.min(1, alpha));

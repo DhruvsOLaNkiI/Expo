@@ -36,8 +36,45 @@ export function hasValidPageIndexStructure(structure: unknown): boolean {
 }
 
 /**
- * Create or update the MongoDB row for boothId + documentType (e.g. priceList) if it does not exist yet.
- * Used before indexing so Atlas shows a row immediately; structure is filled when indexing completes.
+ * Record a failed index run (no structure written). Only called after indexing attempt fails.
+ */
+export async function markPageIndexFailed(
+  boothId: string,
+  documentType: PageIndexDocType,
+  pdfUrl: string,
+  errorMessage: string,
+): Promise<void> {
+  const db = await connectToDatabase();
+  const collection = db.collection<PageIndexDocument>('pageindexes');
+  const now = new Date();
+  const indexError = errorMessage.trim().slice(0, 4000) || 'PageIndex failed';
+
+  await collection.updateOne(
+    { boothId, documentType },
+    {
+      $set: {
+        pdfUrl,
+        indexStatus: 'failed' as PageIndexStatus,
+        indexError,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        boothId,
+        documentType,
+        pdfHash: '',
+        structure: null,
+        indexedAt: null,
+        modelVersion: 'pending',
+        createdAt: now,
+      },
+    },
+    { upsert: true },
+  );
+}
+
+/**
+ * @deprecated Prefer: run PageIndex first, then savePageIndex / markPageIndexFailed only.
+ * Legacy helper — avoid creating "indexing" rows before the tree exists.
  */
 export async function ensurePageIndexSlot(
   boothId: string,
@@ -157,6 +194,10 @@ export async function getPageIndexes(boothId: string): Promise<PageIndexDocument
 }
 
 export async function savePageIndex(doc: PageIndexDocument): Promise<string> {
+  if (!hasValidPageIndexStructure(doc.structure)) {
+    throw new Error('PageIndex tree is empty or invalid — not saving to MongoDB');
+  }
+
   try {
     const db = await connectToDatabase();
     const collection = db.collection<PageIndexDocument>('pageindexes');
@@ -334,6 +375,28 @@ export async function markVisitorLobbyCheckIn(visitorId: string): Promise<void> 
     { visitorId },
     { $set: { lobbyCheckInAt: new Date(), updatedAt: new Date() } },
   );
+}
+
+export type VisitorRegistrationStats = {
+  visitorsTotal: number;
+  visitorsRegisteredToday: number;
+  visitorsCheckedInToday: number;
+};
+
+/** Counts for Help Desk / expo concierge AI (start of local calendar day, server timezone). */
+export async function getVisitorRegistrationStats(): Promise<VisitorRegistrationStats> {
+  const db = await connectToDatabase();
+  const collection = db.collection<VisitorRegistration>('visitors');
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [visitorsTotal, visitorsRegisteredToday, visitorsCheckedInToday] = await Promise.all([
+    collection.countDocuments({}),
+    collection.countDocuments({ createdAt: { $gte: startOfDay } }),
+    collection.countDocuments({ lobbyCheckInAt: { $gte: startOfDay } }),
+  ]);
+
+  return { visitorsTotal, visitorsRegisteredToday, visitorsCheckedInToday };
 }
 
 export async function closeDatabase(): Promise<void> {

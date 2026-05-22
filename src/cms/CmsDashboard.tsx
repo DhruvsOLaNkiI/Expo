@@ -120,10 +120,14 @@ function PageIndexBoothTracker({
           let badgeClass = 'bg-white/10 text-white/40';
           let hint = '';
 
-          if (live?.status === 'indexing' || db?.indexStatus === 'indexing') {
+          if (live?.status === 'indexing') {
             badge = '⟳ Indexing…';
             badgeClass = 'bg-blue-500/20 text-blue-300';
-            hint = 'MongoDB row created — building tree…';
+            hint = live.message || 'Building tree — saved to MongoDB when complete…';
+          } else if (db?.indexStatus === 'indexing') {
+            badge = '⟳ Stuck indexing';
+            badgeClass = 'bg-amber-500/20 text-amber-200';
+            hint = 'Old run did not finish. Click Run PageIndex again.';
           } else if (live?.status === 'error') {
             badge = 'Error';
             badgeClass = 'bg-red-500/20 text-red-300';
@@ -138,11 +142,19 @@ function PageIndexBoothTracker({
           } else if (db?.indexStatus === 'failed') {
             badge = '✗ Index failed';
             badgeClass = 'bg-red-500/20 text-red-300';
-            hint = 'Click Run PageIndex again after fixing the PDF URL.';
+            hint = db.indexError || 'Click Run PageIndex again after fixing the PDF or API keys.';
           } else if (db?.readyForChat) {
             badge = '✓ Ready for AI chat';
             badgeClass = 'bg-green-500/20 text-green-300';
-            hint = db.indexedAt ? `Indexed ${formatIndexedAt(db.indexedAt)}` : '';
+            if (db.treeStats) {
+              const s = db.treeStats;
+              hint = `${s.topLevelSections} top sections · ${s.totalNodes} nodes · ${s.jsonSizeKb} KB in MongoDB`;
+              if (s.sampleTitles.length) {
+                hint += ` — e.g. ${s.sampleTitles.slice(0, 3).join('; ')}`;
+              }
+            } else {
+              hint = db.indexedAt ? `Indexed ${formatIndexedAt(db.indexedAt)}` : '';
+            }
           } else if (db?.stale) {
             badge = '⚠ Stale — re-index';
             badgeClass = 'bg-amber-500/20 text-amber-200';
@@ -1227,6 +1239,11 @@ function MediaTab({
           Builds a searchable tree in MongoDB so <strong className="text-white/55">Ask AI</strong> answers from your PDFs only.
           Turn on auto-index, upload a PDF above, or click <strong className="text-white/55">Run PageIndex</strong>.
           Requires <span className="font-mono text-white/50">MONGODB_URI</span> and dev server running.
+          When indexing finishes, click <strong className="text-white/55">Refresh</strong> to see section/node counts. Full JSON:{' '}
+          <a href="/pageindex" className="text-[#d4af37]/90 underline hover:text-[#f5d060]" target="_blank" rel="noreferrer">
+            /pageindex
+          </a>{' '}
+          or Atlas → <span className="font-mono text-white/50">pageindexes.structure</span>.
         </p>
         <PageIndexBoothTracker boothId={boothId} brochureUrl={brochureUrl} priceListUrl={priceListUrl} />
         <div className="mb-3 grid gap-3 sm:grid-cols-2">

@@ -1,10 +1,14 @@
 import { REG_HALL, REG_RECEPTION_Z } from '../data/registrationHall';
 import {
+  applyBoothOverrides,
+  buildDefaultBoothLayoutList,
   mergeRegistrationLayout,
+  PROJECT_VIDEOS,
   type RegistrationImportedModel,
   type RegistrationLayoutConfig,
 } from '../data/boothLayouts';
 import { LayoutEditableGroup } from './LayoutEditableGroup';
+import { LedScreenSurface } from './LedVideoPlane';
 import { Text, useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Suspense, useMemo } from 'react';
@@ -18,12 +22,9 @@ const floorD = halfD * 2;
 /** Reception zone — compact boutique counter. */
 const BACKDROP_W = 13;
 const DESK_W = 9.5;
-const RECEPTION_PAD_W = 15;
-const RECEPTION_PAD_D = 7;
-
 // Color palette
 const FLOOR_DARK = '#1a1a1a';
-const WALL_PANEL = '#2a2a2a';
+const WALL_CREAM = '#FAF7F0';
 const BLACK_GRID = '#0a0a0a';
 const GOLD = '#d4af37';
 const LED_WHITE = '#f0f8ff';
@@ -31,7 +32,11 @@ const RECEPTION_Z = REG_RECEPTION_Z;
 const FONT =
   'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
 
-const MAT_DESK = { color: '#101014', roughness: 0.18, metalness: 0.78 } as const;
+/** Imported reception desk GLB (FBX converted). */
+const RECEPTION_DESK_GLB_URL = '/assets/3d%20model/Reception_Desk_1_fbx.glb';
+/** Visible span in meters (larger than legacy procedural desk so visitors can read the model clearly). */
+const RECEPTION_DESK_TARGET_WIDTH = DESK_W * 3.0;
+
 const MAT_GOLD = {
   color: GOLD,
   roughness: 0.15,
@@ -48,9 +53,8 @@ export function RegistrationHall() {
     <group name="registration-hall">
       <DarkPolishedFloor />
       <PremiumWalls />
+      <NorthWallVideoDisplays />
       <HexagonLEDCeiling />
-      <LEDFloorStrips />
-      <GoldAccents />
       <PremiumEventReception />
     </group>
   );
@@ -65,22 +69,12 @@ function DarkPolishedFloor() {
         <planeGeometry args={[floorW - 0.5, floorD - 0.5]} />
         <meshStandardMaterial
           color={FLOOR_DARK}
-          roughness={0.14}
-          metalness={0.52}
-          envMapIntensity={0.45}
+          roughness={0.42}
+          metalness={0.28}
+          envMapIntensity={0.12}
         />
       </mesh>
       
-      {/* Reception zone reflective pad */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, RECEPTION_Z]}>
-        <planeGeometry args={[RECEPTION_PAD_W, RECEPTION_PAD_D]} />
-        <meshStandardMaterial
-          color="#222228"
-          roughness={0.08}
-          metalness={0.72}
-          envMapIntensity={0.85}
-        />
-      </mesh>
     </group>
   );
 }
@@ -92,7 +86,7 @@ function PremiumWalls() {
       {/* North wall (front entrance side) */}
       <mesh position={[0, height / 2, cz - halfD + 0.2]} receiveShadow castShadow>
         <boxGeometry args={[floorW, height, 0.4]} />
-        <meshStandardMaterial color={WALL_PANEL} roughness={0.85} metalness={0.12} />
+        <meshStandardMaterial color={WALL_CREAM} roughness={0.92} metalness={0.04} />
       </mesh>
       <WallLEDStrips position={[0, 2, cz - halfD + 0.45]} width={floorW - 4} />
       <WallLEDStrips position={[0, height - 2, cz - halfD + 0.45]} width={floorW - 4} />
@@ -100,20 +94,20 @@ function PremiumWalls() {
       {/* South wall (back) */}
       <mesh position={[0, height / 2, cz + halfD - 0.2]} receiveShadow castShadow>
         <boxGeometry args={[floorW, height, 0.4]} />
-        <meshStandardMaterial color={WALL_PANEL} roughness={0.85} metalness={0.12} />
+        <meshStandardMaterial color={WALL_CREAM} roughness={0.92} metalness={0.04} />
       </mesh>
       <WallLEDStrips position={[0, 2, cz + halfD - 0.45]} width={floorW - 4} />
       
       {/* West wall (left) */}
       <mesh position={[-halfW + 0.2, height / 2, cz]} receiveShadow castShadow>
         <boxGeometry args={[0.4, height, floorD]} />
-        <meshStandardMaterial color={WALL_PANEL} roughness={0.85} metalness={0.12} />
+        <meshStandardMaterial color={WALL_CREAM} roughness={0.92} metalness={0.04} />
       </mesh>
       
       {/* East wall (right) */}
       <mesh position={[halfW - 0.2, height / 2, cz]} receiveShadow castShadow>
         <boxGeometry args={[0.4, height, floorD]} />
-        <meshStandardMaterial color={WALL_PANEL} roughness={0.85} metalness={0.12} />
+        <meshStandardMaterial color={WALL_CREAM} roughness={0.92} metalness={0.04} />
       </mesh>
     </group>
   );
@@ -127,9 +121,10 @@ function WallLEDStrips({ position, width }: { position: [number, number, number]
       <meshStandardMaterial
         color={LED_WHITE}
         emissive={LED_WHITE}
-        emissiveIntensity={2.2}
+        emissiveIntensity={0.65}
         roughness={0.3}
         metalness={0.8}
+        toneMapped={false}
       />
     </mesh>
   );
@@ -166,14 +161,12 @@ function HexagonLEDCeiling() {
               key={`hex-${i}-${j}`}
               position={[x, 0, z]}
               radius={hexRadius}
-              glowIntensity={2.1 + ((i * 7 + j) % 5) * 0.3}
+              glowIntensity={0.85 + ((i * 7 + j) % 5) * 0.12}
             />
           );
         })
       )}
       
-      {/* Angular LED strip lines connecting hexagons */}
-      <AngularLEDStrips />
     </group>
   );
 }
@@ -229,44 +222,11 @@ function HexagonPanel({
           color={LED_WHITE}
           emissive={LED_WHITE}
           emissiveIntensity={glowIntensity}
-          roughness={0.2}
-          metalness={0.7}
+          roughness={0.35}
+          metalness={0.4}
+          toneMapped
         />
       </mesh>
-    </group>
-  );
-}
-
-/** Angular LED strip lines for futuristic grid pattern */
-function AngularLEDStrips() {
-  const hStrips = [-halfD * 0.72, -halfD * 0.36, 0, halfD * 0.36, halfD * 0.72];
-  const vStrips = [-halfW * 0.72, -halfW * 0.36, 0, halfW * 0.36, halfW * 0.72];
-  return (
-    <group name="angular-strips">
-      {hStrips.map((z, i) => (
-        <mesh key={`h-strip-${i}`} position={[0, -0.05, z]}>
-          <boxGeometry args={[floorW - 2.5, 0.06, 0.1]} />
-          <meshStandardMaterial
-            color={LED_WHITE}
-            emissive={LED_WHITE}
-            emissiveIntensity={2.2}
-            roughness={0.25}
-            metalness={0.75}
-          />
-        </mesh>
-      ))}
-      {vStrips.map((x, i) => (
-        <mesh key={`v-strip-${i}`} position={[x, -0.05, 0]}>
-          <boxGeometry args={[0.1, 0.06, floorD - 2.5]} />
-          <meshStandardMaterial
-            color={LED_WHITE}
-            emissive={LED_WHITE}
-            emissiveIntensity={2.2}
-            roughness={0.25}
-            metalness={0.75}
-          />
-        </mesh>
-      ))}
     </group>
   );
 }
@@ -300,27 +260,9 @@ function PremiumEventReception() {
         rotation={lobbyRotation(layout, 'reg-registration-desk')}
       >
         <RegistrationCounterDesk />
-        <StaffWorkstations />
       </LayoutEditableGroup>
-      <LayoutEditableGroup
-        name="reg-event-totems"
-        position={layout.totemsOffset}
-        rotation={lobbyRotation(layout, 'reg-event-totems')}
-      >
-        <EventInfoTotems />
-      </LayoutEditableGroup>
-      <LayoutEditableGroup
-        name="reg-queue-lanes"
-        position={layout.queueOffset}
-        rotation={lobbyRotation(layout, 'reg-queue-lanes')}
-      >
-        <ReceptionQueueLanes />
-      </LayoutEditableGroup>
-      <DigitalVerticalBanners />
-      <FloorQueueGuides />
-      <ReceptionDecor />
       <ReceptionZoneLighting />
-      <LobbyLoungeArea />
+      <RegistrationImportedModels models={layout.importedModels} />
     </LayoutEditableGroup>
   );
 }
@@ -329,13 +271,13 @@ function PremiumEventReception() {
 function ReceptionZoneLighting() {
   return (
     <group name="reception-lights">
-      <pointLight position={[0, height - 1.2, 1.5]} intensity={95} distance={16} decay={2} color="#fff8ee" />
-      <pointLight position={[0, 5.5, -4]} intensity={55} distance={14} decay={2} color="#ffe8c8" />
+      <pointLight position={[0, height - 1.2, 1.5]} intensity={28} distance={16} decay={2} color="#fff8ee" />
+      <pointLight position={[0, 5.5, -4]} intensity={18} distance={14} decay={2} color="#ffe8c8" />
       <spotLight
         position={[0, height - 0.5, 3]}
-        angle={0.72}
-        penumbra={0.82}
-        intensity={140}
+        angle={0.55}
+        penumbra={0.9}
+        intensity={42}
         color="#fffaf4"
         distance={22}
         decay={2}
@@ -353,13 +295,94 @@ function stationPositions(count: number, span: number): number[] {
   return Array.from({ length: count }, (_, i) => start + i * step);
 }
 
+const REG_WALL_DISPLAY_FALLBACK = PROJECT_VIDEOS[2] || PROJECT_VIDEOS[0];
+
+function useRegistrationLobbyVideoUrl() {
+  const boothOverrides = useStore((s) => s.boothOverrides);
+  return useMemo(() => {
+    const vertex = applyBoothOverrides(buildDefaultBoothLayoutList(), boothOverrides).find(
+      (b) => b.id === 'vertex-elite',
+    );
+    return vertex?.videoUrl?.trim() || REG_WALL_DISPLAY_FALLBACK;
+  }, [boothOverrides]);
+}
+
+/** 16:9 LED panel mounted flush on a lobby wall (faces visitors at +Z). */
+function WallVideoPanel({
+  position,
+  args,
+  url,
+}: {
+  position: [number, number, number];
+  args: [number, number];
+  url: string;
+}) {
+  const [w, h] = args;
+  return (
+    <group position={position} name="wall-video-panel">
+      <mesh position={[0, 0, -0.05]} castShadow>
+        <boxGeometry args={[w + 0.18, h + 0.18, 0.1]} />
+        <meshStandardMaterial color="#0e1218" metalness={0.9} roughness={0.16} />
+      </mesh>
+      <mesh position={[0, 0, -0.028]}>
+        <boxGeometry args={[w + 0.08, h + 0.08, 0.04]} />
+        <meshStandardMaterial
+          color="#1a2030"
+          emissive={GOLD}
+          emissiveIntensity={0.55}
+          metalness={0.85}
+          roughness={0.1}
+        />
+      </mesh>
+      <Suspense
+        fallback={
+          <mesh position={[0, 0, 0.02]}>
+            <planeGeometry args={args} />
+            <meshBasicMaterial color="#0a0a10" />
+          </mesh>
+        }
+      >
+        <LedScreenSurface args={args} url={url} position={[0, 0, 0.045]} />
+      </Suspense>
+    </group>
+  );
+}
+
+/**
+ * Twin video walls on the north lobby surface — the large cream wall visitors face
+ * when walking in (between the horizontal LED strips).
+ */
+function NorthWallVideoDisplays() {
+  const videoUrl = useRegistrationLobbyVideoUrl();
+  const wallFaceZ = cz - halfD + 0.48;
+  const centerY = height * 0.46;
+  const panelW = 5.2;
+  const panelH = panelW * (9 / 16);
+  /** Match LED strip span on north wall — panels sit at left/right ends. */
+  const wallSpan = floorW - 4;
+  const edgeInset = 1.15;
+  const xLeft = -(wallSpan / 2) + panelW / 2 + edgeInset;
+  const xRight = wallSpan / 2 - panelW / 2 - edgeInset;
+  const panelArgs: [number, number] = [panelW, panelH];
+
+  return (
+    <group name="reg-north-wall-video-displays">
+      <WallVideoPanel position={[xLeft, centerY, wallFaceZ]} args={panelArgs} url={videoUrl} />
+      <WallVideoPanel position={[xRight, centerY, wallFaceZ]} args={panelArgs} url={videoUrl} />
+    </group>
+  );
+}
+
 /** Large LED + banner backdrop behind staff */
 function ExpoBackdropWall() {
   const wallZ = -7.2;
   const wallH = 5.2;
+  const wallCenterY = wallH / 2 + 0.6;
+  const faceZ = 0.21;
+
   return (
     <group position={[0, 0, wallZ]}>
-      <mesh position={[0, wallH / 2 + 0.6, 0]} castShadow receiveShadow>
+      <mesh position={[0, wallCenterY, 0]} castShadow receiveShadow>
         <boxGeometry args={[BACKDROP_W, wallH, 0.38]} />
         <meshStandardMaterial
           color="#08080c"
@@ -371,7 +394,7 @@ function ExpoBackdropWall() {
       </mesh>
 
       <Text
-        position={[0, wallH + 0.35, 0.22]}
+        position={[0, wallH + 0.35, faceZ + 0.02]}
         fontSize={0.82}
         color={LED_WHITE}
         maxWidth={BACKDROP_W * 0.72}
@@ -383,7 +406,7 @@ function ExpoBackdropWall() {
         WELCOME TO THE EXPO
       </Text>
       <Text
-        position={[0, wallH - 0.55, 0.22]}
+        position={[0, wallCenterY - 1.2, faceZ + 0.02]}
         fontSize={0.36}
         color={GOLD}
         anchorX="center"
@@ -392,14 +415,6 @@ function ExpoBackdropWall() {
       >
         LAUNCH REAL ESTATE · GLOBAL PROPERTY SHOWCASE
       </Text>
-
-      {/* Sponsor / project logo panels */}
-      {[-0.32, -0.11, 0.11, 0.32].map((frac, i) => (
-        <mesh key={`logo-${i}`} position={[frac * BACKDROP_W, wallH * 0.38, 0.2]} castShadow>
-          <boxGeometry args={[BACKDROP_W * 0.22, 1.55, 0.08]} />
-          <meshStandardMaterial color="#141418" roughness={0.35} metalness={0.65} />
-        </mesh>
-      ))}
 
       {/* Vertical branding banners */}
       {[-0.42, 0.42].map((frac, i) => (
@@ -433,18 +448,129 @@ function ExpoBackdropWall() {
 
 const STATION_COUNT = 4;
 
-/** Wide premium registration counter — visitor-facing south (+Z) */
-function RegistrationCounterDesk() {
-  const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
-  const deskW = DESK_W;
-  const deskH = 1.22;
-  const deskD = 1.85;
-  const stationXs = stationPositions(STATION_COUNT, deskW - 2.2);
+/** Match product render: dark wood frame, cream insets, chrome company name. */
+function applyReceptionDeskMaterials(root: THREE.Object3D) {
+  const cream = new THREE.Color('#f8f5ef');
+  const woodDark = new THREE.Color('#382215');
+  const chrome = new THREE.Color('#e0e4e8');
+
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+      
+      const matName = (mat.name || '').toLowerCase();
+
+      if (matName.includes('metal')) {
+        mat.color.copy(chrome);
+        mat.emissive.set('#b0b8c0');
+        mat.emissiveIntensity = 0.4;
+        mat.metalness = 1.0;
+        mat.roughness = 0.15;
+        mat.envMapIntensity = 1.0;
+      } else if (matName.includes('wood')) {
+        mat.color.copy(woodDark);
+        mat.emissive.set('#000000');
+        mat.emissiveIntensity = 0;
+        mat.metalness = 0.05;
+        mat.roughness = 0.8;
+        mat.envMapIntensity = 0.3;
+      } else if (matName.includes('plane')) {
+        mat.color.copy(cream);
+        mat.emissive.set('#000000');
+        mat.emissiveIntensity = 0;
+        mat.metalness = 0.0;
+        mat.roughness = 0.95;
+        mat.envMapIntensity = 0.1;
+      } else if (matName.includes('light')) {
+        mat.color.set('#ffffff');
+        mat.emissive.set('#ffeaaf'); // warm glow
+        mat.emissiveIntensity = 3.5;
+        mat.metalness = 0.0;
+        mat.roughness = 0.5;
+      } else if (matName.includes('glass')) {
+        mat.color.set('#111111');
+        mat.metalness = 0.8;
+        mat.roughness = 0.2;
+      }
+    }
+  });
+}
+
+function prepareReceptionDeskModel(source: THREE.Object3D) {
+  const root = source.clone(true) as THREE.Object3D;
+  root.rotation.set(0, 0, 0);
+  root.scale.set(1, 1, 1);
+  root.updateMatrixWorld(true);
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (m.isMesh) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.frustumCulled = true;
+    }
+  });
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const horiz = Math.max(size.x, size.z, 1e-6);
+  root.scale.setScalar(RECEPTION_DESK_TARGET_WIDTH / horiz);
+  root.updateMatrixWorld(true);
+  const box2 = new THREE.Box3().setFromObject(root);
+  const c = new THREE.Vector3();
+  box2.getCenter(c);
+  root.position.sub(c);
+  root.updateMatrixWorld(true);
+  const box3 = new THREE.Box3().setFromObject(root);
+  root.position.y -= box3.min.y;
+  root.updateMatrixWorld(true);
+
+  /** Hide white floor mat / base plate baked into the GLB (thin mesh at feet). */
+  const floorCutoff = 0.14;
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (!m.isMesh) return;
+    const b = new THREE.Box3().setFromObject(m);
+    const s = new THREE.Vector3();
+    b.getSize(s);
+    const name = (m.name || '').toLowerCase();
+    const namedFloor = /floor|ground|mat|plane|base|platform|carpet|rug/i.test(name);
+    const thinAtFeet =
+      s.y < 0.1 && b.max.y < floorCutoff && Math.max(s.x, s.z) > 0.4;
+    if (namedFloor || thinAtFeet) {
+      m.visible = false;
+    }
+  });
+
+  applyReceptionDeskMaterials(root);
+
+  return root;
+}
+
+/** GLB reception desk — visitor-facing +Z; click counter to check in. */
+function ReceptionDeskGlbModel({
+  onRegister,
+}: {
+  onRegister: () => void;
+}) {
+  const { scene } = useGLTF(RECEPTION_DESK_GLB_URL) as { scene: THREE.Object3D };
+  const model = useMemo(() => prepareReceptionDeskModel(scene), [scene]);
+  const deskSize = useMemo(() => {
+    const b = new THREE.Box3().setFromObject(model);
+    const s = new THREE.Vector3();
+    b.getSize(s);
+    return s;
+  }, [model]);
+  const deskDepth = deskSize.z;
+  const deskHeight = deskSize.y;
 
   const pointerProps = {
     onClick: (e: ThreeEvent<MouseEvent>) => {
       e.stopPropagation();
-      openRegistrationPopup();
+      onRegister();
     },
     onPointerOver: (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation();
@@ -456,69 +582,40 @@ function RegistrationCounterDesk() {
   };
 
   return (
-    <group>
-      {/* Main counter body */}
-      <mesh position={[0, deskH / 2, 1.2]} castShadow receiveShadow {...pointerProps}>
-        <boxGeometry args={[deskW, deskH, deskD]} />
-        <meshStandardMaterial {...MAT_DESK} envMapIntensity={1.1} />
-      </mesh>
-
-      {/* Glossy top slab */}
-      <mesh position={[0, deskH + 0.04, 1.2]} receiveShadow {...pointerProps}>
-        <boxGeometry args={[deskW + 0.1, 0.07, deskD + 0.08]} />
-        <meshStandardMaterial color="#1a1a22" roughness={0.08} metalness={0.88} />
-      </mesh>
-
-      {/* Gold LED edge — top */}
-      <mesh position={[0, deskH + 0.1, 1.2]}>
-        <boxGeometry args={[deskW + 0.15, 0.05, deskD + 0.12]} />
-        <meshStandardMaterial {...MAT_GOLD} emissiveIntensity={2.2} />
-      </mesh>
-
-      {/* Gold LED edge — front kick */}
-      <mesh position={[0, 0.12, 1.2 + deskD / 2 + 0.04]}>
-        <boxGeometry args={[deskW + 0.1, 0.06, 0.08]} />
-        <meshStandardMaterial {...MAT_GOLD} emissiveIntensity={2.5} />
-      </mesh>
-
-      <mesh position={[0, 0.06, 1.2 + deskD / 2 + 0.12]}>
-        <boxGeometry args={[deskW + 0.2, 0.04, 0.14]} />
-        <meshStandardMaterial {...MAT_GOLD} emissiveIntensity={3.2} />
-      </mesh>
-      <mesh position={[0, 0.02, 1.2 + deskD / 2 + 0.2]}>
-        <boxGeometry args={[deskW + 0.35, 0.02, 0.22]} />
-        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={1.8} transparent opacity={0.55} />
-      </mesh>
-
-      <Text
-        position={[-deskW / 2 + 2.2, 0.62, 1.2 + deskD / 2 + 0.08]}
-        fontSize={0.2}
-        color={LED_WHITE}
-        anchorX="left"
-        anchorY="middle"
-        font={FONT}
-      >
-        REGISTRATION
-      </Text>
-
-      {stationXs.map((x, i) => (
-        <group key={`station-glass-${i}`} position={[x, deskH + 0.12, 1.2 + deskD / 2 - 0.15]}>
-          <mesh>
-            <boxGeometry args={[0.05, 0.95, 0.7]} />
-            <meshStandardMaterial color="#e8eef8" transparent opacity={0.28} roughness={0.1} metalness={0.2} />
-          </mesh>
-          <Text position={[0, 0.1, 0.38]} fontSize={0.14} color={LED_WHITE} anchorX="center" anchorY="middle" font={FONT}>
-            {String(i + 1).padStart(2, '0')}
-          </Text>
-        </group>
-      ))}
-
-      {/* Visitor side low panel */}
-      <mesh position={[0, 0.55, 2.35]} castShadow>
-        <boxGeometry args={[deskW - 2, 0.08, 0.5]} />
-        <meshStandardMaterial color="#0e0e12" roughness={0.3} metalness={0.6} />
+    <group position={[0, 0, 1.15]} rotation={[0, -Math.PI / 2, 0]}>
+      <primitive object={model} />
+      {/* Warm wash under canopy — matches reference under-light */}
+      <rectAreaLight
+        position={[0, deskHeight * 0.92, deskDepth * 0.38]}
+        width={RECEPTION_DESK_TARGET_WIDTH * 0.82}
+        height={1.4}
+        intensity={2.2}
+        color="#fff8ee"
+      />
+      <pointLight
+        position={[0, deskHeight * 0.88, deskDepth * 0.42]}
+        intensity={6}
+        color="#fff6e8"
+        distance={8}
+        decay={2}
+      />
+      {/* Invisible hit volume — click counter to check in */}
+      <mesh position={[0, 0.85, deskDepth * 0.35]} visible={false} {...pointerProps}>
+        <boxGeometry args={[RECEPTION_DESK_TARGET_WIDTH, 1.75, Math.max(deskDepth, 1.4)]} />
+        <meshBasicMaterial transparent opacity={0} />
       </mesh>
     </group>
+  );
+}
+
+/** Wide premium registration counter — visitor-facing south (+Z) */
+function RegistrationCounterDesk() {
+  const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
+
+  return (
+    <Suspense fallback={null}>
+      <ReceptionDeskGlbModel onRegister={openRegistrationPopup} />
+    </Suspense>
   );
 }
 
@@ -750,343 +847,6 @@ function RegistrationImportedModels({ models }: { models: RegistrationImportedMo
   );
 }
 
-/** ──────────────────────────────────────────────────
- *  PREMIUM LOBBY LOUNGE — lights + couches + plants
- * ────────────────────────────────────────────────── */
-function LobbyLoungeArea() {
-  const regLayout = useStore((s) => s.sceneOverrides.registrationLayout);
-  const layout = useMemo(() => mergeRegistrationLayout(regLayout), [regLayout]);
-
-  return (
-    <LayoutEditableGroup
-      name="reg-lobby-lounge"
-      position={layout.loungeOffset}
-      rotation={lobbyRotation(layout, 'reg-lobby-lounge')}
-    >
-      {/* ── Ceiling downlights over the carpet (softer than reception) ── */}
-      <pointLight position={[-3.2, height - 1, 0]} intensity={28} distance={9} decay={2} color="#fff5e0" />
-      <pointLight position={[3.2, height - 1, 0]} intensity={28} distance={9} decay={2} color="#fff5e0" />
-      <pointLight position={[0, height - 1, 2]} intensity={22} distance={8} decay={2} color="#ffecc8" />
-
-      {/* Emissive downlight rings on ceiling */}
-      {[-3.2, 3.2].map((x, i) => (
-        <mesh key={`dl-ring-${i}`} position={[x, height - 0.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.28, 0.04, 12, 32]} />
-          <meshStandardMaterial color="#fffbe8" emissive="#fffbe8" emissiveIntensity={3.5} />
-        </mesh>
-      ))}
-
-      {/* ── Carpet ── */}
-      <mesh position={[0, 0.015, 0.8]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[9.5, 5.8]} />
-        <meshStandardMaterial color="#2a2830" roughness={0.95} metalness={0.02} />
-      </mesh>
-      {/* Thin gold border around rug */}
-      {[
-        [0, -2.9, 9.5, 0.06] as const,
-        [0, 2.9, 9.5, 0.06] as const,
-        [-4.75, 0, 0.06, 5.8] as const,
-        [4.75, 0, 0.06, 5.8] as const,
-      ].map(([x, z, w, d], i) => (
-        <mesh key={`rug-edge-${i}`} position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[w, d]} />
-          <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={1.2} />
-        </mesh>
-      ))}
-
-      {/* ── L-shaped sectional sofa (centre, faces registration desk) ── */}
-      <LayoutEditableGroup
-        name="reg-lobby-sectional"
-        position={layout.sectionalOffset}
-        rotation={lobbyRotation(layout, 'reg-lobby-sectional')}
-      >
-        <PremiumSectional />
-      </LayoutEditableGroup>
-
-      {/* ── Two accent chairs flanking the table ── */}
-      <LayoutEditableGroup
-        name="reg-lobby-chair-left"
-        position={layout.chairLeftOffset}
-        rotation={lobbyRotation(layout, 'reg-lobby-chair-left')}
-      >
-        <PremiumChair />
-      </LayoutEditableGroup>
-      <LayoutEditableGroup
-        name="reg-lobby-chair-right"
-        position={layout.chairRightOffset}
-        rotation={lobbyRotation(layout, 'reg-lobby-chair-right')}
-      >
-        <PremiumChair />
-      </LayoutEditableGroup>
-
-      {/* ── Oval coffee table ── */}
-      <LayoutEditableGroup
-        name="reg-lobby-coffee-table"
-        position={layout.coffeeTableOffset}
-        rotation={lobbyRotation(layout, 'reg-lobby-coffee-table')}
-      >
-        <CoffeeTable />
-      </LayoutEditableGroup>
-
-      {/* ── Floor lamps ── */}
-      <LayoutEditableGroup
-        name="reg-lobby-lamp-left"
-        position={layout.lampLeftOffset}
-        rotation={lobbyRotation(layout, 'reg-lobby-lamp-left')}
-      >
-        <FloorLamp />
-      </LayoutEditableGroup>
-      <LayoutEditableGroup
-        name="reg-lobby-lamp-right"
-        position={layout.lampRightOffset}
-        rotation={lobbyRotation(layout, 'reg-lobby-lamp-right')}
-      >
-        <FloorLamp />
-      </LayoutEditableGroup>
-
-      {/* ── Plants ── */}
-      {layout.loungePlantOffsets.map((pos, i) => {
-        const plantName = `reg-lobby-plant-${i}`;
-        return (
-          <LayoutEditableGroup
-            key={plantName}
-            name={plantName}
-            position={pos}
-            rotation={lobbyRotation(layout, plantName)}
-          >
-            <TallPlant />
-          </LayoutEditableGroup>
-        );
-      })}
-
-      <RegistrationImportedModels models={layout.importedModels} />
-    </LayoutEditableGroup>
-  );
-}
-
-/** 3-seat sofa with layered cushions + arms */
-function PremiumSectional() {
-  const fabric = { color: '#b8b2a8', roughness: 0.82, metalness: 0.04 } as const;
-  const dark = { color: '#1a1a20', roughness: 0.28, metalness: 0.68 } as const;
-  return (
-    <group>
-      {/* Legs */}
-      {[-3.1, -1.05, 1.05, 3.1].map((x, i) =>
-        [-0.36, 0.36].map((z, j) => (
-          <mesh key={`leg-${i}-${j}`} position={[x, 0.1, z]} castShadow>
-            <cylinderGeometry args={[0.05, 0.05, 0.2, 8]} />
-            <meshStandardMaterial {...dark} />
-          </mesh>
-        ))
-      )}
-      {/* Base */}
-      <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
-        <boxGeometry args={[7.2, 0.36, 1.05]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      {/* Seat cushions */}
-      {[-2.2, -0.75, 0.75, 2.2].map((x, i) => (
-        <mesh key={`cush-${i}`} position={[x, 0.55, 0.08]} castShadow>
-          <boxGeometry args={[1.65, 0.22, 0.88]} />
-          <meshStandardMaterial color="#c4beb4" roughness={0.8} metalness={0.03} />
-        </mesh>
-      ))}
-      {/* Back rest */}
-      <mesh position={[0, 0.9, -0.42]} castShadow>
-        <boxGeometry args={[7.2, 0.8, 0.28]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      {/* Back cushions */}
-      {[-2.2, -0.75, 0.75, 2.2].map((x, i) => (
-        <mesh key={`back-cush-${i}`} position={[x, 0.88, -0.28]} castShadow>
-          <boxGeometry args={[1.6, 0.72, 0.22]} />
-          <meshStandardMaterial color="#c0bab0" roughness={0.82} />
-        </mesh>
-      ))}
-      {/* Arm rests */}
-      <mesh position={[-3.5, 0.65, 0]} castShadow>
-        <boxGeometry args={[0.42, 0.52, 1.05]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      <mesh position={[3.5, 0.65, 0]} castShadow>
-        <boxGeometry args={[0.42, 0.52, 1.05]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      {/* Dark gold arm caps */}
-      <mesh position={[-3.5, 0.92, 0]}>
-        <boxGeometry args={[0.44, 0.06, 1.08]} />
-        <meshStandardMaterial {...dark} envMapIntensity={1.2} />
-      </mesh>
-      <mesh position={[3.5, 0.92, 0]}>
-        <boxGeometry args={[0.44, 0.06, 1.08]} />
-        <meshStandardMaterial {...dark} envMapIntensity={1.2} />
-      </mesh>
-      {/* Accent pillows */}
-      {[-1.5, 1.5].map((x, i) => (
-        <mesh key={`pillow-${i}`} position={[x, 0.88, -0.1]} castShadow>
-          <boxGeometry args={[0.42, 0.42, 0.14]} />
-          <meshStandardMaterial color={GOLD} roughness={0.7} metalness={0.15} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-/** Barrel accent chair */
-function PremiumChair() {
-  const fabric = { color: '#b0aaa0', roughness: 0.82, metalness: 0.04 } as const;
-  const dark = { color: '#181820', roughness: 0.3, metalness: 0.65 } as const;
-  return (
-    <group>
-      {/* Legs */}
-      {[-0.36, 0.36].map((x, i) =>
-        [-0.28, 0.28].map((z, j) => (
-          <mesh key={`cl-${i}-${j}`} position={[x, 0.12, z]} castShadow>
-            <cylinderGeometry args={[0.04, 0.04, 0.24, 8]} />
-            <meshStandardMaterial {...dark} />
-          </mesh>
-        ))
-      )}
-      {/* Seat */}
-      <mesh position={[0, 0.32, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.88, 0.22, 0.82]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      {/* Seat cushion */}
-      <mesh position={[0, 0.48, 0.04]} castShadow>
-        <boxGeometry args={[0.82, 0.18, 0.72]} />
-        <meshStandardMaterial color="#bcb6ac" roughness={0.8} />
-      </mesh>
-      {/* Back */}
-      <mesh position={[0, 0.82, -0.3]} castShadow>
-        <boxGeometry args={[0.9, 0.7, 0.22]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      {/* Arms */}
-      <mesh position={[-0.46, 0.6, -0.05]} castShadow>
-        <boxGeometry args={[0.1, 0.32, 0.78]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      <mesh position={[0.46, 0.6, -0.05]} castShadow>
-        <boxGeometry args={[0.1, 0.32, 0.78]} />
-        <meshStandardMaterial {...fabric} />
-      </mesh>
-      {/* Gold leg caps */}
-      {[-0.36, 0.36].map((x, i) =>
-        [-0.28, 0.28].map((z, j) => (
-          <mesh key={`cap-${i}-${j}`} position={[x, 0.02, z]}>
-            <cylinderGeometry args={[0.045, 0.045, 0.04, 8]} />
-            <meshStandardMaterial color={GOLD} roughness={0.2} metalness={0.92} />
-          </mesh>
-        ))
-      )}
-    </group>
-  );
-}
-
-/** Oval marble-top coffee table with gold base */
-function CoffeeTable() {
-  return (
-    <group>
-      {/* Oval top */}
-      <mesh position={[0, 0.52, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[1.25, 1.1, 0.08, 32]} />
-        <meshStandardMaterial color="#2a2428" roughness={0.18} metalness={0.55} />
-      </mesh>
-      {/* Gold rim */}
-      <mesh position={[0, 0.56, 0]}>
-        <torusGeometry args={[1.18, 0.03, 12, 40]} />
-        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={1.4} roughness={0.18} metalness={0.92} />
-      </mesh>
-      {/* Pedestal */}
-      <mesh position={[0, 0.26, 0]} castShadow>
-        <cylinderGeometry args={[0.18, 0.28, 0.52, 16]} />
-        <meshStandardMaterial color={GOLD} roughness={0.22} metalness={0.88} />
-      </mesh>
-      {/* Disc base */}
-      <mesh position={[0, 0.04, 0]} receiveShadow>
-        <cylinderGeometry args={[0.55, 0.55, 0.08, 24]} />
-        <meshStandardMaterial color="#1a1820" roughness={0.3} metalness={0.7} />
-      </mesh>
-      {/* Decorative flower vase */}
-      <mesh position={[0, 0.72, 0]} castShadow>
-        <cylinderGeometry args={[0.08, 0.12, 0.32, 16]} />
-        <meshStandardMaterial color="#d4c8b8" roughness={0.5} metalness={0.25} />
-      </mesh>
-      <mesh position={[0, 0.94, 0]} castShadow>
-        <sphereGeometry args={[0.14, 10, 10]} />
-        <meshStandardMaterial color="#f5e8d0" roughness={0.9} metalness={0.0} />
-      </mesh>
-    </group>
-  );
-}
-
-/** Tall arc floor lamp with gold stand */
-function FloorLamp() {
-  return (
-    <group>
-      <mesh position={[0, 0.06, 0]} receiveShadow>
-        <cylinderGeometry args={[0.22, 0.22, 0.12, 16]} />
-        <meshStandardMaterial color="#111116" roughness={0.3} metalness={0.75} />
-      </mesh>
-      <mesh position={[0, 1.55, 0]} castShadow>
-        <cylinderGeometry args={[0.025, 0.025, 3.0, 10]} />
-        <meshStandardMaterial color={GOLD} roughness={0.2} metalness={0.9} />
-      </mesh>
-      {/* Shade */}
-      <mesh position={[0, 3.1, 0]} castShadow>
-        <cylinderGeometry args={[0.28, 0.18, 0.42, 16, 1, true]} />
-        <meshStandardMaterial color="#f5ead8" roughness={0.85} side={2} />
-      </mesh>
-      {/* Emissive glow inside shade */}
-      <mesh position={[0, 3.05, 0]}>
-        <cylinderGeometry args={[0.16, 0.12, 0.06, 16]} />
-        <meshStandardMaterial color="#fffbe8" emissive="#fffbe8" emissiveIntensity={4.5} />
-      </mesh>
-    </group>
-  );
-}
-
-/** Tall decorative plant in black pot with gold ring */
-function TallPlant() {
-  return (
-    <group>
-      {/* Pot */}
-      <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.38, 0.3, 0.9, 14]} />
-        <meshStandardMaterial color="#0e0e12" roughness={0.35} metalness={0.55} />
-      </mesh>
-      {/* Gold rim */}
-      <mesh position={[0, 0.92, 0]}>
-        <torusGeometry args={[0.4, 0.025, 12, 24]} />
-        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={1.1} roughness={0.2} metalness={0.9} />
-      </mesh>
-      {/* Soil disc */}
-      <mesh position={[0, 0.9, 0]}>
-        <cylinderGeometry args={[0.36, 0.36, 0.04, 14]} />
-        <meshStandardMaterial color="#2a2018" roughness={0.95} />
-      </mesh>
-      {/* Main stem */}
-      <mesh position={[0, 1.8, 0]} castShadow>
-        <cylinderGeometry args={[0.04, 0.06, 1.8, 8]} />
-        <meshStandardMaterial color="#2d4a20" roughness={0.85} />
-      </mesh>
-      {/* Large leaf fans at different heights */}
-      {[
-        [0, 1.5, 0, 0] as const,
-        [0, 2.0, 0, Math.PI / 3] as const,
-        [0, 2.5, 0, -Math.PI / 4] as const,
-        [0, 3.0, 0, Math.PI / 5] as const,
-      ].map(([x, y, z, rotY], i) => (
-        <mesh key={`leaf-${i}`} position={[x, y, z]} rotation={[Math.PI / 5 - i * 0.08, rotY, 0]} castShadow>
-          <planeGeometry args={[0.6 + i * 0.1, 1.0 + i * 0.12]} />
-          <meshStandardMaterial color="#1a4a22" roughness={0.85} side={2} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
 /** Gold floor lines guiding queue toward desk */
 function FloorQueueGuides() {
   const lines: Array<{ pos: [number, number, number]; rot: number; len: number }> = [
@@ -1176,18 +936,6 @@ function ReceptionDecor() {
     <group name="reception-decor">
       <PlantPot position={[-plantX, 0, 5.5]} />
       <PlantPot position={[plantX, 0, 5.5]} />
-      <mesh position={[0, 0.02, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[DESK_W + 1, 4.2]} />
-        <meshStandardMaterial
-          color={GOLD}
-          emissive={GOLD}
-          emissiveIntensity={0.25}
-          transparent
-          opacity={0.35}
-          roughness={0.2}
-          metalness={0.9}
-        />
-      </mesh>
     </group>
   );
 }
@@ -1288,3 +1036,5 @@ function GoldAccents() {
     </group>
   );
 }
+
+useGLTF.preload(RECEPTION_DESK_GLB_URL);

@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
-import { markVisitorLobbyCheckIn, saveVisitorRegistration } from './src/server/mongodb';
+import { computeCatalogStats } from './src/data/expoStats';
+import { getVisitorRegistrationStats, markVisitorLobbyCheckIn, saveVisitorRegistration } from './src/server/mongodb';
+import type { ExpoLiveStats } from './src/data/expoStats';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -94,6 +96,40 @@ export function visitorsApiPlugin(rootDir: string): Plugin {
               console.error('Visitor register failed:', msg);
               sendJson(res, 500, { ok: false, error: msg });
             }
+          })();
+          return;
+        }
+
+        if (url === '/api/expo/stats' && req.method === 'GET') {
+          void (async () => {
+            const catalog = computeCatalogStats({});
+            const statsAsOf = new Date().toISOString();
+            let mongoConnected = false;
+            let visitorsTotal: number | null = null;
+            let visitorsRegisteredToday: number | null = null;
+            let visitorsCheckedInToday: number | null = null;
+
+            if (process.env.MONGODB_URI?.trim()) {
+              try {
+                const v = await getVisitorRegistrationStats();
+                mongoConnected = true;
+                visitorsTotal = v.visitorsTotal;
+                visitorsRegisteredToday = v.visitorsRegisteredToday;
+                visitorsCheckedInToday = v.visitorsCheckedInToday;
+              } catch (e) {
+                console.warn('Expo stats: MongoDB visitor counts failed:', e);
+              }
+            }
+
+            const stats: ExpoLiveStats = {
+              ...catalog,
+              visitorsTotal,
+              visitorsRegisteredToday,
+              visitorsCheckedInToday,
+              statsAsOf,
+              mongoConnected,
+            };
+            sendJson(res as ServerResponse, 200, { ok: true, stats });
           })();
           return;
         }

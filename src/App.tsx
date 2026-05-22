@@ -11,6 +11,7 @@ import { useStore } from './store';
 import { CmsDashboard } from './cms/CmsDashboard';
 import { CtaResourcePopupView } from './components/CtaResourcePopup';
 import { AiChatbox } from './components/AiChatbox';
+import { HelpDeskAiPanel } from './components/HelpDeskAiPanel';
 import { VertexEliteScreenHud } from './components/VertexEliteScreenHud';
 import { PageIndexPortal } from './PageIndexPortal';
 import { Suspense, useState, useEffect, useMemo } from 'react';
@@ -70,6 +71,7 @@ export default function App() {
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
   const setAiChatOpen = useStore((s) => s.setAiChatOpen);
+  const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
   const showInstructions = useStore((s) => s.showInstructions);
   const setShowInstructions = useStore((s) => s.setShowInstructions);
   const cmsPage = useStore((s) => s.cmsPage);
@@ -93,7 +95,7 @@ export default function App() {
   const needsOnboarding = !visitorProfile;
 
   const inRegistration = expoPhase === 'registration';
-  const sceneBg = inRegistration ? '#0f0f12' : sceneConfig.bgColor || '#fdfbf2';
+  const sceneBg = inRegistration ? '#FAF7F0' : sceneConfig.bgColor || '#fdfbf2';
   const fogEnabled = sceneConfig.fogEnabled === true;
 
   const glConfig = useMemo(
@@ -188,18 +190,9 @@ export default function App() {
 
       {visitorProfile && <VisitorBadge />}
 
-      {inRegistration && registrationUi === 'none' && !showInstructions && !hallLayoutEditMode && !needsOnboarding && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[45] pointer-events-none text-center px-4">
-          <p className="text-[10px] md:text-xs uppercase tracking-[0.35em] text-[#d4af37] mb-1">Event registration</p>
-          <p className="text-sm md:text-base font-semibold text-[#e8e4dc] tracking-wide">
-            Join the queue · Click the counter to check in
-          </p>
-        </div>
-      )}
-
       <RegistrationLobbyHud />
 
-      <FastTravelHud />
+      {!inRegistration && <FastTravelHud />}
 
       <CameraModeHud />
 
@@ -226,14 +219,14 @@ export default function App() {
         </div>
       )}
 
-      {!needsOnboarding && (
+      {!needsOnboarding && !inRegistration && (
       <>
       {/* Move hall props / booths in-world; saves to localStorage (scene + booth overrides). */}
       <button
         type="button"
         className="fixed bottom-3 left-36 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
         onClick={() => {
-          setHallLayoutSelection(inRegistration ? 'reg-reception-root' : 'hall-entrance-lobby');
+          setHallLayoutSelection('hall-entrance-lobby');
           setHallLayoutEditMode(true);
         }}
       >
@@ -258,6 +251,15 @@ export default function App() {
         Open CMS
       </button>
 
+      {/* Help Desk AI */}
+      <button
+        type="button"
+        className="fixed bottom-3 right-[17.5rem] z-[55] rounded-lg border border-[#d4af37]/35 bg-[#0f1a3d]/90 backdrop-blur-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5e6c8] shadow-xl pointer-events-auto hover:bg-[#1a2d52] transition-all"
+        onClick={() => setHelpDeskOpen(true)}
+      >
+        Help Desk
+      </button>
+
       {/* Ask AI button */}
       <button
         type="button"
@@ -270,6 +272,9 @@ export default function App() {
 
       {/* AI Chatbox */}
       <AiChatbox />
+
+      {/* Smart Help Desk concierge */}
+      <HelpDeskAiPanel />
       </>
       )}
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { buildCtaOpenPayload, resolveBoothCta } from '../api/boothCta';
+import { isEditableKeyboardTarget } from '../utils/keyboard';
 import { useStore, type VertexEliteHudContext } from '../store';
 
 function unlockPointer() {
@@ -159,6 +160,9 @@ export function VertexEliteScreenHud() {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Space' && e.key !== ' ') return;
       if (alpha < 0.12 || !ctx) return;
+      const { aiChatOpen, ctaResourcePopup, helpDeskOpen } = useStore.getState();
+      if (aiChatOpen || ctaResourcePopup || helpDeskOpen) return;
+      if (isEditableKeyboardTarget(e.target)) return;
       e.preventDefault();
       unlockPointer();
     };

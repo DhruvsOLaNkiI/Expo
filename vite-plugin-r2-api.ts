@@ -3,6 +3,11 @@ import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
 import multer from 'multer';
 import { normalizeR2PublicUrl } from './src/api/r2Urls';
+import {
+  formatMulterUploadError,
+  maxUploadBytesFromEnv,
+  maxUploadMbFromEnv,
+} from './src/constants/uploadLimits';
 import { buildObjectKey, isR2Configured, normalizeR2ObjectKey, uploadBufferToR2 } from './src/server/r2';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -23,9 +28,11 @@ export function r2ApiPlugin(rootDir: string): Plugin {
       if (env.R2_BUCKET) process.env.R2_BUCKET = env.R2_BUCKET;
       if (env.R2_PUBLIC_BASE_URL) process.env.R2_PUBLIC_BASE_URL = env.R2_PUBLIC_BASE_URL;
 
+      const maxUploadBytes = maxUploadBytesFromEnv(env);
+      const maxUploadMb = maxUploadMbFromEnv(env);
       const upload = multer({
         storage: multer.memoryStorage(),
-        limits: { fileSize: 52 * 1024 * 1024 },
+        limits: { fileSize: maxUploadBytes },
       });
 
       server.middlewares.use((req, res, next) => {
@@ -39,7 +46,10 @@ export function r2ApiPlugin(rootDir: string): Plugin {
           ]);
           fieldsUpload(req as never, res as never, async (err: unknown) => {
             if (err) {
-              sendJson(res as ServerResponse, 400, { ok: false, error: String(err) });
+              sendJson(res as ServerResponse, 400, {
+                ok: false,
+                error: formatMulterUploadError(err, maxUploadMb),
+              });
               return;
             }
             if (!isR2Configured()) {

@@ -22,17 +22,6 @@ const REGISTRATION_OPTIONS: { id: string; label: string }[] = [
   { id: 'reg-expo-backdrop', label: 'LED backdrop wall' },
   { id: 'reg-queue-lanes', label: 'Queue lanes' },
   { id: 'reg-event-totems', label: 'Info totems & signage' },
-  { id: 'reg-lobby-lounge', label: 'Lounge zone (carpet)' },
-  { id: 'reg-lobby-sectional', label: 'Main sofa' },
-  { id: 'reg-lobby-chair-left', label: 'Lounge chair (left)' },
-  { id: 'reg-lobby-chair-right', label: 'Lounge chair (right)' },
-  { id: 'reg-lobby-coffee-table', label: 'Coffee table' },
-  { id: 'reg-lobby-lamp-left', label: 'Floor lamp (left)' },
-  { id: 'reg-lobby-lamp-right', label: 'Floor lamp (right)' },
-  { id: 'reg-lobby-plant-0', label: 'Plant 1' },
-  { id: 'reg-lobby-plant-1', label: 'Plant 2' },
-  { id: 'reg-lobby-plant-2', label: 'Plant 3' },
-  { id: 'reg-lobby-plant-3', label: 'Plant 4' },
 ];
 
 /** Overlay to move hall props / booths with TransformControls; saves to browser (scene + booth overrides). */

@@ -15,7 +15,7 @@ import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
 import { applyBoothOverrides, buildDefaultBoothLayoutList, DEFAULT_SCENE_CONFIG, siteMapUrlsFromConfig, mergeHallLayout, type PlacedImage, type HostessQuickReply, type MediaItem, type CompanyProfile } from '../data/boothLayouts';
 import {
   buildExpoTeleportDestinations,
-  buildHelpDeskTeleportReplies,
+  buildHelpDeskHostessReplies,
   REGISTRATION_LOBBY_DESTINATION,
 } from '../data/expoTeleportDestinations';
 import { MonarchBooth } from './MonarchBooth';
@@ -119,8 +119,10 @@ function HostessGreetingBubble({
   const groupRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const activeBooth = useStore((s) => s.activeBooth);
+  const helpDeskOpen = useStore((s) => s.helpDeskOpen);
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
-  const setAiChatOpen = useStore((s) => s.setAiChatOpen);
+  const openAiChat = useStore((s) => s.openAiChat);
+  const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
   const teleportPlayer = useStore((s) => s.teleportPlayer);
   const enterRegistrationLobby = useStore((s) => s.enterRegistrationLobby);
   const boothOverrides = useStore((s) => s.boothOverrides);
@@ -138,14 +140,18 @@ function HostessGreetingBubble({
       quickReplies.filter(
         (r) =>
           r.label.trim() &&
-          (r.response.trim() || r.action === 'askAi' || (r.action === 'teleport' && r.teleportId)),
+          (r.response.trim() ||
+            r.action === 'askAi' ||
+            r.action === 'helpDesk' ||
+            (r.action === 'teleport' && r.teleportId)),
       ),
     [quickReplies],
   );
   const hasTeleportOptions = shownOptions.some((r) => r.action === 'teleport');
+  const hasHelpDeskOption = shownOptions.some((r) => r.action === 'helpDesk');
 
   useFrame(() => {
-    if (activeBooth || ctaResourcePopup) {
+    if (activeBooth || helpDeskOpen || ctaResourcePopup) {
       wasNearRef.current = false;
       if (showRef.current) {
         showRef.current = false;
@@ -213,7 +219,11 @@ function HostessGreetingBubble({
               alignSelf: 'center',
             }}
           >
-            {hasTeleportOptions ? 'Where would you like to go?' : 'How can I help you?'}
+            {hasHelpDeskOption
+              ? 'How can I help you?'
+              : hasTeleportOptions
+                ? 'Where would you like to go?'
+                : 'How can I help you?'}
           </div>
 
           {shownOptions.length > 0 && (
@@ -235,7 +245,12 @@ function HostessGreetingBubble({
                   onClick={(e) => {
                     e.stopPropagation();
                     if (opt.action === 'askAi') {
-                      setAiChatOpen(true);
+                      openAiChat(hasHelpDeskOption ? 'expo-concierge' : undefined);
+                      setActiveReplyId(null);
+                      return;
+                    }
+                    if (opt.action === 'helpDesk') {
+                      setHelpDeskOpen(true);
                       setActiveReplyId(null);
                       return;
                     }
@@ -1404,6 +1419,9 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
             </Text>
           </group>
 
+          {/* Smart Help Desk AI kiosk + hologram ring */}
+          <HelpDeskAiKiosk />
+
           {/* Concierge hostess — desk-local coords, faces visitors at the CONCIERGE panel */}
           <Suspense fallback={null}>
             <HelpDeskCustomGirl />
@@ -1755,9 +1773,84 @@ const CONCIERGE_HOSTESS_POS: [number, number, number] = [
 const CONCIERGE_HOSTESS_ROT: [number, number, number] = [0, CONCIERGE_PANEL_YAW, 0];
 const CONCIERGE_HOSTESS_BUBBLE_Y = 1.82;
 
+function HelpDeskAiKiosk() {
+  const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
+  const ringRef = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    if (ringRef.current) {
+      ringRef.current.rotation.z = state.clock.elapsedTime * 0.35;
+    }
+  });
+
+  return (
+    <group position={[0, 1.15, 0]}>
+      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.35, 0.04, 16, 64]} />
+        <meshStandardMaterial
+          color="#d4af37"
+          emissive="#d4af37"
+          emissiveIntensity={1.2}
+          metalness={0.9}
+          roughness={0.15}
+        />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.55, 0.02, 12, 48]} />
+        <meshStandardMaterial color="#0f1a3d" emissive="#1a2d52" emissiveIntensity={0.4} />
+      </mesh>
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <boxGeometry args={[0.9, 1.1, 0.12]} />
+        <meshStandardMaterial color="#0a0a12" metalness={0.85} roughness={0.12} />
+      </mesh>
+      <mesh position={[0, 0.55, 0.07]}>
+        <planeGeometry args={[0.75, 0.85]} />
+        <meshStandardMaterial
+          color="#1a2d52"
+          emissive="#d4af37"
+          emissiveIntensity={0.25}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+      <Html
+        position={[0, 1.35, 0]}
+        center
+        distanceFactor={6}
+        zIndexRange={[16777272, 16777272]}
+        style={{ pointerEvents: 'auto' }}
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setHelpDeskOpen(true);
+          }}
+          style={{
+            padding: '10px 18px',
+            borderRadius: 12,
+            border: '1.5px solid rgba(212,175,55,0.7)',
+            background: 'linear-gradient(135deg, rgba(15,26,61,0.95) 0%, rgba(26,45,82,0.92) 100%)',
+            color: '#f5e6c8',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          ✦ Open AI Concierge
+        </button>
+      </Html>
+      <pointLight position={[0, 1.2, 0]} intensity={18} color="#ffe8c8" distance={6} decay={2} />
+    </group>
+  );
+}
+
 function HelpDeskCustomGirl() {
-  const boothOverrides = useStore((s) => s.boothOverrides);
-  const teleportReplies = useMemo(() => buildHelpDeskTeleportReplies(boothOverrides), [boothOverrides]);
+  const hostessReplies = useMemo(() => buildHelpDeskHostessReplies(), []);
   const [px, , pz] = CONCIERGE_HOSTESS_POS;
   const bubblePos: [number, number, number] = [px, CONCIERGE_HOSTESS_BUBBLE_Y, pz];
 
@@ -1781,7 +1874,7 @@ function HelpDeskCustomGirl() {
         idlePhase={stringToPhase('concierge-desk')}
         navyOutfit
       />
-      <HostessGreetingBubble localPosition={bubblePos} quickReplies={teleportReplies} />
+      <HostessGreetingBubble localPosition={bubblePos} quickReplies={hostessReplies} />
     </group>
   );
 }

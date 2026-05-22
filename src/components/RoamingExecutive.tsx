@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useLayoutEffect, useEffect } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { BOOTH_ROW_X_EAST, BOOTH_ROW_X_WEST } from '../data/boothLayouts';
 
 const ROAMING_NPC_MODEL_URL = '/assets/scanned_animated_walking_man.glb';
 const EXECUTIVE_MAX_HEIGHT = 1.82;
@@ -49,12 +50,12 @@ function buildBoothVisitPoints(): THREE.Vector3[] {
     position: [number, number, number];
     rotation: [number, number, number];
   }[] = [
-    { position: [-20, 0, -15], rotation: [0, Math.PI / 2 - 0.16, 0] },
-    { position: [-20, 0, 5], rotation: [0, Math.PI / 2, 0] },
-    { position: [-21.5, 0, 19], rotation: [0, Math.PI / 2 + 0.06, 0] },
-    { position: [20, 0, -15], rotation: [0, -Math.PI / 2 + 0.16, 0] },
-    { position: [20, 0, 5], rotation: [0, -Math.PI / 2, 0] },
-    { position: [20, 0, 25], rotation: [0, -Math.PI / 2 - 0.16, 0] },
+    { position: [BOOTH_ROW_X_WEST, 0, -15], rotation: [0, Math.PI / 2 - 0.16, 0] },
+    { position: [BOOTH_ROW_X_WEST, 0, 5], rotation: [0, Math.PI / 2, 0] },
+    { position: [BOOTH_ROW_X_WEST, 0, 19], rotation: [0, Math.PI / 2 + 0.06, 0] },
+    { position: [BOOTH_ROW_X_EAST, 0, -15], rotation: [0, -Math.PI / 2 + 0.16, 0] },
+    { position: [BOOTH_ROW_X_EAST, 0, 5], rotation: [0, -Math.PI / 2, 0] },
+    { position: [BOOTH_ROW_X_EAST, 0, 25], rotation: [0, -Math.PI / 2 - 0.16, 0] },
   ];
   const out: THREE.Vector3[] = [];
   for (const b of rows) {

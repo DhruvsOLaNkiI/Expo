@@ -1,6 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
-import { useStore } from '../store';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { fetchExpoLiveStats } from '../api/expoStats';
 import { DEFAULT_SCENE_CONFIG } from '../data/boothLayouts';
+import {
+  buildExpoStatsFactsBlock,
+  computeCatalogStats,
+  tryAnswerExpoStatsQuestion,
+  type ExpoLiveStats,
+} from '../data/expoStats';
+import { useStore } from '../store';
 
 type Message = {
   id: string;
@@ -19,7 +26,9 @@ function formatBoothName(boothId: string): string {
 export function AiChatbox() {
   const aiChatOpen = useStore((s) => s.aiChatOpen);
   const setAiChatOpen = useStore((s) => s.setAiChatOpen);
+  const aiChatContext = useStore((s) => s.aiChatContext);
   const activeBooth = useStore((s) => s.activeBooth);
+  const boothOverrides = useStore((s) => s.boothOverrides);
   const vertexEliteHudAlpha = useStore((s) => s.vertexEliteHudAlpha);
   const vertexEliteHudContext = useStore((s) => s.vertexEliteHudContext);
   const sceneOverrides = useStore((s) => s.sceneOverrides);
@@ -42,7 +51,22 @@ export function AiChatbox() {
   const [documentType, setDocumentType] = useState<'brochure' | 'priceList' | 'siteLayout' | 'unitLayout'>('brochure');
   /** Booth PDF tree vs general OpenRouter chat (no indexing required). */
   const [usePageIndex, setUsePageIndex] = useState(false);
+  const [expoStats, setExpoStats] = useState<ExpoLiveStats | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const isExpoConcierge = aiChatContext === 'expo-concierge' && !chatBoothId;
+
+  const loadExpoStats = useCallback(async () => {
+    const stats = await fetchExpoLiveStats();
+    if (stats) setExpoStats(stats);
+    return stats;
+  }, []);
+
+  useEffect(() => {
+    if (!aiChatOpen || !isExpoConcierge) return;
+    void loadExpoStats();
+    setUsePageIndex(false);
+  }, [aiChatOpen, isExpoConcierge, loadExpoStats]);
 
   const aiModelLabel =
     (import.meta.env.VITE_OPENROUTER_MODEL || import.meta.env.OPENROUTER_MODEL || 'openrouter/free').trim();
@@ -70,6 +94,27 @@ export function AiChatbox() {
     setLoading(true);
 
     try {
+      if (isExpoConcierge) {
+        const stats = expoStats ?? (await loadExpoStats());
+        if (stats) {
+          const quick = tryAnswerExpoStatsQuestion(userMessage.content, stats);
+          if (quick) {
+            setDebugInfo('📊 Answered from live expo stats');
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: quick.replace(/\*\*/g, ''),
+                timestamp: Date.now(),
+              },
+            ]);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       // If PageIndex is enabled and we have an active booth, use booth-specific tree
       if (usePageIndex && chatBoothId) {
         setDebugInfo(`📚 Loading ${documentType} tree for ${chatBoothId}...`);
@@ -143,6 +188,19 @@ export function AiChatbox() {
         ? `The visitor is at the "${formatBoothName(chatBoothId)}" booth. You may use general real-estate knowledge; do not claim specific prices or specs unless you are certain.`
         : '';
 
+      const expoFactsBlock = isExpoConcierge
+        ? buildExpoStatsFactsBlock(
+            expoStats ?? {
+              ...computeCatalogStats(boothOverrides),
+              visitorsTotal: null,
+              visitorsRegisteredToday: null,
+              visitorsCheckedInToday: null,
+              statsAsOf: new Date().toISOString(),
+              mongoConnected: false,
+            },
+          )
+        : '';
+
       const systemPrompt = deckContext
         ? [
             'You are the on-site AI assistant for ONE showcase deck at a luxury residential expo.',
@@ -162,14 +220,27 @@ export function AiChatbox() {
           ]
             .filter(Boolean)
             .join('\n')
-        : [
-            'You are a helpful real estate assistant at a luxury residential property expo.',
-            boothLine,
-            'Answer clearly and helpfully. For exact pricing or legal details, suggest booth staff or official brochures.',
-            baseBrevity,
-          ]
-            .filter(Boolean)
-            .join(' ');
+        : isExpoConcierge
+          ? [
+              'You are the Smart Help Desk AI concierge for the Virtual Property Expo (Noida).',
+              'Use ONLY the live statistics below for how many developers, projects, and visitor registrations exist.',
+              'Do not invent counts. Developers = exhibitor brands/booths, not software engineers.',
+              '---',
+              expoFactsBlock,
+              '---',
+              'For brochures, pricing, and floor plans, direct the visitor to a specific developer booth or the Smart Help Desk panel.',
+              baseBrevity,
+            ]
+              .filter(Boolean)
+              .join('\n')
+          : [
+              'You are a helpful real estate assistant at a luxury residential property expo.',
+              boothLine,
+              'Answer clearly and helpfully. For exact pricing or legal details, suggest booth staff or official brochures.',
+              baseBrevity,
+            ]
+              .filter(Boolean)
+              .join(' ');
 
       const chatMessages = [
         ...messages.map((m) => ({
@@ -248,7 +319,11 @@ export function AiChatbox() {
           </div>
           <div>
             <h3 className="font-bold text-white text-sm">
-              {chatBoothId ? `AI · ${formatBoothName(chatBoothId)}` : 'Ask AI Assistant'}
+              {chatBoothId
+                ? `AI · ${formatBoothName(chatBoothId)}`
+                : isExpoConcierge
+                  ? 'AI · Expo Help Desk'
+                  : 'Ask AI Assistant'}
             </h3>
             <p className="text-[10px] text-white/40">
               {usePageIndex ? (

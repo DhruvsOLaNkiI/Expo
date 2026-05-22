@@ -1,5 +1,11 @@
 import { useMemo, type ComponentType } from 'react';
-import { siteMapUrlsFromConfig, type BoothLayoutConfig, type HostessQuickReply } from '../data/boothLayouts';
+import {
+  BOOTH_ROW_X_EAST,
+  BOOTH_ROW_X_WEST,
+  siteMapUrlsFromConfig,
+  type BoothLayoutConfig,
+  type HostessQuickReply,
+} from '../data/boothLayouts';
 
 const EMPTY_REPLIES: HostessQuickReply[] = [];
 
@@ -34,28 +40,16 @@ export const SIDE_SPECS: {
   position: [number, number, number];
   rotation: [number, number, number];
 }[] = [
-  { templateId: 'builder-1', sideId: 'side-west-luxe', position: [-22, 0, -20], rotation: [0, Math.PI / 2, 0] },
-  { templateId: 'builder-2', sideId: 'side-west-aurum', position: [-22, 0, 0], rotation: [0, Math.PI / 2, 0] },
-  { templateId: 'builder-4', sideId: 'side-west-crown', position: [-22, 0, 20], rotation: [0, Math.PI / 2, 0] },
-  { templateId: 'builder-5', sideId: 'side-east-monarch', position: [22, 0, -20], rotation: [0, -Math.PI / 2, 0] },
-  { templateId: 'builder-6', sideId: 'side-east-horizon', position: [22, 0, 0], rotation: [0, -Math.PI / 2, 0] },
-  { templateId: 'builder-2', sideId: 'side-east-aurum', position: [22, 0, 20], rotation: [0, -Math.PI / 2, 0] },
+  { templateId: 'builder-1', sideId: 'side-west-luxe', position: [BOOTH_ROW_X_WEST, 0, -28], rotation: [0, Math.PI / 2, 0] },
+  { templateId: 'builder-2', sideId: 'side-west-aurum', position: [BOOTH_ROW_X_WEST, 0, -8], rotation: [0, Math.PI / 2, 0] },
+  { templateId: 'builder-4', sideId: 'side-west-crown', position: [BOOTH_ROW_X_WEST, 0, 12], rotation: [0, Math.PI / 2, 0] },
+  { templateId: 'builder-5', sideId: 'side-east-monarch', position: [BOOTH_ROW_X_EAST, 0, -28], rotation: [0, -Math.PI / 2, 0] },
+  { templateId: 'builder-6', sideId: 'side-east-horizon', position: [BOOTH_ROW_X_EAST, 0, -8], rotation: [0, -Math.PI / 2, 0] },
+  { templateId: 'builder-2', sideId: 'side-east-aurum', position: [BOOTH_ROW_X_EAST, 0, 12], rotation: [0, -Math.PI / 2, 0] },
 ];
 
-/** Main + side booth IDs that should hide together (e.g. builder-5 ↔ side-east-monarch). */
-export function linkedBoothIdsForHide(boothId: string): string[] {
-  const ids = new Set<string>([boothId]);
-  for (const spec of SIDE_SPECS) {
-    if (spec.templateId === boothId) ids.add(spec.sideId);
-    if (spec.sideId === boothId) ids.add(spec.templateId);
-  }
-  return [...ids];
-}
-
-export function isBoothHidden(hidden: Set<string>, boothId: string, templateId?: string): boolean {
-  if (hidden.has(boothId)) return true;
-  if (templateId != null && hidden.has(templateId)) return true;
-  return false;
+export function isBoothHidden(hidden: Set<string>, boothId: string): boolean {
+  return hidden.has(boothId);
 }
 
 export function SideExpoBooths({
@@ -72,7 +66,7 @@ export function SideExpoBooths({
   const sideBooths = useMemo(
     () =>
       SIDE_SPECS.flatMap((spec) => {
-        if (isBoothHidden(hiddenBooths, spec.sideId, spec.templateId)) return [];
+        if (isBoothHidden(hiddenBooths, spec.sideId)) return [];
         const template = layouts.find((l) => l.id === spec.templateId);
         if (!template) return [];
         return [

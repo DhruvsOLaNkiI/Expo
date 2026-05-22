@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { uploadAssetToR2 } from './api/cmsUpload';
+import { DEFAULT_MAX_UPLOAD_MB } from './constants/uploadLimits';
 import { useStore } from './store';
+
+const MAX_UPLOAD_BYTES = DEFAULT_MAX_UPLOAD_MB * 1024 * 1024;
 
 type IndexResponse = { ok: true; outputPath: string; tree: unknown } | { ok: false; error: string };
 
@@ -26,13 +29,20 @@ export function PageIndexPortal() {
       setStatus('Please choose a PDF file.');
       return;
     }
+    const sizeMb = f.size / (1024 * 1024);
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setStatus(
+        `PDF is ${sizeMb.toFixed(1)} MB — over the ${DEFAULT_MAX_UPLOAD_MB} MB dev-server limit. Compress the file or set MAX_UPLOAD_MB in .env and restart npm run dev.`,
+      );
+      return;
+    }
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     setFile(f);
     setPdfUrl(URL.createObjectURL(f));
     setTree(null);
     setOutputPath(null);
     setAnswer('');
-    setStatus(`Selected: ${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB)`);
+    setStatus(`Selected: ${f.name} (${sizeMb.toFixed(2)} MB, max ${DEFAULT_MAX_UPLOAD_MB} MB)`);
   }, [pdfUrl]);
 
   const runIndex = useCallback(async () => {
@@ -172,8 +182,9 @@ export function PageIndexPortal() {
           </button>
           {status && <p className="mt-3 text-xs text-white/60 whitespace-pre-wrap">{status}</p>}
           <p className="mt-2 text-[10px] text-white/35">
-            Requires <code className="rounded bg-black/40 px-1">npm run dev</code>, <code className="rounded bg-black/40 px-1">npm run pageindex:install</code>, and{' '}
-            <code className="rounded bg-black/40 px-1">OPENROUTER_API_KEY</code> in <code className="rounded bg-black/40 px-1">.env</code> (free models at openrouter.ai).
+            Max upload: <strong className="text-white/50">{DEFAULT_MAX_UPLOAD_MB} MB</strong> per PDF (dev server). Requires{' '}
+            <code className="rounded bg-black/40 px-1">npm run dev</code>, <code className="rounded bg-black/40 px-1">npm run pageindex:install</code>, and{' '}
+            <code className="rounded bg-black/40 px-1">OPENROUTER_API_KEY</code> in <code className="rounded bg-black/40 px-1">.env</code>.
           </p>
         </div>
 

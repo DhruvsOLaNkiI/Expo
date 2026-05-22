@@ -12,10 +12,18 @@ export interface PageIndexProgressEvent {
 
 export type PageIndexDocType = 'brochure' | 'priceList' | 'siteLayout' | 'unitLayout';
 
+export type PageIndexTreeStats = {
+  topLevelSections: number;
+  totalNodes: number;
+  jsonSizeKb: number;
+  sampleTitles: string[];
+};
+
 export interface PageIndexDbDocStatus {
   documentType: PageIndexDocType;
   indexed: boolean;
   indexStatus: string | null;
+  indexError?: string | null;
   slotExists: boolean;
   indexedAt: string | null;
   pdfUrl: string | null;
@@ -24,6 +32,7 @@ export interface PageIndexDbDocStatus {
   stale: boolean;
   readyForChat: boolean;
   isPdf: boolean;
+  treeStats?: PageIndexTreeStats | null;
 }
 
 /** Create MongoDB row for priceList (or other type) if missing, then run PageIndex. */
@@ -49,14 +58,38 @@ export function notifyPageIndexStatusRefresh(boothId: string): void {
   window.dispatchEvent(new CustomEvent(PAGEINDEX_STATUS_REFRESH, { detail: { boothId } }));
 }
 
+/** Only pass public URLs in query strings — data: URLs can be megabytes and break fetch(). */
+function urlForStatusQuery(url: string | undefined): string | undefined {
+  const u = (url ?? '').trim();
+  if (!u) return undefined;
+  if (u.startsWith('data:')) return undefined;
+  if (!/^https?:\/\//i.test(u)) return undefined;
+  if (u.length > 2048) return undefined;
+  return u;
+}
+
 export async function fetchBoothPageIndexStatus(
   boothId: string,
   urls: { brochureUrl?: string; priceListUrl?: string },
 ): Promise<PageIndexDbDocStatus[]> {
   const qs = new URLSearchParams({ boothId });
-  if (urls.brochureUrl) qs.set('brochureUrl', urls.brochureUrl);
-  if (urls.priceListUrl) qs.set('priceListUrl', urls.priceListUrl);
-  const res = await fetch(`/api/pageindex/status?${qs}`);
+  const brochureQ = urlForStatusQuery(urls.brochureUrl);
+  const priceQ = urlForStatusQuery(urls.priceListUrl);
+  if (brochureQ) qs.set('brochureUrl', brochureQ);
+  if (priceQ) qs.set('priceListUrl', priceQ);
+
+  let res: Response;
+  try {
+    res = await fetch(`/api/pageindex/status?${qs}`);
+  } catch (e) {
+    const hint =
+      e instanceof TypeError && e.message === 'Failed to fetch'
+        ? 'Cannot reach /api/pageindex/status. Run npm run dev (not vite preview) and keep the terminal open.'
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    throw new Error(hint);
+  }
   const text = await res.text();
   let data: { ok: boolean; error?: string; documents?: PageIndexDbDocStatus[] };
   try {
@@ -137,10 +170,21 @@ export async function autoIndexPdf(
       pdfUrl, // Pass R2 URL so server can reference it in MongoDB
     });
 
-    const res = await fetch(`/api/pageindex/index?${qs}`, {
-      method: 'POST',
-      body: fd,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/pageindex/index?${qs}`, {
+        method: 'POST',
+        body: fd,
+      });
+    } catch (e) {
+      const hint =
+        e instanceof TypeError && e.message === 'Failed to fetch'
+          ? 'Cannot reach PageIndex API. Run npm run dev and keep the dev server running.'
+          : e instanceof Error
+            ? e.message
+            : String(e);
+      throw new Error(hint);
+    }
 
     if (!res.ok) {
       const errText = await res.text();
@@ -200,7 +244,18 @@ export async function indexPdfFromUrl(
 
   try {
     const qs = new URLSearchParams({ boothId, documentType, pdfUrl });
-    const res = await fetch(`/api/pageindex/index-from-url?${qs}`, { method: 'POST' });
+    let res: Response;
+    try {
+      res = await fetch(`/api/pageindex/index-from-url?${qs}`, { method: 'POST' });
+    } catch (e) {
+      const hint =
+        e instanceof TypeError && e.message === 'Failed to fetch'
+          ? 'Cannot reach PageIndex API. Run npm run dev (not static hosting).'
+          : e instanceof Error
+            ? e.message
+            : String(e);
+      throw new Error(hint);
+    }
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(errText || `HTTP ${res.status}`);

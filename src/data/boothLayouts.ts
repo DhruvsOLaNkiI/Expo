@@ -52,10 +52,10 @@ export type HostessQuickReply = {
   id: string;
   /** Short chip shown to the visitor */
   label: string;
-  /** Answer text + optional voice (speech synthesis). Ignored when {@link action} is `askAi` or `teleport`. */
+  /** Answer text + optional voice (speech synthesis). Ignored when {@link action} is `askAi`, `helpDesk`, or `teleport`. */
   response: string;
   /** Opens the Ask AI chat panel instead of showing / speaking a canned reply. */
-  action?: 'askAi' | 'teleport';
+  action?: 'askAi' | 'teleport' | 'helpDesk';
   /** When {@link action} is `teleport`, id from {@link buildExpoTeleportDestinations} or registration lobby. */
   teleportId?: string;
 };
@@ -128,6 +128,23 @@ export type HallLayoutConfig = {
 
 /** Half-width of the 90m expo hall (must match `ExpoHall` / `Player` bounds). */
 export const HALL_HALF_EXTENT = 45;
+
+/**
+ * World X for main booth row — backs near west/east walls (hall wall at ±45).
+ * StandardLuxuryBooth back wall sits ~4m toward −X / +X from group origin when facing the aisle.
+ */
+export const BOOTH_ROW_X_WEST = -40;
+export const BOOTH_ROW_X_EAST = 40;
+
+/** Side-aisle duplicate booth IDs (optional extras; hidden by default to avoid floating mid-aisle copies). */
+export const DEFAULT_HIDDEN_SIDE_BOOTH_IDS = [
+  'side-west-luxe',
+  'side-west-aurum',
+  'side-west-crown',
+  'side-east-monarch',
+  'side-east-horizon',
+  'side-east-aurum',
+] as const;
 
 export function defaultEntranceLobbyZ(): number {
   return HALL_HALF_EXTENT - 2;
@@ -309,13 +326,13 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   bloomThreshold: 1.72,
   vignetteIntensity: 0.42,
   bgColor: '#fdfbf2',
-  showStandardBooths: false,
+  showStandardBooths: true,
   postProcessing: false,
   showBallroom: false,
   showRoamingExecutive: false,
   showVideos: false,
   showHallCanopy: true,
-  hiddenBooths: [],
+  hiddenBooths: [...DEFAULT_HIDDEN_SIDE_BOOTH_IDS],
   aiApiKey: '',
   aiDeckContext: '',
   aiGeminiModel: 'gemini-3.1-flash-lite-preview',
@@ -391,10 +408,17 @@ function makeDefaultBooth(
 }
 
 export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
-  const vertex = makeDefaultBooth('vertex-elite', 'VERTEX ELITE', [-21.5, 0, 19], [0, Math.PI / 2 + 0.06, 0], '#fcfaf5', PROJECT_VIDEOS[2]);
+  const vertex = makeDefaultBooth(
+    'vertex-elite',
+    'VERTEX ELITE',
+    [BOOTH_ROW_X_WEST, 0, 19],
+    [0, Math.PI / 2 + 0.06, 0],
+    '#fcfaf5',
+    PROJECT_VIDEOS[2],
+  );
   return [
-    makeDefaultBooth('builder-1', 'LUXE TOWERS', [-20, 0, -15], [0, Math.PI / 2 - 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[0]),
-    makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [-20, 0, 5], [0, Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
+    makeDefaultBooth('builder-1', 'LUXE TOWERS', [BOOTH_ROW_X_WEST, 0, -15], [0, Math.PI / 2 - 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[0]),
+    makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [BOOTH_ROW_X_WEST, 0, 5], [0, Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
     {
       ...vertex,
       brochureUrl: vertex.brochureUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
@@ -411,9 +435,9 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
         { id: 'vertex-hq-ai', label: 'Ask AI', response: '', action: 'askAi' },
       ],
     },
-    makeDefaultBooth('builder-4', 'CROWN ESTATES', [20, 0, -15], [0, -Math.PI / 2 + 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
-    makeDefaultBooth('builder-5', 'THE MONARCH', [20, 0, 5], [0, -Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
-    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [20, 0, 25], [0, -Math.PI / 2 - 0.16, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
+    makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, -15], [0, -Math.PI / 2 + 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
+    makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, 5], [0, -Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
+    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, 25], [0, -Math.PI / 2 - 0.16, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
   ];
 }
 

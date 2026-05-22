@@ -7,13 +7,19 @@ import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
 import multer from 'multer';
 import {
-  ensurePageIndexSlot,
+  formatMulterUploadError,
+  maxUploadBytesFromEnv,
+  maxUploadMbFromEnv,
+} from './src/constants/uploadLimits';
+import {
   getPageIndexes,
   hasValidPageIndexStructure,
+  markPageIndexFailed,
   savePageIndex,
   getPageIndexByBoothAndType,
   type PageIndexDocType,
 } from './src/server/mongodb';
+import { summarizePageIndexTree } from './src/utils/pageIndexTreeStats';
 import { downloadPdfFromPublicUrl, isR2Configured } from './src/server/r2';
 import {
   getOpenRouterModel,
@@ -89,6 +95,26 @@ function normalizeStructure(data: unknown): unknown[] {
   return [];
 }
 
+function pageIndexStructurePath(rootDir: string, uploadBaseName: string): string {
+  return path.join(rootDir, 'pageindex', 'results', `${uploadBaseName}_structure.json`);
+}
+
+async function reportPageIndexFailure(
+  boothId: string,
+  documentType: PageIndexDocType,
+  pdfUrl: string,
+  error: string,
+): Promise<void> {
+  const msg = error.trim() || 'PageIndex failed';
+  console.error(`✗ PageIndex ${boothId}/${documentType}:`, msg.slice(0, 600));
+  if (!process.env.MONGODB_URI?.trim()) return;
+  try {
+    await markPageIndexFailed(boothId, documentType, pdfUrl, msg);
+  } catch (e) {
+    console.warn('Could not write PageIndex failure to MongoDB:', e);
+  }
+}
+
 /** Dev-only API: run PageIndex on uploaded PDFs + Gemini Q&A over the generated tree. */
 export function pageindexApiPlugin(rootDir: string): Plugin {
   return {
@@ -112,7 +138,9 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
           cb(null, `${Date.now()}_${safe}`);
         },
       });
-      const upload = multer({ storage, limits: { fileSize: 52 * 1024 * 1024 } });
+      const maxUploadBytes = maxUploadBytesFromEnv(env);
+      const maxUploadMb = maxUploadMbFromEnv(env);
+      const upload = multer({ storage, limits: { fileSize: maxUploadBytes } });
 
       server.middlewares.use((req, res, next) => {
         const url = req.url?.split('?')[0] ?? '';
@@ -159,10 +187,12 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
                   !currentUrl ||
                   !storedUrl ||
                   normalizeDocUrl(currentUrl) === normalizeDocUrl(storedUrl);
+                const treeStats = indexed ? summarizePageIndexTree(stored?.structure) : null;
                 return {
                   documentType,
                   indexed,
                   indexStatus: indexStatus ?? null,
+                  indexError: stored?.indexError?.trim() || null,
                   slotExists: Boolean(stored),
                   indexedAt: stored?.indexedAt ? new Date(stored.indexedAt).toISOString() : null,
                   pdfUrl: storedUrl || null,
@@ -171,6 +201,7 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
                   stale: indexed && Boolean(currentUrl) && Boolean(storedUrl) && !urlMatches,
                   readyForChat: indexed && urlMatches,
                   isPdf: /\.pdf(\?|#|$)/i.test(currentUrl) || currentUrl.startsWith('data:application/pdf'),
+                  treeStats,
                 };
               });
               sendJson(res as ServerResponse, 200, { ok: true, boothId, documents });
@@ -199,18 +230,11 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
               return;
             }
             const docType = documentType as PageIndexDocType;
-            try {
-              await ensurePageIndexSlot(boothId, docType, pdfUrl, 'indexing');
-              console.log(`✓ MongoDB slot: ${boothId}/${documentType} (indexing)`);
-            } catch (slotErr) {
-              console.warn('Could not ensure PageIndex slot:', slotErr);
-            }
             const py = venvPython(rootDir);
             if (!fs.existsSync(py)) {
-              sendJson(res as ServerResponse, 500, {
-                ok: false,
-                error: 'pageindex/.venv not found. Run: npm run pageindex:install',
-              });
+              const err = 'pageindex/.venv not found. Run: npm run pageindex:install';
+              await reportPageIndexFailure(boothId, docType, pdfUrl, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
             let pdfPath: string;
@@ -222,17 +246,14 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
               fs.writeFileSync(pdfPath, buffer);
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : String(e);
-              try {
-                await ensurePageIndexSlot(boothId, docType, pdfUrl, 'failed');
-              } catch {
-                /* ignore */
-              }
+              await reportPageIndexFailure(boothId, docType, pdfUrl, msg);
               sendJson(res as ServerResponse, 404, { ok: false, error: msg });
               return;
             }
             const runner = path.join(rootDir, 'scripts', 'pageindex_run.py');
             const llmCheck = requirePageIndexLlmEnv();
             if (!llmCheck.ok) {
+              await reportPageIndexFailure(boothId, docType, pdfUrl, llmCheck.error);
               sendJson(res as ServerResponse, 500, { ok: false, error: llmCheck.error });
               return;
             }
@@ -251,27 +272,34 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
               });
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : String(e);
-              sendJson(res as ServerResponse, 500, { ok: false, error: `PageIndex failed: ${msg}` });
+              const err = `PageIndex failed: ${msg}`;
+              await reportPageIndexFailure(boothId, docType, pdfUrl, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
             const base = path.parse(pdfPath).name;
-            const outPath = path.join(rootDir, 'pageindex', 'results', `${base}_structure.json`);
+            const outPath = pageIndexStructurePath(rootDir, base);
             if (!fs.existsSync(outPath)) {
-              sendJson(res as ServerResponse, 500, { ok: false, error: `Expected output missing: ${outPath}` });
+              const err = `Expected output missing: ${outPath}`;
+              await reportPageIndexFailure(boothId, docType, pdfUrl, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
             let tree: unknown;
             try {
               tree = JSON.parse(fs.readFileSync(outPath, 'utf8')) as unknown;
             } catch {
-              sendJson(res as ServerResponse, 500, { ok: false, error: 'Could not read result JSON' });
+              const err = 'Could not read PageIndex result JSON';
+              await reportPageIndexFailure(boothId, docType, pdfUrl, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
+            const mongoRequired = Boolean(process.env.MONGODB_URI?.trim());
             let savedToDb = false;
             let dbErrorMsg: string | undefined;
             try {
-              if (!process.env.MONGODB_URI?.trim()) {
-                throw new Error('MONGODB_URI is not set in .env — restart npm run dev after adding it');
+              if (!mongoRequired) {
+                throw new Error('MONGODB_URI is not set in .env — tree built locally only');
               }
               const docId = await savePageIndex({
                 boothId,
@@ -283,10 +311,18 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
                 modelVersion: getOpenRouterModel(),
               });
               savedToDb = true;
-              console.log(`✓ Saved PageIndex to MongoDB: ${boothId}/${documentType} (ID: ${docId})`);
+              console.log(`✓ Saved PageIndex tree to MongoDB: ${boothId}/${documentType} (ID: ${docId})`);
             } catch (dbError) {
               dbErrorMsg = dbError instanceof Error ? dbError.message : String(dbError);
-              console.error('Warning: Failed to save to MongoDB:', dbErrorMsg);
+              await reportPageIndexFailure(boothId, docType, pdfUrl, dbErrorMsg);
+            }
+            if (mongoRequired && !savedToDb) {
+              sendJson(res as ServerResponse, 500, {
+                ok: false,
+                error: dbErrorMsg || 'Indexing finished but MongoDB save failed',
+                savedToDb: false,
+              });
+              return;
             }
             sendJson(res as ServerResponse, 200, {
               ok: true,
@@ -304,20 +340,15 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
         if (url === '/api/pageindex/index' && req.method === 'POST') {
           upload.single('pdf')(req as never, res as never, async (err: unknown) => {
             if (err) {
-              sendJson(res as ServerResponse, 400, { ok: false, error: String(err) });
+              sendJson(res as ServerResponse, 400, {
+                ok: false,
+                error: formatMulterUploadError(err, maxUploadMb),
+              });
               return;
             }
             const file = (req as { file?: { path: string; originalname: string } }).file;
             if (!file?.path) {
               sendJson(res as ServerResponse, 400, { ok: false, error: 'Missing PDF file (field name: pdf)' });
-              return;
-            }
-            const py = venvPython(rootDir);
-            if (!fs.existsSync(py)) {
-              sendJson(res as ServerResponse, 500, {
-                ok: false,
-                error: 'pageindex/.venv not found. Run: npm run pageindex:install',
-              });
               return;
             }
             const pdfPath = path.resolve(file.path);
@@ -327,14 +358,17 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
             const documentType = queryParams.get('documentType') || 'brochure';
             const pdfUrlStored = queryParams.get('pdfUrl')?.trim() || pdfPath;
             const docType = documentType as PageIndexDocType;
-            try {
-              await ensurePageIndexSlot(boothId, docType, pdfUrlStored, 'indexing');
-            } catch (slotErr) {
-              console.warn('Could not ensure PageIndex slot:', slotErr);
+            const py = venvPython(rootDir);
+            if (!fs.existsSync(py)) {
+              const err = 'pageindex/.venv not found. Run: npm run pageindex:install';
+              await reportPageIndexFailure(boothId, docType, pdfUrlStored, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
+              return;
             }
             const runner = path.join(rootDir, 'scripts', 'pageindex_run.py');
             const llmCheckUpload = requirePageIndexLlmEnv();
             if (!llmCheckUpload.ok) {
+              await reportPageIndexFailure(boothId, docType, pdfUrlStored, llmCheckUpload.error);
               sendJson(res as ServerResponse, 500, { ok: false, error: llmCheckUpload.error });
               return;
             }
@@ -353,32 +387,35 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
               });
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : String(e);
-              sendJson(res as ServerResponse, 500, { ok: false, error: `PageIndex failed: ${msg}` });
+              const err = `PageIndex failed: ${msg}`;
+              await reportPageIndexFailure(boothId, docType, pdfUrlStored, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
             const base = path.parse(file.path).name;
-            const outPath = path.join(rootDir, 'pageindex', 'results', `${base}_structure.json`);
+            const outPath = pageIndexStructurePath(rootDir, base);
             if (!fs.existsSync(outPath)) {
-              sendJson(res as ServerResponse, 500, {
-                ok: false,
-                error: `Expected output missing: ${outPath}`,
-              });
+              const err = `Expected output missing: ${outPath}`;
+              await reportPageIndexFailure(boothId, docType, pdfUrlStored, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
             let tree: unknown;
             try {
               tree = JSON.parse(fs.readFileSync(outPath, 'utf8')) as unknown;
             } catch {
-              sendJson(res as ServerResponse, 500, { ok: false, error: 'Could not read result JSON' });
+              const err = 'Could not read PageIndex result JSON';
+              await reportPageIndexFailure(boothId, docType, pdfUrlStored, err);
+              sendJson(res as ServerResponse, 500, { ok: false, error: err });
               return;
             }
 
-            // Save to MongoDB
+            const mongoRequired = Boolean(process.env.MONGODB_URI?.trim());
             let savedToDb = false;
             let dbErrorMsg: string | undefined;
             try {
-              if (!process.env.MONGODB_URI?.trim()) {
-                throw new Error('MONGODB_URI is not set in .env — add your Atlas connection string and restart npm run dev');
+              if (!mongoRequired) {
+                throw new Error('MONGODB_URI is not set in .env — tree built locally only');
               }
               const docId = await savePageIndex({
                 boothId,
@@ -390,10 +427,19 @@ export function pageindexApiPlugin(rootDir: string): Plugin {
                 modelVersion: getOpenRouterModel(),
               });
               savedToDb = true;
-              console.log(`✓ Saved PageIndex to MongoDB: ${boothId}/${documentType} (ID: ${docId})`);
+              console.log(`✓ Saved PageIndex tree to MongoDB: ${boothId}/${documentType} (ID: ${docId})`);
             } catch (dbError) {
               dbErrorMsg = dbError instanceof Error ? dbError.message : String(dbError);
-              console.error('Warning: Failed to save to MongoDB:', dbErrorMsg);
+              await reportPageIndexFailure(boothId, docType, pdfUrlStored, dbErrorMsg);
+            }
+
+            if (mongoRequired && !savedToDb) {
+              sendJson(res as ServerResponse, 500, {
+                ok: false,
+                error: dbErrorMsg || 'Indexing finished but MongoDB save failed',
+                savedToDb: false,
+              });
+              return;
             }
 
             sendJson(res as ServerResponse, 200, {

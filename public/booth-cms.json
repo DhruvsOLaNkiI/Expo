@@ -1,3 +1,15 @@
 {
-  "overrides": {}
+  "overrides": {},
+  "scene": {
+    "showStandardBooths": true,
+    "showHallCanopy": true,
+    "hiddenBooths": [
+      "side-west-luxe",
+      "side-west-aurum",
+      "side-west-crown",
+      "side-east-monarch",
+      "side-east-horizon",
+      "side-east-aurum"
+    ]
+  }
 }

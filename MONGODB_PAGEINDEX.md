@@ -46,10 +46,11 @@ npm run dev
 **Before:** Every time you asked a question, PageIndex would re-scan the PDF (expensive tokens).
 
 **After:** 
-1. You upload a PDF through `/pageindex` portal
-2. PageIndex builds the tree structure
-3. Tree is automatically saved to MongoDB
-4. Questions retrieve the saved tree (no re-scanning!)
+1. You upload a PDF through `/pageindex` portal or CMS
+2. PageIndex builds the full tree structure (Python job — can take several minutes)
+3. **Only when indexing succeeds**, the full tree is saved to MongoDB (`indexStatus: ready`, `structure` filled)
+4. If indexing fails, MongoDB is updated with `indexStatus: failed` and `indexError` (no half-empty tree row)
+5. Questions retrieve the saved tree (no re-scanning!)
 
 ### Data Structure in MongoDB
 

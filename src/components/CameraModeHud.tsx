@@ -11,6 +11,7 @@ export function CameraModeHud() {
   const hallLayoutEditMode = useStore((s) => s.hallLayoutEditMode);
   const visitorProfile = useStore((s) => s.visitorProfile);
   const aiChatOpen = useStore((s) => s.aiChatOpen);
+  const helpDeskOpen = useStore((s) => s.helpDeskOpen);
 
   if (
     !visitorProfile ||
@@ -19,7 +20,8 @@ export function CameraModeHud() {
     ctaResourcePopup ||
     activeBooth ||
     hallLayoutEditMode ||
-    aiChatOpen
+    aiChatOpen ||
+    helpDeskOpen
   ) {
     return null;
   }

@@ -1,7 +1,7 @@
 import { useStore } from '../store';
 import { DEFAULT_SCENE_CONFIG, mergeSceneConfig, type SceneConfig, buildDefaultBoothLayoutList, applyBoothOverrides } from '../data/boothLayouts';
 import React, { useMemo } from 'react';
-import { linkedBoothIdsForHide, SIDE_SPECS } from '../components/SideExpoBooths';
+import { SIDE_SPECS } from '../components/SideExpoBooths';
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-2">{children}</h3>;
@@ -150,7 +150,7 @@ export function CmsScenePanel() {
       <SectionTitle>Booth Visibility ({allBooths.length} booths)</SectionTitle>
       <div className="mb-2 p-2 bg-white/[0.02] border border-white/[0.06] rounded-lg">
         <p className="text-[9px] text-white/40 mb-2">
-          Hide specific booths to reduce GPU load. Unchecked booths will not be rendered. Hiding a main booth (e.g. THE MONARCH) also hides its matching side-aisle copy.
+          Hide specific booths to reduce GPU load. Unchecked booths will not be rendered. Main and (Side) entries are independent.
         </p>
         <div className="flex gap-2 mb-2">
           <button
@@ -160,11 +160,7 @@ export function CmsScenePanel() {
             Show All
           </button>
           <button
-            onClick={() => {
-              const allIds = new Set<string>();
-              allBooths.forEach((b) => linkedBoothIdsForHide(b.id).forEach((id) => allIds.add(id)));
-              patchScene({ hiddenBooths: [...allIds] });
-            }}
+            onClick={() => patchScene({ hiddenBooths: allBooths.map((b) => b.id) })}
             className="px-2 py-1 text-[9px] bg-white/[0.06] hover:bg-white/[0.08] text-white/60 rounded transition-colors"
           >
             Hide All
@@ -173,8 +169,7 @@ export function CmsScenePanel() {
       </div>
       <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
         {allBooths.map((booth) => {
-          const linkedIds = linkedBoothIdsForHide(booth.id);
-          const isVisible = !linkedIds.some((id) => hiddenBoothIds.includes(id));
+          const isVisible = !hiddenBoothIds.includes(booth.id);
           return (
             <label
               key={booth.id}
@@ -186,8 +181,8 @@ export function CmsScenePanel() {
                 checked={isVisible}
                 onChange={(e) => {
                   const newHidden = e.target.checked
-                    ? hiddenBoothIds.filter((id) => !linkedIds.includes(id))
-                    : [...new Set([...hiddenBoothIds, ...linkedIds])];
+                    ? hiddenBoothIds.filter((id) => id !== booth.id)
+                    : [...hiddenBoothIds, booth.id];
                   patchScene({ hiddenBooths: newHidden });
                 }}
               />
