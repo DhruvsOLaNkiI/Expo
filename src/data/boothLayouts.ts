@@ -411,16 +411,20 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
   const vertex = makeDefaultBooth(
     'vertex-elite',
     'VERTEX ELITE',
-    [BOOTH_ROW_X_WEST, 0, 19],
+    [BOOTH_ROW_X_WEST, 0, 20],
     [0, Math.PI / 2 + 0.06, 0],
     '#fcfaf5',
     PROJECT_VIDEOS[2],
   );
+  /** Even 20m spacing along each wall — matches Edit-layout spacing visitors expect on deploy. */
+  const westZ = [-20, 0, 20] as const;
+  const eastZ = [-20, 0, 20] as const;
   return [
-    makeDefaultBooth('builder-1', 'LUXE TOWERS', [BOOTH_ROW_X_WEST, 0, -15], [0, Math.PI / 2 - 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[0]),
-    makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [BOOTH_ROW_X_WEST, 0, 5], [0, Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
+    makeDefaultBooth('builder-1', 'LUXE TOWERS', [BOOTH_ROW_X_WEST, 0, westZ[0]], [0, Math.PI / 2 - 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[0]),
+    makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [BOOTH_ROW_X_WEST, 0, westZ[1]], [0, Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
     {
       ...vertex,
+      position: [BOOTH_ROW_X_WEST, 0, westZ[2]],
       brochureUrl: vertex.brochureUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       priceListUrl: vertex.priceListUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       siteMapUrl: vertex.siteMapUrl || '/maps/site-map.svg',
@@ -435,9 +439,9 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
         { id: 'vertex-hq-ai', label: 'Ask AI', response: '', action: 'askAi' },
       ],
     },
-    makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, -15], [0, -Math.PI / 2 + 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
-    makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, 5], [0, -Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
-    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, 25], [0, -Math.PI / 2 - 0.16, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
+    makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, eastZ[0]], [0, -Math.PI / 2 + 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
+    makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, eastZ[1]], [0, -Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
+    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, eastZ[2]], [0, -Math.PI / 2 - 0.16, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
   ];
 }
 

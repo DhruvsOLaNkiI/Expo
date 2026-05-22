@@ -50,12 +50,12 @@ function buildBoothVisitPoints(): THREE.Vector3[] {
     position: [number, number, number];
     rotation: [number, number, number];
   }[] = [
-    { position: [BOOTH_ROW_X_WEST, 0, -15], rotation: [0, Math.PI / 2 - 0.16, 0] },
-    { position: [BOOTH_ROW_X_WEST, 0, 5], rotation: [0, Math.PI / 2, 0] },
-    { position: [BOOTH_ROW_X_WEST, 0, 19], rotation: [0, Math.PI / 2 + 0.06, 0] },
-    { position: [BOOTH_ROW_X_EAST, 0, -15], rotation: [0, -Math.PI / 2 + 0.16, 0] },
-    { position: [BOOTH_ROW_X_EAST, 0, 5], rotation: [0, -Math.PI / 2, 0] },
-    { position: [BOOTH_ROW_X_EAST, 0, 25], rotation: [0, -Math.PI / 2 - 0.16, 0] },
+    { position: [BOOTH_ROW_X_WEST, 0, -20], rotation: [0, Math.PI / 2 - 0.16, 0] },
+    { position: [BOOTH_ROW_X_WEST, 0, 0], rotation: [0, Math.PI / 2, 0] },
+    { position: [BOOTH_ROW_X_WEST, 0, 20], rotation: [0, Math.PI / 2 + 0.06, 0] },
+    { position: [BOOTH_ROW_X_EAST, 0, -20], rotation: [0, -Math.PI / 2 + 0.16, 0] },
+    { position: [BOOTH_ROW_X_EAST, 0, 0], rotation: [0, -Math.PI / 2, 0] },
+    { position: [BOOTH_ROW_X_EAST, 0, 20], rotation: [0, -Math.PI / 2 - 0.16, 0] },
   ];
   const out: THREE.Vector3[] = [];
   for (const b of rows) {

@@ -1,5 +1,30 @@
 {
-  "overrides": {},
+  "booths": {
+    "builder-1": {
+      "position": [-40, 0, -20],
+      "rotation": [0, 1.4107963267948966, 0]
+    },
+    "builder-2": {
+      "position": [-40, 0, 0],
+      "rotation": [0, 1.5707963267948966, 0]
+    },
+    "vertex-elite": {
+      "position": [-40, 0, 20],
+      "rotation": [0, 1.6307963267948966, 0]
+    },
+    "builder-4": {
+      "position": [40, 0, -20],
+      "rotation": [0, -1.4107963267948966, 0]
+    },
+    "builder-5": {
+      "position": [40, 0, 0],
+      "rotation": [0, -1.5707963267948966, 0]
+    },
+    "builder-6": {
+      "position": [40, 0, 20],
+      "rotation": [0, -1.7307963267948966, 0]
+    }
+  },
   "scene": {
     "showStandardBooths": true,
     "showHallCanopy": true,
