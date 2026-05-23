@@ -3,6 +3,7 @@ import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
+import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
 /** Matte trim — no mirror hotspots. */
@@ -76,7 +77,7 @@ export function HorizonVistasBooth({
   const uiGlow = '#6b8fd4';
 
   return (
-    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
+    <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       {/* Floor */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
         <boxGeometry args={[12.2, 0.1, 5.5]} />
@@ -249,6 +250,6 @@ export function HorizonVistasBooth({
           </mesh>
         </group>
       ))}
-    </group>
+    </BoothLayoutRoot>
   );
 }

@@ -1,4 +1,6 @@
-/** Registration lobby world (separate from main 90×90 expo hall). */
+import { HALL_HALF_DEPTH } from './boothLayouts';
+
+/** Registration lobby world (separate from main expo hall). */
 
 /** Boutique luxury registration lobby — compact, human-scale proportions. */
 export const REG_HALL = {
@@ -16,7 +18,7 @@ export const REG_SPAWN: [number, number, number] = [
   REG_HALL.centerZ + REG_HALL.halfD - 7,
 ];
 
-export const REG_MAIN_EXPO_SPAWN: [number, number, number] = [0, 1.7, 38];
+export const REG_MAIN_EXPO_SPAWN: [number, number, number] = [0, 1.7, HALL_HALF_DEPTH - 2];
 
 /** North end of lobby — reception desk + LED backdrop anchor. */
 export const REG_RECEPTION_Z = REG_HALL.centerZ - REG_HALL.halfD + 7;

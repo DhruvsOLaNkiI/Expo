@@ -1,41 +1,52 @@
 {
   "booths": {
     "builder-1": {
-      "position": [-40, 0, -20],
-      "rotation": [0, 1.4107963267948966, 0]
+      "position": [-14, 0, -9],
+      "rotation": [0, 1.5707963267948966, 0],
+      "scale": [1.3, 1.58, 1.3]
     },
     "builder-2": {
-      "position": [-40, 0, 0],
+      "position": [-14, 0, 0],
       "rotation": [0, 1.5707963267948966, 0]
     },
     "vertex-elite": {
-      "position": [-40, 0, 20],
-      "rotation": [0, 1.6307963267948966, 0]
+      "position": [-14, 0, 9],
+      "rotation": [0, 1.5707963267948966, 0]
     },
     "builder-4": {
-      "position": [40, 0, -20],
-      "rotation": [0, -1.4107963267948966, 0]
+      "position": [14, 0, -9],
+      "rotation": [0, -1.5707963267948966, 0]
     },
     "builder-5": {
-      "position": [40, 0, 0],
+      "position": [14, 0, 0],
       "rotation": [0, -1.5707963267948966, 0]
     },
     "builder-6": {
-      "position": [40, 0, 20],
-      "rotation": [0, -1.7307963267948966, 0]
+      "position": [14, 0, 9],
+      "rotation": [0, -1.5707963267948966, 0]
+    },
+    "builder-8": {
+      "position": [14, 0, -12],
+      "rotation": [0, -1.5707963267948966, 0],
+      "scale": [1.3, 1.58, 1.3]
+    },
+    "builder-9": {
+      "position": [14, 0, -4.5],
+      "rotation": [0, -1.5707963267948966, 0],
+      "scale": [1.3, 1.58, 1.3]
     }
   },
   "scene": {
     "showStandardBooths": true,
     "showVideos": true,
     "showHallCanopy": true,
+    "showBallroom": true,
     "fogEnabled": false,
-    "fogNear": 18,
-    "fogFar": 62,
+    "fogNear": 14,
+    "fogFar": 55,
     "fogColor": "#d8d4cc",
     "modelCompression": "off",
     "hiddenBooths": [
-      "side-west-luxe",
       "side-west-aurum",
       "side-west-crown",
       "side-east-monarch",

@@ -6,13 +6,28 @@ import * as THREE from 'three';
 import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
+import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
 import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { HallAisleStandees } from './HallAisleStandees';
 import { HallSuspendedCanopies } from './HallSuspendedCanopy.tsx';
 import { SideExpoBooths } from './SideExpoBooths';
+import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
-import { applyBoothOverrides, buildDefaultBoothLayoutList, DEFAULT_SCENE_CONFIG, siteMapUrlsFromConfig, mergeHallLayout, type PlacedImage, type HostessQuickReply, type MediaItem, type CompanyProfile } from '@/features/shared/data/boothLayouts';
+import {
+  applyBoothOverrides,
+  buildDefaultBoothLayoutList,
+  DEFAULT_SCENE_CONFIG,
+  HELP_DESK_COUNTER_HEIGHT,
+  HELP_DESK_RADIUS,
+  siteMapUrlsFromConfig,
+  mergeHallLayout,
+  mergeSceneConfig,
+  type PlacedImage,
+  type HostessQuickReply,
+  type MediaItem,
+  type CompanyProfile,
+} from '@/features/shared/data/boothLayouts';
 import {
   buildExpoTeleportDestinations,
   buildHelpDeskHostessReplies,
@@ -329,6 +344,12 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
 
   const showStandardBooths = sceneOverrides.showStandardBooths ?? DEFAULT_SCENE_CONFIG.showStandardBooths;
   const showHallCanopy = sceneOverrides.showHallCanopy ?? DEFAULT_SCENE_CONFIG.showHallCanopy;
+  const showHallPlants = sceneOverrides.showHallPlants ?? DEFAULT_SCENE_CONFIG.showHallPlants;
+  const showVertexEliteCtaKiosk =
+    sceneOverrides.showVertexEliteCtaKiosk ?? DEFAULT_SCENE_CONFIG.showVertexEliteCtaKiosk;
+  const showHallAisleStandees =
+    sceneOverrides.showHallAisleStandees ?? DEFAULT_SCENE_CONFIG.showHallAisleStandees;
+  const showBoothStandee = sceneOverrides.showBoothStandee ?? DEFAULT_SCENE_CONFIG.showBoothStandee;
   const modelCompression = useModelCompression();
   const hideDecorativeGlbs = shouldHideDecorativeGlbInstances(modelCompression);
   const hiddenBoothIds = sceneOverrides.hiddenBooths ?? DEFAULT_SCENE_CONFIG.hiddenBooths;
@@ -356,8 +377,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
       {/* Central Featured Help Desk Zone */}
       <FeaturedProperty position={[0, 0, 0]} />
 
-      {/* Main Path Decorative Plants (`tree.glb`) — hidden when model compression is on */}
-      {!hideDecorativeGlbs && (
+      {/* Main path trees (`tree.glb`) — off by default (heavy); also skipped in model-compression mode */}
+      {showHallPlants && !hideDecorativeGlbs && hallLayout.plantPositions.length > 0 && (
         <Suspense fallback={null}>
           {hallLayout.plantPositions.map((pos, i) => (
             <Plant key={`hall-plant-${i}`} name={`hall-plant-${i}`} position={pos} scale={hallLayout.plantScales[i] ?? 1} />
@@ -365,7 +386,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
         </Suspense>
       )}
 
-      {!hideDecorativeGlbs && <HallAisleStandees layouts={layouts} />}
+      {showHallAisleStandees && !hideDecorativeGlbs && <HallAisleStandees layouts={layouts} />}
 
       {/* Single suspended LED ring above help desk */}
       {showHallCanopy && <HallSuspendedCanopies showVideos={showVideos} />}
@@ -395,6 +416,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
+              showCtaKiosk={showVertexEliteCtaKiosk}
               media={b.media}
               company={b.company}
             />
@@ -721,7 +743,7 @@ export function StandardLuxuryBooth({
   const glow = accent || '#d4af37';
 
   return (
-    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
+    <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       {/* Back Wall with Luxury Trim */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
@@ -758,41 +780,35 @@ export function StandardLuxuryBooth({
         <meshStandardMaterial color={lighting.ledStripColor} emissive={lighting.ledStripColor} emissiveIntensity={lighting.ledStripIntensity} />
       </mesh>
 
-      {/* Header fascia — Vertex: physical satin acrylic slab; others: metallic canopy */}
-      <mesh position={[0, 6.5, -4]} castShadow>
-        <boxGeometry args={[12.5, 1.5, 0.6]} />
-        {headerLogoUrl ? (
-          <meshPhysicalMaterial
-            color="#fcfcfc"
-            roughness={0.2}
-            metalness={0}
-            clearcoat={0.48}
-            clearcoatRoughness={0.22}
-            envMapIntensity={0.15}
-            reflectivity={0.35}
-          />
-        ) : (
-          <meshStandardMaterial color={color} metalness={0.8} roughness={0.2} />
-        )}
-      </mesh>
-
-      {/* Branding: optional PNG on canopy, else gold title only */}
+      {/* Header canopy — grey satin fascia + gold title (same style as ballroom wall accents) */}
       {headerLogoUrl ? (
-        <Suspense fallback={null}>
-          <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={accent} />
-        </Suspense>
+        <>
+          <mesh position={[0, 6.5, -4]} castShadow>
+            <boxGeometry args={[12.5, 1.5, 0.6]} />
+            <meshPhysicalMaterial
+              color="#fcfcfc"
+              roughness={0.2}
+              metalness={0}
+              clearcoat={0.48}
+              clearcoatRoughness={0.22}
+              envMapIntensity={0.15}
+              reflectivity={0.35}
+            />
+          </mesh>
+          <Suspense fallback={null}>
+            <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={accent} />
+          </Suspense>
+        </>
       ) : (
-        <Text
-          position={[0, 6.5, -3.6]}
-          fontSize={0.8}
-          color={accent}
-          anchorX="center"
-          anchorY="middle"
-          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-        >
-          {name}
-          <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.15} />
-        </Text>
+        <LuxuryBoothHeaderCanopy
+          title={name}
+          subtitle="LUXURY RESIDENCES"
+          accent={accent}
+          width={12.5}
+          height={1.5}
+          depth={0.72}
+          position={[0, 6.5, -3.64]}
+        />
       )}
 
       {/* Interactive Concierge Desk */}
@@ -874,7 +890,7 @@ export function StandardLuxuryBooth({
           <BoothPlacedImage item={img} />
         </Suspense>
       ))}
-    </group>
+    </BoothLayoutRoot>
   );
 }
 
@@ -912,6 +928,7 @@ export function VertexEliteBooth({
   cmsPreview,
   cmsPlacedImageEdit,
   showVideos = true,
+  showCtaKiosk = true,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -939,6 +956,7 @@ export function VertexEliteBooth({
     onDragImage: (id: string, pos: [number, number, number]) => void;
   };
   showVideos?: boolean;
+  showCtaKiosk?: boolean;
 }) {
   const glow = accent;
   const dark = '#0c0c12';
@@ -951,7 +969,7 @@ export function VertexEliteBooth({
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
 
   return (
-    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
+    <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       {/* ── Matte floor (no mirror reflections) ── */}
       <mesh position={[0, 0.02, -1.5]} receiveShadow>
         <boxGeometry args={[13, 0.04, 7]} />
@@ -1115,15 +1133,16 @@ export function VertexEliteBooth({
         </Suspense>
       </group>
 
-      {/* ── CTA kiosk — front-right by reception: path stays open (center x clear), screen + branding visible ── */}
-      <VertexEliteCtaKiosk
-        glow={glow}
-        brochureUrl={brochureUrl}
-        priceListUrl={priceListUrl}
-        siteMapUrls={siteMapUrls}
-        position={[4.48, 0.03, 2.02]}
-        rotation={[0, 0.13, 0]}
-      />
+      {showCtaKiosk && (
+        <VertexEliteCtaKiosk
+          glow={glow}
+          brochureUrl={brochureUrl}
+          priceListUrl={priceListUrl}
+          siteMapUrls={siteMapUrls}
+          position={[4.48, 0.03, 2.02]}
+          rotation={[0, 0.13, 0]}
+        />
+      )}
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -1229,31 +1248,36 @@ export function VertexEliteBooth({
           )}
         </Suspense>
       ))}
-    </group>
+    </BoothLayoutRoot>
   );
 }
 
 /** Roll-up style stand facing visitors approaching from the hall center */
 export function BoothStandee({ name, accent }: { name: string; accent: string }) {
-  const w = 0.95;
-  const h = 1.55;
-  const frameT = 0.04;
+  const showBoothStandee = useStore(
+    (s) => mergeSceneConfig(s.sceneOverrides).showBoothStandee,
+  );
+  if (!showBoothStandee) return null;
+
+  const w = 1.45;
+  const h = 2.4;
+  const frameT = 0.05;
   // Local +X = toward TV side of counter; +Z = aisle — matches standee beside desk edge
   const standeePosition: [number, number, number] = [2.76, 0, 3.4];
   return (
     <group position={standeePosition}>
       {/* Weighted base plate */}
       <mesh position={[0, 0.0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.55, 0.08, 0.35]} />
+        <boxGeometry args={[0.72, 0.1, 0.45]} />
         <meshStandardMaterial color="#1a1a1a" metalness={0.75} roughness={0.25} />
       </mesh>
       {/* Centre pole */}
       <mesh position={[0, 0.005, 0]} castShadow>
-        <cylinderGeometry args={[0.035, 0.04, 1.55, 12]} />
+        <cylinderGeometry args={[0.045, 0.05, 2.35, 12]} />
         <meshStandardMaterial color="#2a2a2a" metalness={0.85} roughness={0.2} />
       </mesh>
       {/* Poster panel + gold frame */}
-      <group position={[0, 1.02, 0]}>
+      <group position={[0, 1.58, 0]}>
         <mesh rotation={[0, 0, 0]}>
           <planeGeometry args={[w, h]} />
           <meshStandardMaterial color="#faf8f4" roughness={0.55} metalness={0.05} side={THREE.DoubleSide} />
@@ -1275,8 +1299,8 @@ export function BoothStandee({ name, accent }: { name: string; accent: string })
           <meshStandardMaterial color={accent} metalness={0.9} roughness={0.2} />
         </mesh>
         <Text
-          position={[0, 0.15, 0.02]}
-          fontSize={0.11}
+          position={[0, 0.22, 0.02]}
+          fontSize={0.16}
           color="#1a1a1a"
           anchorX="center"
           anchorY="middle"
@@ -1287,8 +1311,8 @@ export function BoothStandee({ name, accent }: { name: string; accent: string })
           {name}
         </Text>
         <Text
-          position={[0, -0.35, 0.02]}
-          fontSize={0.055}
+          position={[0, -0.52, 0.02]}
+          fontSize={0.075}
           color={accent}
           anchorX="center"
           anchorY="middle"
@@ -1356,45 +1380,44 @@ function Plant({
 }
 
 function FeaturedProperty({ position }: { position: [number, number, number] }) {
+  const r = HELP_DESK_RADIUS;
+  const deskH = HELP_DESK_COUNTER_HEIGHT / 2;
+  const topY = HELP_DESK_COUNTER_HEIGHT;
+  const panelZ = r * 1.01;
+  const stationR = r * 0.92;
+
   return (
     <group position={position}>
-      {/* --- CIRCULAR HELP DESK (on main hall floor — recessed stage disc removed) --- */}
       <group position={[0, 0, 0]}>
-        {/* Main Circular Counter Structure */}
         <group rotation={[0, -Math.PI / 6, 0]}>
-          {/* Desk Body (Polished White Marble) */}
-          <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
-            <cylinderGeometry args={[5.8, 5.8, 1.1, 128, 1, true, 0, Math.PI * 2]} />
+          <mesh position={[0, deskH, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[r, r, deskH * 2, 64, 1, true, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#ffffff" roughness={0.1} metalness={0.1} side={THREE.DoubleSide} />
           </mesh>
 
-          {/* Champagne Gold Mid-Belt Detail */}
-          <mesh position={[0, 0.55, 0]}>
-            <cylinderGeometry args={[5.82, 5.82, 0.3, 128, 1, true, 0, Math.PI * 2]} />
+          <mesh position={[0, deskH, 0]}>
+            <cylinderGeometry args={[r + 0.02, r + 0.02, deskH * 0.55, 64, 1, true, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#d4af37" metalness={0.25} roughness={0.65} envMapIntensity={0.08} side={THREE.DoubleSide} />
           </mesh>
 
-          {/* Desk Top Surface (Premium Marble) */}
-          <mesh position={[0, 1.1, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <ringGeometry args={[5, 5.85, 128, 1, 0, Math.PI * 2]} />
+          <mesh position={[0, topY, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <ringGeometry args={[r * 0.86, r + 0.02, 64, 1, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#ffffff" roughness={0.05} metalness={0.2} side={THREE.DoubleSide} />
           </mesh>
 
-          {/* Under-counter LED Glow */}
-          <mesh position={[0, 1.05, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[5.7, 5.8, 128, 1, 0, Math.PI * 2]} />
+          <mesh position={[0, topY - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[r * 0.97, r, 64, 1, 0, Math.PI * 2]} />
             <meshStandardMaterial color="#fff5e6" emissive="#fff5e6" emissiveIntensity={0.35} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
           </mesh>
 
-          {/* Front branding — Help Desk panel */}
           <group position={[0, 0, 0]} rotation={[0, Math.PI * 0.8, 0]}>
-            <mesh position={[0, 0.55, 5.85]} castShadow>
-              <boxGeometry args={[3.35, 1.15, 0.1]} />
+            <mesh position={[0, deskH, panelZ]} castShadow>
+              <boxGeometry args={[r * 1.15, deskH * 2.2, 0.04]} />
               <meshStandardMaterial color="#ffffff" roughness={0.1} />
             </mesh>
             <Text
-              position={[0, 0.72, 5.96]}
-              fontSize={0.24}
+              position={[0, deskH * 1.3, panelZ + 0.05]}
+              fontSize={0.095}
               color="#ffd700"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
@@ -1405,9 +1428,9 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
               <meshStandardMaterial attach="material" color="#ffd700" emissive="#ffd700" emissiveIntensity={0.45} />
             </Text>
             <Text
-              position={[0, 0.52, 5.96]}
-              fontSize={0.068}
-              maxWidth={3.1}
+              position={[0, deskH * 0.95, panelZ + 0.05]}
+              fontSize={0.028}
+              maxWidth={r * 1.05}
               color="#1a1a1a"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
@@ -1417,8 +1440,8 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
               Digital Property Expo (NOIDA)
             </Text>
             <Text
-              position={[0, 0.36, 5.96]}
-              fontSize={0.048}
+              position={[0, deskH * 0.65, panelZ + 0.05]}
+              fontSize={0.02}
               color="#666"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
@@ -1429,24 +1452,22 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
             </Text>
           </group>
 
-          {/* Concierge hostess — desk-local coords, faces visitors at the CONCIERGE panel */}
           <Suspense fallback={null}>
             <HelpDeskCustomGirl />
           </Suspense>
 
-          {/* Integrated iMac-style stations — evenly spaced on full ring */}
-          {Array.from({ length: 5 }).map((_, i) => {
-            const angle = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-            const x = 5.3 * Math.cos(angle);
-            const z = 5.3 * Math.sin(angle);
+          {Array.from({ length: 4 }).map((_, i) => {
+            const angle = -Math.PI / 2 + (i * 2 * Math.PI) / 4;
+            const x = stationR * Math.cos(angle);
+            const z = stationR * Math.sin(angle);
             return (
-              <group key={i} position={[x, 0.85, z]} rotation={[0, -angle - Math.PI / 2, 0]}>
+              <group key={i} position={[x, topY * 0.75, z]} rotation={[0, -angle - Math.PI / 2, 0]}>
                 <mesh position={[0, 0, 0]}>
-                  <boxGeometry args={[0.6, 0.4, 0.02]} />
+                  <boxGeometry args={[0.22, 0.14, 0.012]} />
                   <meshStandardMaterial color="#111" metalness={0.9} roughness={0.1} />
                 </mesh>
-                <mesh position={[0, -0.25, -0.05]}>
-                  <boxGeometry args={[0.1, 0.3, 0.05]} />
+                <mesh position={[0, -0.09, -0.018]}>
+                  <boxGeometry args={[0.04, 0.1, 0.018]} />
                   <meshStandardMaterial color="#d4af37" metalness={1} />
                 </mesh>
               </group>
@@ -1770,8 +1791,8 @@ export function BoothHostessGreeter({
 
 /** Same yaw as the CONCIERGE branding panel (`FeaturedProperty` front group). */
 const CONCIERGE_PANEL_YAW = Math.PI * 0.8;
-/** Just inside the panel (panel mesh z ≈ 5.85 in branding-local +Z). */
-const CONCIERGE_HOSTESS_RADIUS = 4.78;
+/** Just inside the help-desk branding panel. */
+const CONCIERGE_HOSTESS_RADIUS = HELP_DESK_RADIUS * 0.82;
 const CONCIERGE_HOSTESS_POS: [number, number, number] = [
   CONCIERGE_HOSTESS_RADIUS * Math.sin(CONCIERGE_PANEL_YAW),
   0,
@@ -1779,7 +1800,7 @@ const CONCIERGE_HOSTESS_POS: [number, number, number] = [
 ];
 /** GLB forward is +Z — yaw aligns with radial line toward visitors (same as booth hostesses). */
 const CONCIERGE_HOSTESS_ROT: [number, number, number] = [0, CONCIERGE_PANEL_YAW, 0];
-const CONCIERGE_HOSTESS_BUBBLE_Y = 1.82;
+const CONCIERGE_HOSTESS_BUBBLE_Y = HELP_DESK_COUNTER_HEIGHT + 0.95;
 
 function HelpDeskCustomGirl() {
   const hostessReplies = useMemo(() => buildHelpDeskHostessReplies(), []);
@@ -1812,4 +1833,3 @@ function HelpDeskCustomGirl() {
 }
 
 useGLTF.preload(HOSTESS_MODEL_URL);
-useGLTF.preload(HALL_TREE_MODEL_URL);

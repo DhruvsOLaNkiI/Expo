@@ -845,11 +845,14 @@ function LayoutTab({ px, setPx, py, setPy, pz, setPz, rxDeg, setRxDeg, ryDeg, se
         <CmsField label="Y°" value={ryDeg} onChange={setRyDeg} />
         <CmsField label="Z°" value={rzDeg} onChange={setRzDeg} />
       </div>
-      <SectionTitle>Scale</SectionTitle>
+      <SectionTitle>Booth size</SectionTitle>
+      <p className="mb-2 text-[10px] leading-relaxed text-white/45">
+        Width = left–right · Height = floor to ceiling · Depth = front to back. 1.0 is default; Luxe booths use ~1.3 × 1.58 × 1.3.
+      </p>
       <div className="grid grid-cols-3 gap-2">
-        <CmsField label="X" value={sx} onChange={setSx} />
-        <CmsField label="Y" value={sy} onChange={setSy} />
-        <CmsField label="Z" value={sz} onChange={setSz} />
+        <CmsField label="Width (X)" value={sx} onChange={setSx} />
+        <CmsField label="Height (Y)" value={sy} onChange={setSy} />
+        <CmsField label="Depth (Z)" value={sz} onChange={setSz} />
       </div>
     </>
   );

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
+import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
 function useBoothGradient() {
@@ -82,7 +83,7 @@ export function CrownEstatesBooth({
   const floorMat = <meshStandardMaterial color="#fcfcfc" roughness={0.4} metalness={0.05} />;
 
   return (
-    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
+    <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       {/* Floor Pad */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
         <boxGeometry args={[12.2, 0.1, 5.5]} />
@@ -274,6 +275,6 @@ export function CrownEstatesBooth({
           </mesh>
         </group>
       ))}
-    </group>
+    </BoothLayoutRoot>
   );
 }

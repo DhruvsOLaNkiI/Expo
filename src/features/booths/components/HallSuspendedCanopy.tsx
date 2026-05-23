@@ -3,6 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import { Suspense, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
+import { HELP_DESK_RADIUS, HALL_HEIGHT } from '@/features/shared/data/boothLayouts';
+
+/** Original canopy was sized for ~11.6 m desk; scale to match {@link HELP_DESK_RADIUS}. */
+export const HELP_DESK_CANOPY_SCALE = HELP_DESK_RADIUS / 5.8;
 
 function TickerRing({
   radius,
@@ -88,11 +92,13 @@ function SuspendedExpoCanopy({
   name,
   showVideos = false,
   lite = false,
+  scale = 1,
 }: {
   position: [number, number, number];
   name: string;
   showVideos?: boolean;
   lite?: boolean;
+  scale?: number;
 }) {
   const graphicRingRef = useRef<THREE.Group>(null);
   const spinAccum = useRef(0);
@@ -115,7 +121,7 @@ function SuspendedExpoCanopy({
   const torusSegments = lite ? [8, 48] : [16, 128];
 
   return (
-    <group name={name} position={position}>
+    <group name={name} position={position} scale={[scale, scale, scale]}>
       <mesh position={[-5, 3, -5]}>
         <cylinderGeometry args={[0.03, 0.03, 15, 6]} />
         <meshStandardMaterial color="#d4af37" metalness={1} />
@@ -271,9 +277,9 @@ function SuspendedExpoCanopy({
   );
 }
 
-/** Single suspended LED ring above the help desk. */
+/** Single suspended LED ring above the help desk (8 m ceiling). */
 export const HALL_CANOPY_PLACEMENTS = [
-  { name: 'hall-canopy-center', position: [0, 14, 0] as [number, number, number] },
+  { name: 'hall-canopy-center', position: [0, HALL_HEIGHT * 0.68, 0] as [number, number, number] },
 ];
 
 export function HallSuspendedCanopies({
@@ -290,6 +296,7 @@ export function HallSuspendedCanopies({
           key={canopy.name}
           name={canopy.name}
           position={canopy.position}
+          scale={HELP_DESK_CANOPY_SCALE}
           showVideos={showVideos}
           lite={lite}
         />

@@ -118,29 +118,74 @@ export type HallLayoutConfig = {
   entranceLobbyOffset: [number, number, number];
   /** Added to default banner anchor `[0, 6, -4.5]` inside the lobby group. */
   receptionBannerOffset: [number, number, number];
-  /** Four decorative tree world positions. */
-  plantPositions: [
-    [number, number, number],
-    [number, number, number],
-    [number, number, number],
-    [number, number, number],
-  ];
-  plantScales: [number, number, number, number];
+  /** Decorative tree world positions (up to four in Edit layout). */
+  plantPositions: [number, number, number][];
+  plantScales: number[];
 };
 
-/** Half-width of the 90m expo hall (must match `ExpoHall` / `Player` bounds). */
-export const HALL_HALF_EXTENT = 45;
+/** Main expo hall footprint (meters) — width × depth × height. */
+export const HALL_WIDTH = 65;
+export const HALL_DEPTH = 30;
+export const HALL_HEIGHT = 12;
+
+export const HALL_HALF_WIDTH = HALL_WIDTH / 2;
+export const HALL_HALF_DEPTH = HALL_DEPTH / 2;
+
+/** Legacy square bound helper — use {@link HALL_HALF_WIDTH} / {@link HALL_HALF_DEPTH} for clamps. */
+export const HALL_HALF_EXTENT = Math.max(HALL_HALF_WIDTH, HALL_HALF_DEPTH);
+
+/** Circular help desk at center plaza — outer ring diameter. */
+export const HELP_DESK_RADIUS = 2.75;
+export const HELP_DESK_DIAMETER = HELP_DESK_RADIUS * 2;
+/** Standing counter height (m) — top of the white ring. */
+export const HELP_DESK_COUNTER_HEIGHT = 1.15;
 
 /**
- * World X for main booth row — backs near west/east walls (hall wall at ±45).
- * StandardLuxuryBooth back wall sits ~4m toward −X / +X from group origin when facing the aisle.
+ * World X for main booth row — inset from walls so booths sit on the red carpet, not past the perimeter.
+ * StandardLuxuryBooth back wall is ~4m behind the group origin along local −Z.
  */
-export const BOOTH_ROW_X_WEST = -40;
-export const BOOTH_ROW_X_EAST = 40;
+/**
+ * Booth row X — close enough to the center that both rows are visible from the aisle.
+ * Hall is 65 m wide (±32.5). Putting rows at ±14 gives a ~28 m aisle — expo hall feel.
+ * Each booth is ~13 m wide so the back wall sits at ~±18 — well inside the red carpet.
+ */
+export const BOOTH_ROW_X_WEST = -14;
+export const BOOTH_ROW_X_EAST = 14;
+/** Extra north bay on each wall (between gold pillars). */
+export const BOOTH_ROW_Z_NORTH_EXTRA = -12;
+/** Slot south of north-extra on the east wall (right of Luxe Gardens when facing the row). */
+export const BOOTH_ROW_Z_EAST_LUXE_PAIR = -4.5;
+/** Three booth slots along the 30 m depth — mirrored on west and east rows. */
+export const BOOTH_ROW_Z = [-9, 0, 9] as const;
+/** West row faces east (+X); east row faces west (−X). */
+export const BOOTH_YAW_WEST = Math.PI / 2;
+export const BOOTH_YAW_EAST = -Math.PI / 2;
 
-/** Side-aisle duplicate booth IDs (optional extras; hidden by default to avoid floating mid-aisle copies). */
+/** Aisle centre-line between the two booth rows. */
+export const EXPO_AISLE_WEST_X = BOOTH_ROW_X_WEST + 6;
+export const EXPO_AISLE_EAST_X = BOOTH_ROW_X_EAST - 6;
+
+/**
+ * Default world scale for main-row booths (65×30 m hall, 12 m ceiling).
+ * Walls are ~6 m tall at scale 1 — this reads better against the hall height.
+ */
+export const DEFAULT_MAIN_BOOTH_SCALE: [number, number, number] = [1.22, 1.48, 1.22];
+/** LUXE TOWERS — slightly larger footprint so it matches Monarch / Vertex presence. */
+export const LUXE_TOWERS_BOOTH_SCALE: [number, number, number] = [1.3, 1.58, 1.3];
+
+/** Keep booth origins on the hall floor (65×30 m), including saved CMS overrides. */
+export function clampBoothInsideHall(position: [number, number, number]): [number, number, number] {
+  const maxX = HALL_HALF_WIDTH - 5;
+  const maxZ = HALL_HALF_DEPTH - 7;
+  return [
+    Math.min(maxX, Math.max(-maxX, position[0])),
+    position[1],
+    Math.min(maxZ, Math.max(-maxZ, position[2])),
+  ];
+}
+
+/** Side-aisle duplicate booth IDs (optional extras; hidden by default). */
 export const DEFAULT_HIDDEN_SIDE_BOOTH_IDS = [
-  'side-west-luxe',
   'side-west-aurum',
   'side-west-crown',
   'side-east-monarch',
@@ -149,19 +194,14 @@ export const DEFAULT_HIDDEN_SIDE_BOOTH_IDS = [
 ] as const;
 
 export function defaultEntranceLobbyZ(): number {
-  return HALL_HALF_EXTENT - 2;
+  return HALL_HALF_DEPTH - 2;
 }
 
 export const DEFAULT_HALL_LAYOUT: HallLayoutConfig = {
   entranceLobbyOffset: [0, 0, 0],
   receptionBannerOffset: [0, 0, 0],
-  plantPositions: [
-    [-5, 0, 15],
-    [5, 0, 15],
-    [-5, 0, 30],
-    [5, 0, 30],
-  ],
-  plantScales: [1.08, 1.08, 0.92, 0.92],
+  plantPositions: [],
+  plantScales: [],
 };
 
 export function mergeHallLayout(overrides?: Partial<HallLayoutConfig>): HallLayoutConfig {
@@ -267,14 +307,14 @@ function sanitizeSceneFog(rest: Omit<SceneOverridesInput, 'hallLayout'>): Omit<S
   const far = rest.fogFar ?? DEFAULT_SCENE_CONFIG.fogFar;
   const color = (rest.fogColor ?? '').toLowerCase();
   const legacyLightFog =
-    far <= 65 && (color === '#d8d4cc' || color === '#fdfbf2' || color === '#ffffff' || color === '');
+    far <= 48 && (color === '#d8d4cc' || color === '#fdfbf2' || color === '#ffffff' || color === '');
   if (legacyLightFog) {
     return { ...rest, fogEnabled: false };
   }
   return {
     ...rest,
-    fogNear: Math.max(rest.fogNear ?? DEFAULT_SCENE_CONFIG.fogNear, 25),
-    fogFar: Math.max(far, 75),
+    fogNear: Math.max(rest.fogNear ?? DEFAULT_SCENE_CONFIG.fogNear, 8),
+    fogFar: Math.min(Math.max(far, 32), 75),
     fogColor: rest.fogColor && color !== '#d8d4cc' ? rest.fogColor : DEFAULT_SCENE_CONFIG.fogColor,
   };
 }
@@ -309,7 +349,7 @@ export type SceneConfig = {
   showStandardBooths: boolean;
   /** Full-screen bloom / tone-map / vignette — expensive on integrated GPUs. */
   postProcessing: boolean;
-  /** Show ballroom with conference chairs (expensive). */
+  /** Show ballroom stage, screen, and podium on the east wall. */
   showBallroom: boolean;
   /** Show roaming executive animated model. */
   showRoamingExecutive: boolean;
@@ -317,6 +357,14 @@ export type SceneConfig = {
   showVideos: boolean;
   /** Suspended hall LED ring above help desk — heavy (8 screens + ticker). */
   showHallCanopy: boolean;
+  /** Four `tree.glb` path plants — heavy on integrated GPUs; off by default. */
+  showHallPlants: boolean;
+  /** Vertex Elite tall CTA kiosk (brochure / site map stand by the help-desk path). */
+  showVertexEliteCtaKiosk: boolean;
+  /** Sketchfab digital standees between booth rows (`digital_display_standee_sketchfab_export.glb`). */
+  showHallAisleStandees: boolean;
+  /** Small roll-up name stand beside each luxury booth counter. */
+  showBoothStandee: boolean;
   /** Array of booth IDs to hide (for selective performance tuning). */
   hiddenBooths: string[];
   /**
@@ -348,8 +396,8 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   ceilingLightColor: '#ffffff',
   /** Off by default — light fog at low fogFar looks like a white wall that moves with the camera */
   fogEnabled: false,
-  fogNear: 35,
-  fogFar: 95,
+  fogNear: 14,
+  fogFar: 55,
   fogColor: '#f0ebe4',
   bloomIntensity: 0.26,
   bloomThreshold: 1.72,
@@ -357,10 +405,14 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   bgColor: '#f5f2ec',
   showStandardBooths: true,
   postProcessing: false,
-  showBallroom: false,
+  showBallroom: true,
   showRoamingExecutive: false,
   showVideos: true,
   showHallCanopy: true,
+  showHallPlants: false,
+  showVertexEliteCtaKiosk: false,
+  showHallAisleStandees: false,
+  showBoothStandee: true,
   hiddenBooths: [...DEFAULT_HIDDEN_SIDE_BOOTH_IDS],
   modelCompression: '30fps',
   renderQuality: 'hd',
@@ -410,12 +462,13 @@ function makeDefaultBooth(
   color: string,
   videoUrl: string,
   headerLogoUrl?: string,
+  scale: [number, number, number] = DEFAULT_MAIN_BOOTH_SCALE,
 ): BoothLayoutConfig {
   return {
     id,
     position,
     rotation,
-    scale: [1, 1, 1],
+    scale,
     name,
     color,
     accent: '#d4af37',
@@ -439,23 +492,30 @@ function makeDefaultBooth(
 }
 
 export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
+  const [zNorth, zCenter, zSouth] = BOOTH_ROW_Z;
   const vertex = makeDefaultBooth(
     'vertex-elite',
     'VERTEX ELITE',
-    [BOOTH_ROW_X_WEST, 0, 20],
-    [0, Math.PI / 2 + 0.06, 0],
+    [BOOTH_ROW_X_WEST, 0, zSouth],
+    [0, BOOTH_YAW_WEST, 0],
     '#fcfaf5',
     PROJECT_VIDEOS[2],
   );
-  /** Even 20m spacing along each wall — matches Edit-layout spacing visitors expect on deploy. */
-  const westZ = [-20, 0, 20] as const;
-  const eastZ = [-20, 0, 20] as const;
   return [
-    makeDefaultBooth('builder-1', 'LUXE TOWERS', [BOOTH_ROW_X_WEST, 0, westZ[0]], [0, Math.PI / 2 - 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[0]),
-    makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [BOOTH_ROW_X_WEST, 0, westZ[1]], [0, Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
+    makeDefaultBooth(
+      'builder-1',
+      'LUXE TOWERS',
+      [BOOTH_ROW_X_WEST, 0, zNorth],
+      [0, BOOTH_YAW_WEST, 0],
+      '#fcfaf5',
+      PROJECT_VIDEOS[0],
+      undefined,
+      LUXE_TOWERS_BOOTH_SCALE,
+    ),
+    makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [BOOTH_ROW_X_WEST, 0, zCenter], [0, BOOTH_YAW_WEST, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
     {
       ...vertex,
-      position: [BOOTH_ROW_X_WEST, 0, westZ[2]],
+      position: [BOOTH_ROW_X_WEST, 0, zSouth],
       brochureUrl: vertex.brochureUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       priceListUrl: vertex.priceListUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       siteMapUrl: vertex.siteMapUrl || '/maps/site-map.svg',
@@ -470,9 +530,29 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
         { id: 'vertex-hq-ai', label: 'Ask AI', response: '', action: 'askAi' },
       ],
     },
-    makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, eastZ[0]], [0, -Math.PI / 2 + 0.16, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
-    makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, eastZ[1]], [0, -Math.PI / 2, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
-    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, eastZ[2]], [0, -Math.PI / 2 - 0.16, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
+    makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, zNorth], [0, BOOTH_YAW_EAST, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
+    makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, zCenter], [0, BOOTH_YAW_EAST, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
+    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, zSouth], [0, BOOTH_YAW_EAST, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
+    makeDefaultBooth(
+      'builder-8',
+      'LUXE GARDENS',
+      [BOOTH_ROW_X_EAST, 0, BOOTH_ROW_Z_NORTH_EXTRA],
+      [0, BOOTH_YAW_EAST, 0],
+      '#fcfaf5',
+      PROJECT_VIDEOS[0],
+      undefined,
+      LUXE_TOWERS_BOOTH_SCALE,
+    ),
+    makeDefaultBooth(
+      'builder-9',
+      'LUXE SKYLINE',
+      [BOOTH_ROW_X_EAST, 0, BOOTH_ROW_Z_EAST_LUXE_PAIR],
+      [0, BOOTH_YAW_EAST, 0],
+      '#fcfaf5',
+      PROJECT_VIDEOS[0],
+      undefined,
+      LUXE_TOWERS_BOOTH_SCALE,
+    ),
   ];
 }
 
@@ -508,18 +588,23 @@ export function applyBoothOverrides(
 ): BoothLayoutConfig[] {
   return defaults.map((b) => {
     const o = overrides[b.id];
-    if (!o) return b;
+    const merged = o
+      ? {
+          ...b,
+          ...o,
+          media: o.media ?? b.media,
+          placedImages: o.placedImages ?? b.placedImages,
+          siteMapGallery: o.siteMapGallery ?? b.siteMapGallery,
+          hostessQuickReplies: migrateLegacyHostessQuickReplies(
+            o.hostessQuickReplies !== undefined ? o.hostessQuickReplies : b.hostessQuickReplies,
+          ),
+          company: o.company ? { ...b.company, ...o.company } : b.company,
+          lighting: o.lighting ? { ...b.lighting, ...o.lighting } : b.lighting,
+        }
+      : b;
     return {
-      ...b,
-      ...o,
-      media: o.media ?? b.media,
-      placedImages: o.placedImages ?? b.placedImages,
-      siteMapGallery: o.siteMapGallery ?? b.siteMapGallery,
-      hostessQuickReplies: migrateLegacyHostessQuickReplies(
-        o.hostessQuickReplies !== undefined ? o.hostessQuickReplies : b.hostessQuickReplies,
-      ),
-      company: o.company ? { ...b.company, ...o.company } : b.company,
-      lighting: o.lighting ? { ...b.lighting, ...o.lighting } : b.lighting,
+      ...merged,
+      position: clampBoothInsideHall(merged.position),
     };
   });
 }

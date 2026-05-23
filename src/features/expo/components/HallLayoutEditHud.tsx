@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@/store';
 import {
+  applyBoothOverrides,
   buildDefaultBoothLayoutList,
   mergeRegistrationLayout,
   type RegistrationImportedModel,
@@ -35,7 +36,12 @@ export function HallLayoutEditHud() {
   const rotationAxis = useStore((s) => s.hallLayoutRotationAxis);
   const setRotationAxis = useStore((s) => s.setHallLayoutRotationAxis);
   const patchSceneOverride = useStore((s) => s.patchSceneOverride);
+  const boothOverrides = useStore((s) => s.boothOverrides);
+  const patchBoothOverride = useStore((s) => s.patchBoothOverride);
   const regOverrides = useStore((s) => s.sceneOverrides.registrationLayout);
+  const [boothWidth, setBoothWidth] = useState('1');
+  const [boothHeight, setBoothHeight] = useState('1');
+  const [boothDepth, setBoothDepth] = useState('1');
   const inRegistration = useStore((s) => s.expoPhase) === 'registration';
   const [glbUrlInput, setGlbUrlInput] = useState('');
   const [saveHint, setSaveHint] = useState<string | null>(null);
@@ -77,14 +83,61 @@ export function HallLayoutEditHud() {
     return [...REGISTRATION_OPTIONS, ...imported];
   }, [regLayout.importedModels]);
 
+  const boothLayouts = useMemo(
+    () => applyBoothOverrides(buildDefaultBoothLayoutList(), boothOverrides),
+    [boothOverrides],
+  );
+
   const boothOptions = useMemo(
     () =>
-      buildDefaultBoothLayoutList().map((b) => ({
+      boothLayouts.map((b) => ({
         id: `booth-root-${b.id}`,
         label: `Booth: ${b.name}`,
       })),
-    [],
+    [boothLayouts],
   );
+
+  const selectedBoothId = sel?.startsWith('booth-root-') ? sel.slice('booth-root-'.length) : null;
+
+  useEffect(() => {
+    if (!selectedBoothId) return;
+    const obj = findLayoutObject(`booth-root-${selectedBoothId}`);
+    if (obj) {
+      setBoothWidth(obj.scale.x.toFixed(2));
+      setBoothHeight(obj.scale.y.toFixed(2));
+      setBoothDepth(obj.scale.z.toFixed(2));
+      return;
+    }
+    const b = boothLayouts.find((x) => x.id === selectedBoothId);
+    if (b) {
+      setBoothWidth(String(b.scale[0]));
+      setBoothHeight(String(b.scale[1]));
+      setBoothDepth(String(b.scale[2]));
+    }
+  }, [selectedBoothId, boothLayouts, sel]);
+
+  const applyBoothSize = () => {
+    if (!selectedBoothId) return;
+    const parse = (v: string, fallback: number) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) && n > 0 ? n : fallback;
+    };
+    const scale: [number, number, number] = [
+      parse(boothWidth, 1),
+      parse(boothHeight, 1),
+      parse(boothDepth, 1),
+    ];
+    const obj = findLayoutObject(`booth-root-${selectedBoothId}`);
+    if (obj) {
+      obj.scale.set(scale[0], scale[1], scale[2]);
+      obj.updateMatrixWorld(true);
+      persistHallLayoutTransform(`booth-root-${selectedBoothId}`, obj);
+      flashSaveHint('✓ Booth size saved');
+      return;
+    }
+    void patchBoothOverride(selectedBoothId, { scale });
+    flashSaveHint('✓ Booth size saved');
+  };
 
   const addImportedModel = (url: string, label: string) => {
     const trimmed = url.trim();
@@ -126,6 +179,7 @@ export function HallLayoutEditHud() {
       }
       if (e.key === 'g' || e.key === 'G') setGizmoMode('translate');
       if (e.key === 'r' || e.key === 'R') setGizmoMode('rotate');
+      if (e.key === 's' || e.key === 'S') setGizmoMode('scale');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -141,7 +195,7 @@ export function HallLayoutEditHud() {
             {inRegistration ? 'Edit registration layout' : 'Edit hall layout'}
           </div>
           <p className="mt-1 text-[10px] leading-relaxed text-white/55">
-            <strong className="text-white/75">Click object</strong> to select · <strong className="text-white/75">G</strong> move · <strong className="text-white/75">R</strong> rotate
+            <strong className="text-white/75">Click object</strong> to select · <strong className="text-white/75">G</strong> move · <strong className="text-white/75">R</strong> rotate · <strong className="text-white/75">S</strong> resize
           </p>
           {saveHint && (
             <p className="mt-1 text-[10px] font-semibold text-emerald-400/90">{saveHint}</p>
@@ -188,7 +242,72 @@ export function HallLayoutEditHud() {
         >
           Rotate
         </button>
+        <button
+          type="button"
+          className={`flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide ${
+            gizmoMode === 'scale'
+              ? 'border-[#d4af37]/50 bg-[#d4af37]/20 text-[#f5e6b8]'
+              : 'border-white/12 bg-white/[0.06] text-white/70 hover:bg-white/10'
+          }`}
+          onClick={() => setGizmoMode('scale')}
+        >
+          Size
+        </button>
       </div>
+
+      {selectedBoothId && (
+        <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#d4af37]">Booth width & height</div>
+          <p className="mt-1 text-[10px] leading-relaxed text-white/50">
+            Drag the <strong className="text-white/70">Size</strong> gizmo, or type values below (1.0 = default).
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <label className="block">
+              <span className="text-[9px] uppercase text-white/40">Width</span>
+              <input
+                type="number"
+                min={0.5}
+                max={3}
+                step={0.05}
+                value={boothWidth}
+                onChange={(e) => setBoothWidth(e.target.value)}
+                className="mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[9px] uppercase text-white/40">Height</span>
+              <input
+                type="number"
+                min={0.5}
+                max={3}
+                step={0.05}
+                value={boothHeight}
+                onChange={(e) => setBoothHeight(e.target.value)}
+                className="mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[9px] uppercase text-white/40">Depth</span>
+              <input
+                type="number"
+                min={0.5}
+                max={3}
+                step={0.05}
+                value={boothDepth}
+                onChange={(e) => setBoothDepth(e.target.value)}
+                className="mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            className="mt-2 w-full rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/15 px-2 py-1.5 text-[10px] font-semibold uppercase text-[#f5e6b8] hover:bg-[#d4af37]/25"
+            onClick={applyBoothSize}
+          >
+            Apply size
+          </button>
+        </div>
+      )}
 
       {gizmoMode === 'rotate' && (
         <div className="mt-2">

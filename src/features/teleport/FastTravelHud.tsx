@@ -18,6 +18,7 @@ export function FastTravelHud() {
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const activeBooth = useStore((s) => s.activeBooth);
   const helpDeskOpen = useStore((s) => s.helpDeskOpen);
+  const hallLayoutEditMode = useStore((s) => s.hallLayoutEditMode);
   const visitorProfile = useStore((s) => s.visitorProfile);
 
   const [open, setOpen] = useState(true);
@@ -27,7 +28,15 @@ export function FastTravelHud() {
     [boothOverrides],
   );
 
-  if (!visitorProfile || showInstructions || registrationUi !== 'none' || ctaResourcePopup || activeBooth || helpDeskOpen) {
+  if (
+    !visitorProfile ||
+    showInstructions ||
+    registrationUi !== 'none' ||
+    ctaResourcePopup ||
+    activeBooth ||
+    helpDeskOpen ||
+    hallLayoutEditMode
+  ) {
     return null;
   }
 

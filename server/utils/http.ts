@@ -8,6 +8,7 @@ export function sendJson(res: ServerResponse, status: number, body: unknown) {
 
 export function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
+    const MaxBodySize = 1024 * 1024 * 10; // 10MB
     const chunks: Buffer[] = [];
     req.on('data', (c) => chunks.push(c as Buffer));
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));

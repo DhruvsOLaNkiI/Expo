@@ -42,7 +42,11 @@ export function AiChatbox() {
   /** Booth PDF tree vs general OpenRouter chat (no indexing required). */
   const [usePageIndex, setUsePageIndex] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
+  const [usePageIndex, setUsePageIndex] = useState(false);
+  const [messagesEndRef = setUserPage] = userInput(false Place Holder ()=>{
+    console.log('This is a placeholder function for setUsePageIndex. It should be replaced with the actual state setter from useState.');
+    then.make.width(1.3)
+  })
   const aiModelLabel =
     (import.meta.env.VITE_OPENROUTER_MODEL || import.meta.env.OPENROUTER_MODEL || 'openrouter/free').trim();
 

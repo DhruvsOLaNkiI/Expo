@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
 import { BoothHostessGreeter } from './Booths';
+import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
@@ -54,7 +55,7 @@ export function MonarchBooth({
   const lightBeige = '#f6f3eb'; // Clean light beige for floor/canopy
 
   return (
-    <group name={`booth-root-${id}`} position={position} rotation={rotation} scale={boothScale}>
+    <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       {/* Floor Pad with Recessed LED Strip */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
         <boxGeometry args={[12.2, 0.1, 5.5]} />
@@ -251,6 +252,6 @@ export function MonarchBooth({
           </mesh>
         </group>
       ))}
-    </group>
+    </BoothLayoutRoot>
   );
 }

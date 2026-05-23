@@ -6,15 +6,22 @@ import { PointerLockControls } from 'three-stdlib';
 import { CAMERA_MODES } from '@/features/expo/camera/cameraModes';
 import { useStore } from '@/store';
 import { regBounds, REG_MAIN_EXPO_SPAWN, REG_SPAWN } from '@/features/shared/data/registrationHall';
-import { HALL_HALF_EXTENT } from '@/features/shared/data/boothLayouts';
+import {
+  EXPO_AISLE_EAST_X,
+  EXPO_AISLE_WEST_X,
+  HALL_HALF_DEPTH,
+  HALL_HALF_WIDTH,
+} from '@/features/shared/data/boothLayouts';
 import { LocalVisitorAvatar } from './LocalVisitorAvatar';
 
 /** Realistic walking speed ~4.5 km/h = ~1.25 m/s. Expo feel is slightly faster. */
 const WALK_SPEED = 4.2;
 /** Cap frame delta to avoid teleporting on a lag spike. */
 const MAX_DELTA = 0.1;
-const PLAYER_MARGIN = 3.5;
-const EXPO_BOUND = HALL_HALF_EXTENT - PLAYER_MARGIN;
+const PLAYER_MARGIN_X = 2;
+const PLAYER_MARGIN_Z = 3.5;
+const EXPO_BOUND_X = HALL_HALF_WIDTH - PLAYER_MARGIN_X;
+const EXPO_BOUND_Z = HALL_HALF_DEPTH - PLAYER_MARGIN_Z;
 /** Joystick dead-zone. */
 const JOY_DEAD = 0.14;
 /** FOV smoothing factor per frame. */
@@ -69,6 +76,8 @@ export function Player() {
   const ctaResourcePopup = useStore((state) => state.ctaResourcePopup);
   const teleportNonce = useStore((state) => state.teleportNonce);
   const joystickData = useStore((state) => state.joystickData);
+  const strafeHold = useStore((state) => state.strafeHold);
+  const teleportPlayer = useStore((state) => state.teleportPlayer);
   const hallLayoutEditMode = useStore((state) => state.hallLayoutEditMode);
   const expoPhase = useStore((state) => state.expoPhase);
   const registrationUi = useStore((state) => state.registrationUi);
@@ -193,6 +202,16 @@ export function Player() {
       if (e.repeat) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (expoPhase === 'expo' && !hallLayoutEditMode) {
+        if (e.code === 'KeyQ') {
+          teleportPlayer([EXPO_AISLE_WEST_X, 1.7, 0]);
+          return;
+        }
+        if (e.code === 'KeyE') {
+          teleportPlayer([EXPO_AISLE_EAST_X, 1.7, 0]);
+          return;
+        }
+      }
       if (e.code === 'KeyV') {
         cycleCameraMode();
         const next = useStore.getState().cameraMode;
@@ -202,7 +221,7 @@ export function Player() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [camera, cycleCameraMode]);
+  }, [camera, cycleCameraMode, expoPhase, teleportPlayer, hallLayoutEditMode]);
 
   /* ── react to mode switch (position unchanged — only FOV / third-person offset) ── */
   useEffect(() => {
@@ -238,12 +257,20 @@ export function Player() {
     let lz = 0;
 
     if (isTouch) {
-      const jx = joystickData.x;
+      const jx = joystickData.x + (strafeHold.right ? 1 : 0) - (strafeHold.left ? 1 : 0);
       const jy = joystickData.y;
       const mag = Math.hypot(jx, jy);
       if (mag >= JOY_DEAD) { lx = jx / mag; lz = jy / mag; }
+      else if (strafeHold.left || strafeHold.right) {
+        lx = strafeHold.right ? 1 : -1;
+        lz = 0;
+      }
     } else {
-      lx = Number(keys.right) - Number(keys.left);
+      lx =
+        Number(keys.right) -
+        Number(keys.left) +
+        (strafeHold.right ? 1 : 0) -
+        (strafeHold.left ? 1 : 0);
       lz = Number(keys.forward) - Number(keys.backward);
       const mag = Math.hypot(lx, lz);
       if (mag > 1e-6) { lx /= mag; lz /= mag; }
@@ -280,8 +307,8 @@ export function Player() {
       feetRef.current.x = THREE.MathUtils.clamp(feetRef.current.x, b.minX, b.maxX);
       feetRef.current.z = THREE.MathUtils.clamp(feetRef.current.z, b.minZ, b.maxZ);
     } else {
-      feetRef.current.x = THREE.MathUtils.clamp(feetRef.current.x, -EXPO_BOUND, EXPO_BOUND);
-      feetRef.current.z = THREE.MathUtils.clamp(feetRef.current.z, -EXPO_BOUND, EXPO_BOUND);
+      feetRef.current.x = THREE.MathUtils.clamp(feetRef.current.x, -EXPO_BOUND_X, EXPO_BOUND_X);
+      feetRef.current.z = THREE.MathUtils.clamp(feetRef.current.z, -EXPO_BOUND_Z, EXPO_BOUND_Z);
     }
 
     /* Always grounded at y=0 */

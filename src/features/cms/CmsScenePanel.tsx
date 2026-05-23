@@ -248,6 +248,66 @@ export function CmsScenePanel() {
         </span>
       </label>
 
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showVertexEliteCtaKiosk}
+          onChange={(e) => patchScene({ showVertexEliteCtaKiosk: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">Show Vertex Elite CTA kiosk (tall black stand)</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Tall black “EXPLORE MORE” kiosk on the aisle. Off by default — leave unchecked to hide it.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showHallAisleStandees}
+          onChange={(e) => patchScene({ showHallAisleStandees: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">Show aisle digital standees (GLB)</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Tall phone-style displays between booth rows (Sketchfab GLB). Off by default — heavy on GPU.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showBoothStandee}
+          onChange={(e) => patchScene({ showBoothStandee: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">Show booth roll-up standee</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Small name sign on a pole beside each luxury booth desk (Luxe, Aurum, Crown, Horizon).
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showHallPlants}
+          onChange={(e) => patchScene({ showHallPlants: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">Show hall path trees</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Four decorative tree models on the main aisle. Off by default — each uses a heavy GLB mesh.
+          </span>
+        </span>
+      </label>
+
       <SectionTitle>Booth Visibility ({allBooths.length} booths)</SectionTitle>
       <div className="mb-2 p-2 bg-white/[0.02] border border-white/[0.06] rounded-lg">
         <p className="text-[9px] text-white/40 mb-2">

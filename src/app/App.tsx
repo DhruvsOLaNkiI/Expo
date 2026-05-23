@@ -47,6 +47,38 @@ function AdminRouteFallback({ label }: { label: string }) {
   );
 }
 
+/** Hold ◀ / ▶ to strafe left and right (mobile + desktop). */
+function StrafeButtons() {
+  const setStrafeHold = useStore((s) => s.setStrafeHold);
+  const inRegistration = useStore((s) => s.expoPhase) === 'registration';
+
+  if (inRegistration) return null;
+
+  const bind = (side: 'left' | 'right') => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      setStrafeHold({ left: side === 'left', right: side === 'right' });
+    },
+    onPointerUp: () => setStrafeHold({ left: false, right: false }),
+    onPointerLeave: () => setStrafeHold({ left: false, right: false }),
+    onPointerCancel: () => setStrafeHold({ left: false, right: false }),
+  });
+
+  const btnClass =
+    'pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#d4af37]/35 bg-[#1a1a22]/85 text-xl font-bold text-[#d4af37] shadow-lg backdrop-blur-md active:bg-[#d4af37]/25';
+
+  return (
+    <div className="fixed bottom-14 left-48 z-50 flex gap-3 touch-none" data-expo-ui>
+      <button type="button" className={btnClass} aria-label="Move left" {...bind('left')}>
+        ◀
+      </button>
+      <button type="button" className={btnClass} aria-label="Move right" {...bind('right')}>
+        ▶
+      </button>
+    </div>
+  );
+}
+
 function Joystick() {
   const setJoystickData = useStore((state) => state.setJoystickData);
   const [active, setActive] = useState(false);
@@ -291,7 +323,7 @@ export default function App() {
             type="button"
             className="fixed bottom-3 left-36 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
             onClick={() => {
-              setHallLayoutSelection('hall-entrance-lobby');
+              setHallLayoutSelection(null);
               setHallLayoutEditMode(true);
             }}
           >
@@ -331,7 +363,12 @@ export default function App() {
         </>
       )}
 
-      {isTouch && !showInstructions && !ctaResourcePopup && !needsOnboarding && <Joystick />}
+      {!showInstructions && !ctaResourcePopup && !needsOnboarding && !inRegistration && (
+        <>
+          <StrafeButtons />
+          {isTouch && <Joystick />}
+        </>
+      )}
 
       {ctaResourcePopup && (
         <CtaResourcePopupView popup={ctaResourcePopup} onClose={() => setCtaResourcePopup(null)} />

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { BoothLayoutConfig } from '@/features/shared/data/boothLayouts';
 
 const STANDEE_GLB_URL = '/digital_display_standee_sketchfab_export.glb';
-const STANDEE_TARGET_HEIGHT = 2.45;
+const STANDEE_TARGET_HEIGHT = 3.15;
 /** Meters from booth anchor toward hall center (lower = closer to booth / back toward wall). */
 const AISLE_INSET = 3;
 

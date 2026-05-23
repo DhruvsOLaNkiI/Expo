@@ -27,6 +27,9 @@ import {
 } from '@/features/visitor/visitorProfile';
 
 const SCENE_CMS_LS_KEY = 'virtual-expo-scene-config';
+
+/** Removed booth IDs — strip from persisted overrides so duplicates never reappear. */
+const REMOVED_BOOTH_IDS = ['builder-7', 'side-west-luxe'] as const;
 const INTRO_DISMISSED_LS_KEY = 'virtual-expo-intro-dismissed';
 const REG_PASS_LS_KEY = 'virtual-expo-registration-pass';
 const CAMERA_MODE_LS_KEY = 'virtual-expo-camera-mode';
@@ -127,6 +130,8 @@ interface AppState {
   setPlayerPosition: (pos: [number, number, number] | null) => void;
   joystickData: { x: number; y: number };
   setJoystickData: (data: { x: number; y: number }) => void;
+  strafeHold: { left: boolean; right: boolean };
+  setStrafeHold: (hold: { left: boolean; right: boolean }) => void;
 
   boothCmsOpen: boolean;
   setBoothCmsOpen: (open: boolean) => void;
@@ -152,9 +157,9 @@ interface AppState {
   /** Object `name` in the R3F scene, e.g. `hall-entrance-lobby`, `booth-root-vertex-elite`. */
   hallLayoutSelection: string | null;
   setHallLayoutSelection: (id: string | null) => void;
-  /** Move (translate) vs Rotate in layout editor gizmo. */
-  hallLayoutGizmoMode: 'translate' | 'rotate';
-  setHallLayoutGizmoMode: (mode: 'translate' | 'rotate') => void;
+  /** Move, rotate, or scale in layout editor gizmo. */
+  hallLayoutGizmoMode: 'translate' | 'rotate' | 'scale';
+  setHallLayoutGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   /** Locked rotation axis; `E` = free view rotation, `null` = click a ring on the gizmo. */
   hallLayoutRotationAxis: 'X' | 'Y' | 'Z' | 'E' | null;
   setHallLayoutRotationAxis: (axis: 'X' | 'Y' | 'Z' | 'E' | null) => void;
@@ -282,6 +287,8 @@ export const useStore = create<AppState>((set, get) => ({
   },
   joystickData: { x: 0, y: 0 },
   setJoystickData: (data) => set({ joystickData: data }),
+  strafeHold: { left: false, right: false },
+  setStrafeHold: (hold) => set({ strafeHold: hold }),
 
   boothCmsOpen: false,
   setBoothCmsOpen: (open) => set({ boothCmsOpen: open }),
@@ -371,6 +378,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ registrationUi: 'granted', registrationPass: true });
   },
   teleportPlayer: (position) => {
+    if (get().hallLayoutEditMode) return;
     if (typeof document !== 'undefined' && document.pointerLockElement) {
       document.exitPointerLock();
     }
@@ -467,12 +475,21 @@ export const useStore = create<AppState>((set, get) => ({
     for (const id of ids) {
       merged[id] = { ...(fromFile[id] || {}), ...(fromBrowser[id] || {}) };
     }
+    for (const id of REMOVED_BOOTH_IDS) {
+      delete merged[id];
+    }
     const hasLocalScene = Object.keys(sceneFromLs).length > 0;
     let sceneMerged: SceneOverridesInput = hasLocalScene
       ? { ...sceneFromFile, ...sceneFromLs }
       : { ...getBootstrapSceneForDevice(), ...sceneFromFile, ...sceneFromLs };
     if (sceneMerged.showVideos !== true && sceneFromFile.showVideos === true) {
       sceneMerged = { ...sceneMerged, showVideos: true };
+    }
+    if (sceneMerged.showBallroom !== true && sceneFromFile.showBallroom === true) {
+      sceneMerged = { ...sceneMerged, showBallroom: true };
+    }
+    if (sceneMerged.showStandardBooths === false && sceneFromFile.showStandardBooths === true) {
+      sceneMerged = { ...sceneMerged, showStandardBooths: true };
     }
     set({ boothOverrides: merged, sceneOverrides: sceneMerged, _boothCmsHydrated: true });
   },

@@ -9,7 +9,7 @@ export const PERFORMANCE_30FPS_SCENE_PATCH: SceneOverridesInput = {
   modelCompression: '30fps',
   postProcessing: false,
   showVideos: false,
-  showBallroom: false,
+  showBallroom: true,
   showRoamingExecutive: false,
   showHallCanopy: false,
   fogEnabled: false,

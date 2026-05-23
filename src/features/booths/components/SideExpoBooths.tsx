@@ -40,12 +40,11 @@ export const SIDE_SPECS: {
   position: [number, number, number];
   rotation: [number, number, number];
 }[] = [
-  { templateId: 'builder-1', sideId: 'side-west-luxe', position: [BOOTH_ROW_X_WEST, 0, -28], rotation: [0, Math.PI / 2, 0] },
-  { templateId: 'builder-2', sideId: 'side-west-aurum', position: [BOOTH_ROW_X_WEST, 0, -8], rotation: [0, Math.PI / 2, 0] },
-  { templateId: 'builder-4', sideId: 'side-west-crown', position: [BOOTH_ROW_X_WEST, 0, 12], rotation: [0, Math.PI / 2, 0] },
-  { templateId: 'builder-5', sideId: 'side-east-monarch', position: [BOOTH_ROW_X_EAST, 0, -28], rotation: [0, -Math.PI / 2, 0] },
-  { templateId: 'builder-6', sideId: 'side-east-horizon', position: [BOOTH_ROW_X_EAST, 0, -8], rotation: [0, -Math.PI / 2, 0] },
-  { templateId: 'builder-2', sideId: 'side-east-aurum', position: [BOOTH_ROW_X_EAST, 0, 12], rotation: [0, -Math.PI / 2, 0] },
+  { templateId: 'builder-2', sideId: 'side-west-aurum', position: [BOOTH_ROW_X_WEST, 0, 0], rotation: [0, Math.PI / 2, 0] },
+  { templateId: 'builder-4', sideId: 'side-west-crown', position: [BOOTH_ROW_X_WEST, 0, 10], rotation: [0, Math.PI / 2, 0] },
+  { templateId: 'builder-5', sideId: 'side-east-monarch', position: [BOOTH_ROW_X_EAST, 0, -10], rotation: [0, -Math.PI / 2, 0] },
+  { templateId: 'builder-6', sideId: 'side-east-horizon', position: [BOOTH_ROW_X_EAST, 0, 0], rotation: [0, -Math.PI / 2, 0] },
+  { templateId: 'builder-2', sideId: 'side-east-aurum', position: [BOOTH_ROW_X_EAST, 0, 10], rotation: [0, -Math.PI / 2, 0] },
 ];
 
 export function isBoothHidden(hidden: Set<string>, boothId: string): boolean {
