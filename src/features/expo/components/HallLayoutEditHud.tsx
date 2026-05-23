@@ -37,6 +37,7 @@ export function HallLayoutEditHud() {
   const setRotationAxis = useStore((s) => s.setHallLayoutRotationAxis);
   const patchSceneOverride = useStore((s) => s.patchSceneOverride);
   const boothOverrides = useStore((s) => s.boothOverrides);
+  const sceneOverrides = useStore((s) => s.sceneOverrides);
   const patchBoothOverride = useStore((s) => s.patchBoothOverride);
   const regOverrides = useStore((s) => s.sceneOverrides.registrationLayout);
   const [boothWidth, setBoothWidth] = useState('1');
@@ -46,6 +47,7 @@ export function HallLayoutEditHud() {
   const [glbUrlInput, setGlbUrlInput] = useState('');
   const [saveHint, setSaveHint] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const layoutImportRef = useRef<HTMLInputElement>(null);
   const saveHintTimer = useRef<any>(null);
 
   const flashSaveHint = (msg: string) => {
@@ -142,6 +144,9 @@ export function HallLayoutEditHud() {
   const addImportedModel = (url: string, label: string) => {
     const trimmed = url.trim();
     if (!trimmed) return;
+    if (trimmed.startsWith('blob:')) {
+      flashSaveHint('Local file picked — copy GLB to public/assets/ and use /assets/… path for localhost + production');
+    }
     const id = `model-${Date.now()}`;
     const entry: RegistrationImportedModel = {
       id,
@@ -169,6 +174,68 @@ export function HallLayoutEditHud() {
       },
     });
     setSel(null);
+  };
+
+  const exportLayoutJson = () => {
+    const payload = {
+      booths: boothOverrides,
+      scene: sceneOverrides,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'booth-cms-export.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    flashSaveHint('Exported layout JSON — import on localhost or save to public/booth-cms.json');
+  };
+
+  const importLayoutJson = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      void (async () => {
+        try {
+          const j = JSON.parse(String(reader.result)) as {
+            booths?: Record<string, unknown>;
+            overrides?: Record<string, unknown>;
+            scene?: Record<string, unknown>;
+          };
+          const src = j.booths ?? j.overrides;
+          if (src && typeof src === 'object') {
+            for (const [id, patch] of Object.entries(src)) {
+              if (patch && typeof patch === 'object') {
+                await patchBoothOverride(id, patch as Parameters<typeof patchBoothOverride>[1]);
+              }
+            }
+          }
+          if (j.scene && typeof j.scene === 'object') {
+            patchSceneOverride(j.scene as Parameters<typeof patchSceneOverride>[0]);
+          }
+          flashSaveHint('✓ Layout imported — refresh if models still missing');
+        } catch {
+          flashSaveHint('Invalid layout JSON');
+        }
+      })();
+    };
+    reader.readAsText(file);
+  };
+
+  const saveLayoutToBoothCmsFile = async () => {
+    try {
+      const res = await fetch('/api/booth-cms/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booths: boothOverrides, scene: sceneOverrides }),
+      });
+      const j = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !j.ok) {
+        flashSaveHint(j.error ?? 'Save failed (dev server only)');
+        return;
+      }
+      flashSaveHint('✓ Saved to public/booth-cms.json');
+    } catch {
+      flashSaveHint('Save failed — run npm run dev');
+    }
   };
 
   useEffect(() => {
@@ -436,6 +503,50 @@ export function HallLayoutEditHud() {
           </div>
         </div>
       )}
+
+      <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2.5">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[#d4af37]">Sync layout</div>
+        <p className="mt-1 text-[10px] leading-relaxed text-white/50">
+          Aligned models are stored in this browser until exported. On production: Export → import here, or Save to{' '}
+          <span className="text-white/70">public/booth-cms.json</span> (localhost dev only).
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/15 px-2 py-1 text-[10px] font-semibold uppercase text-[#f5e6b8] hover:bg-[#d4af37]/25"
+            onClick={exportLayoutJson}
+          >
+            Export JSON
+          </button>
+          <input
+            ref={layoutImportRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importLayoutJson(file);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            className="rounded-lg border border-white/15 bg-white/10 px-2 py-1 text-[10px] font-semibold uppercase text-white/85 hover:bg-white/15"
+            onClick={() => layoutImportRef.current?.click()}
+          >
+            Import JSON
+          </button>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold uppercase text-cyan-100 hover:bg-cyan-500/20"
+              onClick={() => void saveLayoutToBoothCmsFile()}
+            >
+              Save booth-cms.json
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

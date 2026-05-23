@@ -301,6 +301,53 @@ export type SceneOverridesInput = Omit<Partial<SceneConfig>, 'hallLayout'> & {
   registrationLayout?: Partial<RegistrationLayoutConfig>;
 };
 
+/**
+ * Merge bootstrap + `booth-cms.json` + browser storage without dropping
+ * registration imported GLBs when localStorage only has partial layout edits.
+ */
+export function mergeSceneOverridesInput(
+  bootstrap: SceneOverridesInput,
+  fromFile: SceneOverridesInput,
+  fromBrowser: SceneOverridesInput,
+): SceneOverridesInput {
+  const { hallLayout: hallFile, registrationLayout: regFile, ...restFile } = fromFile;
+  const { hallLayout: hallBrowser, registrationLayout: regBrowser, ...restBrowser } = fromBrowser;
+
+  const merged: SceneOverridesInput = {
+    ...bootstrap,
+    ...restFile,
+    ...restBrowser,
+  };
+
+  merged.hallLayout = mergeHallLayout({
+    ...DEFAULT_HALL_LAYOUT,
+    ...hallFile,
+    ...hallBrowser,
+    plantPositions: hallBrowser?.plantPositions ?? hallFile?.plantPositions,
+    plantScales: hallBrowser?.plantScales ?? hallFile?.plantScales,
+  });
+
+  const regCombined: Partial<RegistrationLayoutConfig> = {
+    ...regFile,
+    ...regBrowser,
+    loungeRotations: {
+      ...regFile?.loungeRotations,
+      ...regBrowser?.loungeRotations,
+    },
+    loungePlantOffsets: regBrowser?.loungePlantOffsets ?? regFile?.loungePlantOffsets,
+  };
+  const browserModels = regBrowser?.importedModels;
+  const fileModels = regFile?.importedModels;
+  if (browserModels && browserModels.length > 0) {
+    regCombined.importedModels = browserModels;
+  } else if (fileModels && fileModels.length > 0) {
+    regCombined.importedModels = fileModels;
+  }
+
+  merged.registrationLayout = mergeRegistrationLayout(regCombined);
+  return merged;
+}
+
 /** Old CMS defaults painted a light fog slab that shifted with camera movement. */
 function sanitizeSceneFog(rest: Omit<SceneOverridesInput, 'hallLayout'>): Omit<SceneOverridesInput, 'hallLayout'> {
   if (rest.fogEnabled !== true) return rest;

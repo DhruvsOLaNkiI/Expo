@@ -7,7 +7,7 @@ import type {
   PlacedImage,
   SceneOverridesInput,
 } from '@/features/shared/data/boothLayouts';
-import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
+import { mergeSceneConfig, mergeSceneOverridesInput } from '@/features/shared/data/boothLayouts';
 import { getBootstrapSceneForDevice } from '@/utils/devicePerformance';
 import { persistBoothOverridesWithFallback, readPersistedBoothOverrides } from '@/store/persist/boothCms';
 import { commitHallLayoutTransform } from '@/store/persist/hallLayout';
@@ -478,10 +478,11 @@ export const useStore = create<AppState>((set, get) => ({
     for (const id of REMOVED_BOOTH_IDS) {
       delete merged[id];
     }
-    const hasLocalScene = Object.keys(sceneFromLs).length > 0;
-    let sceneMerged: SceneOverridesInput = hasLocalScene
-      ? { ...sceneFromFile, ...sceneFromLs }
-      : { ...getBootstrapSceneForDevice(), ...sceneFromFile, ...sceneFromLs };
+    let sceneMerged = mergeSceneOverridesInput(
+      getBootstrapSceneForDevice(),
+      sceneFromFile,
+      sceneFromLs,
+    );
     if (sceneMerged.showVideos !== true && sceneFromFile.showVideos === true) {
       sceneMerged = { ...sceneMerged, showVideos: true };
     }
@@ -490,6 +491,9 @@ export const useStore = create<AppState>((set, get) => ({
     }
     if (sceneMerged.showStandardBooths === false && sceneFromFile.showStandardBooths === true) {
       sceneMerged = { ...sceneMerged, showStandardBooths: true };
+    }
+    if (sceneMerged.showHallAisleStandees !== true && sceneFromFile.showHallAisleStandees === true) {
+      sceneMerged = { ...sceneMerged, showHallAisleStandees: true };
     }
     set({ boothOverrides: merged, sceneOverrides: sceneMerged, _boothCmsHydrated: true });
   },

@@ -46,6 +46,7 @@
     "fogFar": 55,
     "fogColor": "#d8d4cc",
     "modelCompression": "off",
+    "showHallAisleStandees": true,
     "hiddenBooths": [
       "side-west-aurum",
       "side-west-crown",
