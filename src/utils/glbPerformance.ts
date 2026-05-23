@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { SceneOverridesInput } from '../data/boothLayouts';
-import { DEFAULT_SCENE_CONFIG } from '../data/boothLayouts';
+import type { SceneOverridesInput } from '@/features/shared/data/boothLayouts';
+import { DEFAULT_SCENE_CONFIG } from '@/features/shared/data/boothLayouts';
 
 /** Runtime GLB compression level — reduces mesh/material cost for smoother expo FPS. */
 export type ModelCompressionLevel = 'off' | '30fps';
@@ -12,10 +12,10 @@ export const PERFORMANCE_30FPS_SCENE_PATCH: SceneOverridesInput = {
   showBallroom: false,
   showRoamingExecutive: false,
   showHallCanopy: false,
-  fogEnabled: true,
-  fogNear: 16,
-  fogFar: 58,
-  fogColor: '#f5f0e8',
+  fogEnabled: false,
+  fogNear: 30,
+  fogFar: 88,
+  fogColor: '#f0ebe4',
 };
 
 const TRIANGLE_KEEP_RATIO: Record<ModelCompressionLevel, number> = {

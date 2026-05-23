@@ -1,4 +1,4 @@
-import type { VisitorProfile } from '../visitorProfile';
+import type { VisitorProfile } from '@/features/visitor/visitorProfile';
 
 type ApiResult = { ok: true } | { ok: false; error: string };
 

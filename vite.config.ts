@@ -15,7 +15,20 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(__dirname, 'src'),
+        '@app': path.resolve(__dirname, 'src/app'),
+        '@api': path.resolve(__dirname, 'src/api'),
+        '@config': path.resolve(__dirname, 'src/config'),
+        '@constants': path.resolve(__dirname, 'src/constants'),
+        '@features': path.resolve(__dirname, 'src/features'),
+        '@hooks': path.resolve(__dirname, 'src/hooks'),
+        '@lib': path.resolve(__dirname, 'src/lib'),
+        '@store': path.resolve(__dirname, 'src/store'),
+        '@types': path.resolve(__dirname, 'src/types'),
+        '@components': path.resolve(__dirname, 'src/components'),
+        '@pages': path.resolve(__dirname, 'src/pages'),
+        '@layouts': path.resolve(__dirname, 'src/layouts'),
+        '@server': path.resolve(__dirname, 'server'),
       },
     },
     server: {

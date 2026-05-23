@@ -63,6 +63,7 @@ async function idbDeleteJson(): Promise<void> {
         resolve();
       };
       tx.onerror = () => {
+        console.error('Error deleting JSON:', tx.error);
         db.close();
         resolve();
       };

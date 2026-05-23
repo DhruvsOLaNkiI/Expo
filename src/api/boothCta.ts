@@ -1,4 +1,4 @@
-import type { CompanyProfile, MediaItem, PlacedImage } from '../data/boothLayouts';
+import type { CompanyProfile, MediaItem, PlacedImage } from '@/features/shared/data/boothLayouts';
 import { isPdfUrl } from './pageindexAutoIndex';
 import { normalizeR2PublicUrl } from './r2Urls';
 

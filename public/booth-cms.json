@@ -27,12 +27,13 @@
   },
   "scene": {
     "showStandardBooths": true,
+    "showVideos": true,
     "showHallCanopy": true,
-    "fogEnabled": true,
+    "fogEnabled": false,
     "fogNear": 18,
     "fogFar": 62,
-    "fogColor": "#f5f0e8",
-    "modelCompression": "30fps",
+    "fogColor": "#d8d4cc",
+    "modelCompression": "off",
     "hiddenBooths": [
       "side-west-luxe",
       "side-west-aurum",

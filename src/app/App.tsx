@@ -1,0 +1,397 @@
+import { Canvas } from '@react-three/fiber';
+import { KeyboardControls } from '@react-three/drei';
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import { useStore } from '@/store';
+import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
+import { getRenderQualityPreset } from '@/features/shared/data/renderQuality';
+import { getEffectiveCanvasDpr } from '@/utils/devicePerformance';
+import {
+  Player,
+  ExpoHall,
+  Lighting,
+  Effects,
+  HallLayoutGizmos,
+  HallLayoutEditHud,
+  CameraModeHud,
+  SceneQualityHud,
+  ExpoSceneSettingsHud,
+  RoamingExecutive,
+} from '@/features/expo';
+import { Booths, Ballroom, VertexEliteScreenHud } from '@/features/booths';
+import {
+  RegistrationHall,
+  RegistrationLobbyLighting,
+  RegistrationLobbyHud,
+} from '@/features/registration';
+import { AiChatbox, HelpDeskAiPanel } from '@/features/ai';
+import { FastTravelHud } from '@/features/teleport';
+import { VisitorOnboarding, VisitorBadge } from '@/features/visitor';
+import {
+  CtaResourcePopupView,
+  SharedVideoTextureUpdater,
+  VideoEnabledHint,
+} from '@/features/media';
+
+const CmsDashboard = lazy(() =>
+  import('@/features/cms').then((m) => ({ default: m.CmsDashboard })),
+);
+const PageIndexPortal = lazy(() =>
+  import('@/features/pageindex').then((m) => ({ default: m.PageIndexPortal })),
+);
+
+function AdminRouteFallback({ label }: { label: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0f1118] text-[#d4af37] text-sm font-semibold tracking-widest uppercase">
+      Loading {label}…
+    </div>
+  );
+}
+
+function Joystick() {
+  const setJoystickData = useStore((state) => state.setJoystickData);
+  const [active, setActive] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+
+  const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
+    setActive(true);
+    handleMove(e);
+  };
+
+  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!active) return;
+    const touch = 'touches' in e ? e.touches[0] : e;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    let dx = touch.clientX - centerX;
+    let dy = touch.clientY - centerY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = 40;
+    if (dist > maxDist) {
+      dx *= maxDist / dist;
+      dy *= maxDist / dist;
+    }
+    setPos({ x: dx, y: dy });
+    setJoystickData({ x: dx / maxDist, y: -dy / maxDist });
+  };
+
+  const handleEnd = () => {
+    setActive(false);
+    setPos({ x: 0, y: 0 });
+    setJoystickData({ x: 0, y: 0 });
+  };
+
+  return (
+    <div
+      className="fixed bottom-12 left-12 w-32 h-32 bg-black/10 rounded-full border border-white/20 backdrop-blur-md z-50 touch-none flex items-center justify-center"
+      onTouchStart={handleStart}
+      onTouchMove={handleMove}
+      onTouchEnd={handleEnd}
+      onMouseDown={handleStart}
+      onMouseMove={handleMove}
+      onMouseUp={handleEnd}
+      onMouseLeave={handleEnd}
+    >
+      <div
+        className="w-12 h-12 bg-[#d4af37] rounded-full shadow-lg transition-transform duration-75"
+        style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+      />
+    </div>
+  );
+}
+
+export default function App() {
+  const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
+  const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
+  const setAiChatOpen = useStore((s) => s.setAiChatOpen);
+  const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
+  const showInstructions = useStore((s) => s.showInstructions);
+  const setShowInstructions = useStore((s) => s.setShowInstructions);
+  const cmsPage = useStore((s) => s.cmsPage);
+  const setCmsPage = useStore((s) => s.setCmsPage);
+  const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const sceneConfig = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
+  const postProcessing = sceneConfig.postProcessing;
+  const showBallroom = sceneConfig.showBallroom;
+  const showRoamingExecutive = sceneConfig.showRoamingExecutive;
+  const showVideos = sceneConfig.showVideos;
+  const compressModels = sceneConfig.modelCompression === '30fps';
+  const expoPhase = useStore((s) => s.expoPhase);
+  const inRegistration = expoPhase === 'registration';
+  const qualityPreset = useMemo(
+    () => getRenderQualityPreset(sceneConfig.renderQuality),
+    [sceneConfig.renderQuality],
+  );
+  const canvasDpr = useMemo(
+    () => getEffectiveCanvasDpr(qualityPreset.dpr, { compressModels }),
+    [qualityPreset.dpr, compressModels],
+  );
+  const useAntialias =
+    sceneConfig.renderQuality === 'fullhd' && !compressModels && !inRegistration;
+  const setHallLayoutEditMode = useStore((s) => s.setHallLayoutEditMode);
+  const setHallLayoutSelection = useStore((s) => s.setHallLayoutSelection);
+  const registrationUi = useStore((s) => s.registrationUi);
+  const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
+  const skipToMainExpo = useStore((s) => s.skipToMainExpo);
+  const visitorProfile = useStore((s) => s.visitorProfile);
+  const [isTouch, setIsTouch] = useState(false);
+
+  const needsOnboarding = !visitorProfile;
+
+  const sceneBg = inRegistration ? '#FAF7F0' : sceneConfig.bgColor || '#f5f2ec';
+  const fogEnabled = sceneConfig.fogEnabled === true;
+  const cameraFar = fogEnabled ? Math.max(sceneConfig.fogFar + 45, 160) : 400;
+
+  const glConfig = useMemo(
+    () => ({
+      antialias: useAntialias,
+      alpha: false,
+      stencil: false,
+      depth: true,
+      powerPreference: 'high-performance' as const,
+    }),
+    [useAntialias],
+  );
+
+  useEffect(() => {
+    setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  useEffect(() => {
+    const normalized = window.location.pathname.replace(/\/$/, '') || '/';
+    if (normalized === '/cms') {
+      setCmsPage('cms');
+      window.history.replaceState(null, '', '/cms');
+    } else if (normalized === '/pageindex') {
+      setCmsPage('pageindex');
+      window.history.replaceState(null, '', '/pageindex');
+    }
+  }, [setCmsPage]);
+
+  useEffect(() => {
+    if (cmsPage === 'cms') {
+      if (document.pointerLockElement) document.exitPointerLock();
+      window.history.replaceState(null, '', '/cms');
+    } else if (cmsPage === 'pageindex') {
+      if (document.pointerLockElement) document.exitPointerLock();
+      window.history.replaceState(null, '', '/pageindex');
+    } else {
+      window.history.replaceState(null, '', '/');
+    }
+  }, [cmsPage]);
+
+  useEffect(() => {
+    if (ctaResourcePopup && document.pointerLockElement) document.exitPointerLock();
+  }, [ctaResourcePopup]);
+
+  if (cmsPage === 'cms') {
+    return (
+      <Suspense fallback={<AdminRouteFallback label="CMS" />}>
+        <CmsDashboard />
+      </Suspense>
+    );
+  }
+  if (cmsPage === 'pageindex') {
+    return (
+      <Suspense fallback={<AdminRouteFallback label="PageIndex" />}>
+        <PageIndexPortal />
+      </Suspense>
+    );
+  }
+
+  return (
+    <div
+      className="w-full h-screen bg-black overflow-hidden select-none font-sans"
+      onClick={() => {
+        if (showInstructions && !needsOnboarding) setShowInstructions(false);
+      }}
+    >
+      <KeyboardControls
+        map={[
+          { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
+          { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
+          { name: 'left', keys: ['ArrowLeft', 'KeyA'] },
+          { name: 'right', keys: ['ArrowRight', 'KeyD'] },
+        ]}
+      >
+        <Canvas
+          shadows={!compressModels}
+          camera={{ fov: 65, near: 0.1, far: cameraFar }}
+          dpr={canvasDpr}
+          gl={glConfig}
+        >
+          <color attach="background" args={[sceneBg]} />
+          {fogEnabled && !inRegistration && (
+            <fog
+              attach="fog"
+              args={[
+                sceneConfig.fogColor || '#f0ebe4',
+                Math.max(sceneConfig.fogNear, 25),
+                Math.max(sceneConfig.fogFar, 70),
+              ]}
+            />
+          )}
+          <Suspense fallback={null}>
+            <SharedVideoTextureUpdater />
+            {inRegistration ? (
+              <RegistrationLobbyLighting compressedMode={compressModels} />
+            ) : (
+              <Lighting compressedMode={compressModels} />
+            )}
+            {inRegistration ? (
+              <RegistrationHall />
+            ) : (
+              <>
+                <ExpoHall showVideos={showVideos} />
+                <Booths showVideos={showVideos} />
+                {showRoamingExecutive && <RoamingExecutive />}
+                {showBallroom && <Ballroom showVideos={showVideos} />}
+              </>
+            )}
+            <HallLayoutGizmos />
+            <Player />
+            {postProcessing && <Effects />}
+          </Suspense>
+        </Canvas>
+      </KeyboardControls>
+
+      {needsOnboarding && <VisitorOnboarding />}
+      {visitorProfile && <VisitorBadge />}
+      <RegistrationLobbyHud />
+      {!inRegistration && <FastTravelHud />}
+      <CameraModeHud />
+      <SceneQualityHud />
+      <ExpoSceneSettingsHud />
+      <VideoEnabledHint />
+      {!inRegistration && <VertexEliteScreenHud />}
+      <HallLayoutEditHud />
+
+      {inRegistration && !showInstructions && registrationUi === 'none' && !needsOnboarding && (
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] flex flex-col sm:flex-row items-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            className="rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md hover:bg-black transition-all"
+            onClick={() => openRegistrationPopup()}
+          >
+            Register Now
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-white/20 bg-[#1a1a22]/80 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white/80 shadow-xl backdrop-blur-md hover:bg-black/90 transition-all"
+            onClick={() => skipToMainExpo()}
+          >
+            Skip to expo
+          </button>
+        </div>
+      )}
+
+      {!needsOnboarding && !inRegistration && (
+        <>
+          <button
+            type="button"
+            className="fixed bottom-3 left-36 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
+            onClick={() => {
+              setHallLayoutSelection('hall-entrance-lobby');
+              setHallLayoutEditMode(true);
+            }}
+          >
+            Edit layout
+          </button>
+          <button
+            type="button"
+            className="fixed bottom-3 left-3 z-[55] rounded-lg border border-emerald-500/25 bg-emerald-950/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-emerald-200 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-emerald-900/90 transition-all"
+            onClick={() => setCmsPage('pageindex')}
+          >
+            PageIndex
+          </button>
+          <button
+            type="button"
+            className="fixed bottom-3 right-3 z-[55] rounded-lg border border-white/15 bg-[#1a1a22]/90 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md pointer-events-auto hover:bg-[#1a1a22] transition-all"
+            onClick={() => setCmsPage('cms')}
+          >
+            Open CMS
+          </button>
+          <button
+            type="button"
+            className="fixed bottom-3 right-[17.5rem] z-[55] rounded-lg border border-[#d4af37]/35 bg-[#0f1a3d]/90 backdrop-blur-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5e6c8] shadow-xl pointer-events-auto hover:bg-[#1a2d52] transition-all"
+            onClick={() => setHelpDeskOpen(true)}
+          >
+            Help Desk
+          </button>
+          <button
+            type="button"
+            className="fixed bottom-3 right-32 z-[55] rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/10 backdrop-blur-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl pointer-events-auto hover:bg-[#d4af37]/20 transition-all flex items-center gap-2"
+            onClick={() => setAiChatOpen(true)}
+          >
+            <span>🤖</span>
+            Ask AI
+          </button>
+          <AiChatbox />
+          <HelpDeskAiPanel />
+        </>
+      )}
+
+      {isTouch && !showInstructions && !ctaResourcePopup && !needsOnboarding && <Joystick />}
+
+      {ctaResourcePopup && (
+        <CtaResourcePopupView popup={ctaResourcePopup} onClose={() => setCtaResourcePopup(null)} />
+      )}
+
+      {showInstructions && !needsOnboarding && (
+        <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-40 backdrop-blur-sm pointer-events-auto">
+          <div className="text-center px-4">
+            <h1 className="text-3xl md:text-5xl font-bold tracking-widest text-[#d4af37] mb-4">
+              VIRTUAL EXPO
+            </h1>
+            <h2 className="text-lg md:text-2xl font-light text-black tracking-[0.2em] mb-4 md:mb-6">
+              LUXURY RESIDENCES
+            </h2>
+            {visitorProfile && (
+              <p className="text-sm text-[#8a7a5a] tracking-wide mb-2">
+                Welcome,{' '}
+                <span className="font-semibold text-black">{visitorProfile.displayName}</span> ·{' '}
+                <span className="font-mono text-xs text-[#d4af37]">{visitorProfile.id}</span>
+              </p>
+            )}
+            {inRegistration && (
+              <p className="text-sm text-gray-600 tracking-wide mb-8 md:mb-10 max-w-md mx-auto">
+                You are in the registration lobby. Check in at the counter, then enter the main
+                exhibition hall.
+              </p>
+            )}
+            {!inRegistration && <div className="mb-8 md:mb-12" />}
+            <div className="bg-black/5 border border-black/10 p-6 md:p-8 rounded-2xl backdrop-blur-md inline-block">
+              <p className="text-black text-base md:text-lg mb-6">
+                {isTouch ? 'Tap to enter' : 'Click anywhere to enter'}
+              </p>
+              <div className="flex items-center justify-center gap-4 md:gap-8 text-gray-700">
+                <div className="flex flex-col items-center">
+                  <div className="p-2 md:p-3 border border-black/20 rounded-lg mb-2 text-black font-semibold text-xs md:text-sm">
+                    {isTouch ? 'JOYSTICK' : 'WASD'}
+                  </div>
+                  <span className="text-[10px] md:text-xs uppercase tracking-widest">Move</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="p-2 md:p-3 border border-black/20 rounded-lg mb-2 text-black font-semibold text-xs md:text-sm">
+                    {isTouch ? 'DRAG' : 'MOUSE'}
+                  </div>
+                  <span className="text-[10px] md:text-xs uppercase tracking-widest">Look</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="p-2 md:p-3 border border-black/20 rounded-lg mb-2 text-black font-semibold text-xs md:text-sm">
+                    V
+                  </div>
+                  <span className="text-[10px] md:text-xs uppercase tracking-widest">Camera</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isTouch && (
+        <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-black/50 rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30" />
+      )}
+    </div>
+  );
+}
