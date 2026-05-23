@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@/store';
 import {
   applyBoothOverrides,
   buildDefaultBoothLayoutList,
+  deg3ToRad3,
   mergeRegistrationLayout,
+  rad3ToDeg3,
   type RegistrationImportedModel,
 } from '@/features/shared/data/boothLayouts';
 import { commitHallLayoutTransform, findLayoutObject, persistHallLayoutTransform } from '@/store/persist/hallLayout';
@@ -25,6 +27,15 @@ const REGISTRATION_OPTIONS: { id: string; label: string }[] = [
   { id: 'reg-event-totems', label: 'Info totems & signage' },
 ];
 
+function parseCoord(v: string, fallback: number): number {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function coordInputClassName() {
+  return 'mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45';
+}
+
 /** Overlay to move hall props / booths with TransformControls; saves to browser (scene + booth overrides). */
 export function HallLayoutEditHud() {
   const edit = useStore((s) => s.hallLayoutEditMode);
@@ -40,9 +51,16 @@ export function HallLayoutEditHud() {
   const sceneOverrides = useStore((s) => s.sceneOverrides);
   const patchBoothOverride = useStore((s) => s.patchBoothOverride);
   const regOverrides = useStore((s) => s.sceneOverrides.registrationLayout);
-  const [boothWidth, setBoothWidth] = useState('1');
-  const [boothHeight, setBoothHeight] = useState('1');
-  const [boothDepth, setBoothDepth] = useState('1');
+  const [posX, setPosX] = useState('');
+  const [posY, setPosY] = useState('');
+  const [posZ, setPosZ] = useState('');
+  const [rotXDeg, setRotXDeg] = useState('');
+  const [rotYDeg, setRotYDeg] = useState('');
+  const [rotZDeg, setRotZDeg] = useState('');
+  const [scaleX, setScaleX] = useState('');
+  const [scaleY, setScaleY] = useState('');
+  const [scaleZ, setScaleZ] = useState('');
+  const coordTypingRef = useRef(false);
   const inRegistration = useStore((s) => s.expoPhase) === 'registration';
   const [glbUrlInput, setGlbUrlInput] = useState('');
   const [saveHint, setSaveHint] = useState<string | null>(null);
@@ -101,44 +119,54 @@ export function HallLayoutEditHud() {
 
   const selectedBoothId = sel?.startsWith('booth-root-') ? sel.slice('booth-root-'.length) : null;
 
-  useEffect(() => {
-    if (!selectedBoothId) return;
-    const obj = findLayoutObject(`booth-root-${selectedBoothId}`);
-    if (obj) {
-      setBoothWidth(obj.scale.x.toFixed(2));
-      setBoothHeight(obj.scale.y.toFixed(2));
-      setBoothDepth(obj.scale.z.toFixed(2));
-      return;
-    }
-    const b = boothLayouts.find((x) => x.id === selectedBoothId);
-    if (b) {
-      setBoothWidth(String(b.scale[0]));
-      setBoothHeight(String(b.scale[1]));
-      setBoothDepth(String(b.scale[2]));
-    }
-  }, [selectedBoothId, boothLayouts, sel]);
+  const syncCoordsFromSelection = useCallback(() => {
+    if (!sel || coordTypingRef.current) return;
+    const obj = findLayoutObject(sel);
+    if (!obj) return;
+    obj.updateMatrixWorld(true);
+    setPosX(obj.position.x.toFixed(2));
+    setPosY(obj.position.y.toFixed(2));
+    setPosZ(obj.position.z.toFixed(2));
+    const [dx, dy, dz] = rad3ToDeg3(obj.rotation.x, obj.rotation.y, obj.rotation.z);
+    setRotXDeg(dx.toFixed(1));
+    setRotYDeg(dy.toFixed(1));
+    setRotZDeg(dz.toFixed(1));
+    setScaleX(obj.scale.x.toFixed(2));
+    setScaleY(obj.scale.y.toFixed(2));
+    setScaleZ(obj.scale.z.toFixed(2));
+  }, [sel]);
 
-  const applyBoothSize = () => {
-    if (!selectedBoothId) return;
-    const parse = (v: string, fallback: number) => {
-      const n = parseFloat(v);
-      return Number.isFinite(n) && n > 0 ? n : fallback;
-    };
-    const scale: [number, number, number] = [
-      parse(boothWidth, 1),
-      parse(boothHeight, 1),
-      parse(boothDepth, 1),
-    ];
-    const obj = findLayoutObject(`booth-root-${selectedBoothId}`);
-    if (obj) {
-      obj.scale.set(scale[0], scale[1], scale[2]);
-      obj.updateMatrixWorld(true);
-      persistHallLayoutTransform(`booth-root-${selectedBoothId}`, obj);
-      flashSaveHint('✓ Booth size saved');
+  useEffect(() => {
+    coordTypingRef.current = false;
+    syncCoordsFromSelection();
+  }, [sel, syncCoordsFromSelection, boothOverrides, sceneOverrides]);
+
+  useEffect(() => {
+    if (!edit || !sel) return;
+    const id = window.setInterval(syncCoordsFromSelection, 350);
+    return () => window.clearInterval(id);
+  }, [edit, sel, syncCoordsFromSelection]);
+
+  const applyCoordinates = () => {
+    if (!sel) return;
+    const obj = findLayoutObject(sel);
+    if (!obj) {
+      flashSaveHint(`Not found in scene: ${sel}`);
       return;
     }
-    void patchBoothOverride(selectedBoothId, { scale });
-    flashSaveHint('✓ Booth size saved');
+    obj.position.set(parseCoord(posX, 0), parseCoord(posY, 0), parseCoord(posZ, 0));
+    const rot = deg3ToRad3(parseCoord(rotXDeg, 0), parseCoord(rotYDeg, 0), parseCoord(rotZDeg, 0));
+    obj.rotation.set(rot[0], rot[1], rot[2]);
+    obj.scale.set(
+      Math.max(0.1, parseCoord(scaleX, 1)),
+      Math.max(0.1, parseCoord(scaleY, 1)),
+      Math.max(0.1, parseCoord(scaleZ, 1)),
+    );
+    obj.updateMatrixWorld(true);
+    const ok = persistHallLayoutTransform(sel, obj);
+    coordTypingRef.current = false;
+    syncCoordsFromSelection();
+    flashSaveHint(ok ? '✓ Coordinates saved' : `Failed to save ${sel}`);
   };
 
   const addImportedModel = (url: string, label: string) => {
@@ -255,7 +283,7 @@ export function HallLayoutEditHud() {
   if (!edit) return null;
 
   return (
-    <div className="pointer-events-auto fixed left-1/2 top-4 z-[60] w-[min(92vw,400px)] -translate-x-1/2 rounded-xl border border-[#d4af37]/30 bg-black/80 px-4 py-3 text-xs text-white/90 shadow-2xl backdrop-blur-md">
+    <div className="pointer-events-auto fixed left-1/2 top-4 z-[60] w-[min(92vw,440px)] -translate-x-1/2 rounded-xl border border-[#d4af37]/30 bg-black/80 px-4 py-3 text-xs text-white/90 shadow-2xl backdrop-blur-md">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#d4af37]">
@@ -322,56 +350,92 @@ export function HallLayoutEditHud() {
         </button>
       </div>
 
-      {selectedBoothId && (
+      {sel && (
         <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#d4af37]">Booth width & height</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#d4af37]">
+            World coordinates (meters)
+          </div>
           <p className="mt-1 text-[10px] leading-relaxed text-white/50">
-            Drag the <strong className="text-white/70">Size</strong> gizmo, or type values below (1.0 = default).
+            Live values from the selected object. Hall: X west (-) to east (+), Z north (-) to south (+), Y up.
+            {selectedBoothId ? ' West booths often use Y rotation 90 degrees.' : ''}
           </p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <label className="block">
-              <span className="text-[9px] uppercase text-white/40">Width</span>
-              <input
-                type="number"
-                min={0.5}
-                max={3}
-                step={0.05}
-                value={boothWidth}
-                onChange={(e) => setBoothWidth(e.target.value)}
-                className="mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45"
-              />
-            </label>
-            <label className="block">
-              <span className="text-[9px] uppercase text-white/40">Height</span>
-              <input
-                type="number"
-                min={0.5}
-                max={3}
-                step={0.05}
-                value={boothHeight}
-                onChange={(e) => setBoothHeight(e.target.value)}
-                className="mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45"
-              />
-            </label>
-            <label className="block">
-              <span className="text-[9px] uppercase text-white/40">Depth</span>
-              <input
-                type="number"
-                min={0.5}
-                max={3}
-                step={0.05}
-                value={boothDepth}
-                onChange={(e) => setBoothDepth(e.target.value)}
-                className="mt-0.5 w-full rounded border border-white/12 bg-white/[0.06] px-2 py-1.5 text-[11px] text-white outline-none focus:border-[#d4af37]/45"
-              />
-            </label>
+          <div className="mt-2 text-[9px] font-semibold uppercase tracking-wide text-white/35">Position</div>
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {(
+              [
+                ['X', posX, setPosX],
+                ['Y', posY, setPosY],
+                ['Z', posZ, setPosZ],
+              ] as const
+            ).map(([label, value, setValue]) => (
+              <label key={label} className="block">
+                <span className="text-[9px] uppercase text-white/40">{label}</span>
+                <input
+                  type="number"
+                  step={0.1}
+                  value={value}
+                  onFocus={() => { coordTypingRef.current = true; }}
+                  onBlur={() => { coordTypingRef.current = false; syncCoordsFromSelection(); }}
+                  onChange={(e) => setValue(e.target.value)}
+                  className={coordInputClassName()}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 text-[9px] font-semibold uppercase tracking-wide text-white/35">Rotation (degrees)</div>
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {(
+              [
+                ['X', rotXDeg, setRotXDeg],
+                ['Y', rotYDeg, setRotYDeg],
+                ['Z', rotZDeg, setRotZDeg],
+              ] as const
+            ).map(([label, value, setValue]) => (
+              <label key={label} className="block">
+                <span className="text-[9px] uppercase text-white/40">{label}</span>
+                <input
+                  type="number"
+                  step={0.5}
+                  value={value}
+                  onFocus={() => { coordTypingRef.current = true; }}
+                  onBlur={() => { coordTypingRef.current = false; syncCoordsFromSelection(); }}
+                  onChange={(e) => setValue(e.target.value)}
+                  className={coordInputClassName()}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 text-[9px] font-semibold uppercase tracking-wide text-white/35">Scale</div>
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {(
+              [
+                ['Width', scaleX, setScaleX],
+                ['Height', scaleY, setScaleY],
+                ['Depth', scaleZ, setScaleZ],
+              ] as const
+            ).map(([label, value, setValue]) => (
+              <label key={label} className="block">
+                <span className="text-[9px] uppercase text-white/40">{label}</span>
+                <input
+                  type="number"
+                  min={0.1}
+                  max={3}
+                  step={0.05}
+                  value={value}
+                  onFocus={() => { coordTypingRef.current = true; }}
+                  onBlur={() => { coordTypingRef.current = false; syncCoordsFromSelection(); }}
+                  onChange={(e) => setValue(e.target.value)}
+                  className={coordInputClassName()}
+                />
+              </label>
+            ))}
           </div>
           <button
             type="button"
             className="mt-2 w-full rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/15 px-2 py-1.5 text-[10px] font-semibold uppercase text-[#f5e6b8] hover:bg-[#d4af37]/25"
-            onClick={applyBoothSize}
+            onClick={applyCoordinates}
           >
-            Apply size
+            Apply coordinates
           </button>
         </div>
       )}
