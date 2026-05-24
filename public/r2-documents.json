@@ -1,6 +1,6 @@
 {
-  "_readme": "Set publicBase to your R2 public URL (Cloudflare → R2 → virtual-expo-pdfs → Settings → Public Bucket URL). Paths must match objects under booths/ in the bucket — not virtual-expo-pdfs/booths/. Redeploy after editing.",
-  "publicBase": "",
+  "_readme": "publicBase is your R2 dev URL from Cloudflare Settings. Replace REPLACE-WITH-YOUR-PDF-FILENAME.pdf with the exact filename shown under Objects → booths → builder-4 → brochure. Test: open publicBase + '/' + brochureUrl in a browser before redeploying.",
+  "publicBase": "https://pub-f5f7c55d276a45eabbf52d335d3a1607.r2.dev",
   "documents": {
     "builder-4": {
       "brochureUrl": "booths/builder-4/brochure/REPLACE-WITH-YOUR-PDF-FILENAME.pdf",

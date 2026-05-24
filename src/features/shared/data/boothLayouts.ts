@@ -563,8 +563,6 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
     {
       ...vertex,
       position: [BOOTH_ROW_X_WEST, 0, zSouth],
-      brochureUrl: vertex.brochureUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-      priceListUrl: vertex.priceListUrl || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
       siteMapUrl: vertex.siteMapUrl || '/maps/site-map.svg',
       company: {
         ...vertex.company,

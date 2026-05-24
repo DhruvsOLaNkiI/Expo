@@ -77,6 +77,23 @@ function pdfEmbedSrc(url: string): string {
   return `${u}#toolbar=1&navpanes=0&view=FitH`;
 }
 
+/** Sites like w3.org block iframe embeds — open those in a new tab instead. */
+function canEmbedPdfInIframe(url: string): boolean {
+  const u = normalizeCtaUrl(url).trim();
+  if (!u || u.startsWith('data:')) return true;
+  try {
+    const parsed = new URL(u, typeof window !== 'undefined' ? window.location.origin : 'https://expo.digitalbroker.in');
+    if (typeof window !== 'undefined' && parsed.origin === window.location.origin) return true;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'www.w3.org' || host === 'w3.org') return false;
+    if (host.endsWith('.r2.dev') || host.includes('r2.cloudflarestorage.com')) return true;
+    if (typeof window !== 'undefined' && parsed.origin !== window.location.origin) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function EmbeddedVideoPanel({
   title,
   url,
@@ -153,15 +170,27 @@ function EmbeddedPdfPanel({
   onClose: () => void;
   overlayClassName?: string;
 }) {
-  const [loadFailed, setLoadFailed] = useState(false);
+  const embedAllowed = useMemo(() => canEmbedPdfInIframe(url), [url]);
+  const [loadFailed, setLoadFailed] = useState(!embedAllowed);
   const embedSrc = useMemo(() => pdfEmbedSrc(url), [url]);
+  const loadedRef = useRef(false);
 
   useLayoutEffect(() => {
-    setLoadFailed(false);
+    loadedRef.current = false;
+    setLoadFailed(!canEmbedPdfInIframe(url));
   }, [url]);
 
+  useEffect(() => {
+    if (!embedAllowed) return;
+    loadedRef.current = false;
+    const t = window.setTimeout(() => {
+      if (!loadedRef.current) setLoadFailed(true);
+    }, 8000);
+    return () => window.clearTimeout(t);
+  }, [embedAllowed, embedSrc]);
+
   const overlay = overlayClassName?.trim() || DEFAULT_OVERLAY;
-  const openTab = () => window.open(url, '_blank', 'noopener,noreferrer');
+  const openTab = () => window.open(normalizeCtaUrl(url), '_blank', 'noopener,noreferrer');
 
   return (
     <div role="presentation" className={overlay} onClick={onClose}>
@@ -202,12 +231,18 @@ function EmbeddedPdfPanel({
               title={title}
               src={embedSrc}
               className="absolute inset-0 h-full w-full border-0 bg-white"
+              onLoad={() => {
+                loadedRef.current = true;
+                setLoadFailed(false);
+              }}
               onError={() => setLoadFailed(true)}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
               <p className="text-sm text-amber-200/90">
-                This PDF could not be embedded here. Open it in a new tab instead.
+                {embedAllowed
+                  ? 'This PDF could not be embedded here. Open it in a new tab instead.'
+                  : 'This PDF must open in a new browser tab (the host blocks embedded previews).'}
               </p>
               <button
                 type="button"
