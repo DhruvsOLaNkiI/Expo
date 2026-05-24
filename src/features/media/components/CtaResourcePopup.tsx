@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { isPdfUrl } from '@/api/pageindexAutoIndex';
 import { normalizeCtaUrl } from '@/api/boothCta';
 import type { CtaResourcePopup } from '@/store';
+import { isUnopenableAssetUrl, openUrlInNewTab } from '@/utils/openUrl';
 
 function isSvgSiteMapUrl(url: string): boolean {
   const u = url.trim();
@@ -107,7 +108,11 @@ function EmbeddedVideoPanel({
 }) {
   const src = useMemo(() => normalizeCtaUrl(url), [url]);
   const overlay = overlayClassName?.trim() || DEFAULT_OVERLAY;
-  const openTab = () => window.open(src, '_blank', 'noopener,noreferrer');
+  const openTab = () => {
+    if (!openUrlInNewTab(src)) {
+      window.alert('This file URL is not valid yet. Upload to Cloudflare R2 and set the URL in public/r2-documents.json, then redeploy.');
+    }
+  };
 
   return (
     <div role="presentation" className={overlay} onClick={onClose}>
@@ -170,14 +175,19 @@ function EmbeddedPdfPanel({
   onClose: () => void;
   overlayClassName?: string;
 }) {
-  const embedAllowed = useMemo(() => canEmbedPdfInIframe(url), [url]);
+  const resolvedUrl = useMemo(() => normalizeCtaUrl(url), [url]);
+  const embedAllowed = useMemo(
+    () => canEmbedPdfInIframe(url) && !isUnopenableAssetUrl(resolvedUrl) && !resolvedUrl.startsWith('data:'),
+    [url, resolvedUrl],
+  );
   const [loadFailed, setLoadFailed] = useState(!embedAllowed);
   const embedSrc = useMemo(() => pdfEmbedSrc(url), [url]);
   const loadedRef = useRef(false);
 
   useLayoutEffect(() => {
     loadedRef.current = false;
-    setLoadFailed(!canEmbedPdfInIframe(url));
+    const resolved = normalizeCtaUrl(url);
+    setLoadFailed(!canEmbedPdfInIframe(url) || isUnopenableAssetUrl(resolved) || resolved.startsWith('data:'));
   }, [url]);
 
   useEffect(() => {
@@ -190,7 +200,14 @@ function EmbeddedPdfPanel({
   }, [embedAllowed, embedSrc]);
 
   const overlay = overlayClassName?.trim() || DEFAULT_OVERLAY;
-  const openTab = () => window.open(normalizeCtaUrl(url), '_blank', 'noopener,noreferrer');
+  const openTab = () => {
+    const target = normalizeCtaUrl(url);
+    if (!openUrlInNewTab(target)) {
+      window.alert(
+        'Brochure URL is not configured for production.\n\nUpload the PDF in Cloudflare R2, add the path to public/r2-documents.json, and redeploy.',
+      );
+    }
+  };
 
   return (
     <div role="presentation" className={overlay} onClick={onClose}>
@@ -240,9 +257,11 @@ function EmbeddedPdfPanel({
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
               <p className="text-sm text-amber-200/90">
-                {embedAllowed
-                  ? 'This PDF could not be embedded here. Open it in a new tab instead.'
-                  : 'This PDF must open in a new browser tab (the host blocks embedded previews).'}
+                {isUnopenableAssetUrl(resolvedUrl)
+                  ? 'Brochure PDF is not linked yet. Set public/r2-documents.json (or upload via CMS when Node + R2 are running on Coolify).'
+                  : embedAllowed
+                    ? 'This PDF could not be embedded here. Open it in a new tab instead.'
+                    : 'This PDF must open in a new browser tab (the host blocks embedded previews).'}
               </p>
               <button
                 type="button"
@@ -347,7 +366,10 @@ function CtaResourcePopupContent({
   }, [currentUrl]);
 
   const openTab = () => {
-    window.open(currentUrl || popup.url, '_blank', 'noopener,noreferrer');
+    const target = currentUrl || popup.url;
+    if (!openUrlInNewTab(normalizeCtaUrl(target))) {
+      window.alert('This resource URL is not valid or is too large to open in a new tab.');
+    }
   };
 
   const isImage = variant === 'image';

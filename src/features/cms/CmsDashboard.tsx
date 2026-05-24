@@ -18,8 +18,9 @@ import {
 import { CmsPreview3D } from './CmsPreview3D';
 import { CmsScenePanel } from './CmsScenePanel';
 import { CtaResourcePopupView } from '@/features/media/components/CtaResourcePopup';
-import { uploadCmsFile, type UploadResult } from '@/api/cmsUpload';
+import { CmsUploadError, isR2Available, uploadCmsFile, type UploadResult } from '@/api/cmsUpload';
 import { normalizeR2PublicUrl } from '@/api/r2Urls';
+import { openUrlInNewTab } from '@/utils/openUrl';
 import {
   autoIndexPdf,
   fetchBoothPageIndexStatus,
@@ -375,7 +376,20 @@ export function CmsDashboard() {
   const toastUploadResult = useCallback(
     (result: UploadResult, label: string) => {
       if (result.storage === 'r2') showToast(`${label} → Cloudflare R2`);
-      else showToast(`${label} saved locally (set R2_* in .env for cloud URLs)`);
+      else showToast(`${label} saved locally (dev only — use R2 on production)`);
+    },
+    [showToast],
+  );
+
+  const showUploadError = useCallback(
+    (err: unknown) => {
+      const msg =
+        err instanceof CmsUploadError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Upload failed';
+      showToast(msg.length > 220 ? `${msg.slice(0, 217)}…` : msg);
     },
     [showToast],
   );
@@ -703,6 +717,7 @@ export function CmsDashboard() {
                 <MediaTab
                   boothId={selectedId}
                   toastUploadResult={toastUploadResult}
+                  showUploadError={showUploadError}
                   media={media}
                   addMediaItem={addMediaItem}
                   removeMediaItem={removeMediaItem}
@@ -1157,9 +1172,11 @@ function MediaTab({
   persistDocumentField,
   persistPageIndexFlag,
   onUseBundledSiteMapPath,
+  showUploadError,
 }: {
   boothId: string;
   toastUploadResult: (result: UploadResult, label: string) => void;
+  showUploadError: (err: unknown) => void;
   media: MediaItem[];
   addMediaItem: (f: File, t: MediaItem['type']) => void;
   removeMediaItem: (id: string) => void;
@@ -1187,6 +1204,11 @@ function MediaTab({
   onUseBundledSiteMapPath: () => void;
 }) {
   const [galleryPreview, setGalleryPreview] = useState<MediaItem | null>(null);
+  const [r2ApiOnline, setR2ApiOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void isR2Available().then(setR2ApiOnline);
+  }, []);
   const remotePreview = galleryPreview ? /^https?:\/\//i.test(galleryPreview.url.trim()) : false;
   const galleryDataUrlChars = useMemo(
     () => media.reduce((acc, m) => acc + (/^data:/i.test(m.url) ? m.url.length : 0), 0),
@@ -1201,8 +1223,13 @@ function MediaTab({
     <>
       <SectionTitle>Booth side menu — visitor buttons</SectionTitle>
       <p className="mb-3 text-[10px] leading-relaxed text-white/40">
-        Upload here for each gold button at your booth. Uses Cloudflare R2 when <span className="font-mono text-white/50">R2_*</span> is set in <span className="font-mono text-white/50">.env</span>.
+        Upload here for each gold button at your booth. Production uploads need Coolify running <span className="font-mono text-white/50">npm run start:prod</span> with all <span className="font-mono text-white/50">R2_*</span> env vars (Runtime ON). Otherwise upload PDFs in Cloudflare R2 and edit <span className="font-mono text-white/50">public/r2-documents.json</span>.
       </p>
+      {r2ApiOnline === false && (
+        <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-100/90">
+          R2 upload API is offline on this server (static hosting or missing Node). CMS PDF upload will fail until you redeploy with <span className="font-mono">npm run start:prod</span>.
+        </p>
+      )}
 
       <div className="mb-4 space-y-3 rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/5 p-3">
         <CmsDocFieldWithPreview
@@ -1213,11 +1240,15 @@ function MediaTab({
           uploadLabel="Upload brochure (PDF)"
           uploadAccept=".pdf,application/pdf"
           onUploadFile={async (f) => {
-            const up = await uploadCmsFile(f, boothId, 'brochure');
-            setBrochureUrl(up.url);
-            toastUploadResult(up, 'Brochure');
-            await persistDocumentField('brochureUrl', up.url, 'Brochure');
-            if (enablePageIndexBrochure) void autoIndexPdf(f, boothId, 'brochure', up.url);
+            try {
+              const up = await uploadCmsFile(f, boothId, 'brochure');
+              setBrochureUrl(up.url);
+              toastUploadResult(up, 'Brochure');
+              await persistDocumentField('brochureUrl', up.url, 'Brochure');
+              if (enablePageIndexBrochure) void autoIndexPdf(f, boothId, 'brochure', up.url);
+            } catch (e) {
+              showUploadError(e);
+            }
           }}
         />
         <CmsDocFieldWithPreview
@@ -1228,12 +1259,16 @@ function MediaTab({
           uploadLabel="Upload price list (PDF or image)"
           uploadAccept=".pdf,application/pdf,image/*"
           onUploadFile={async (f) => {
-            const up = await uploadCmsFile(f, boothId, 'price-list');
-            setPriceListUrl(up.url);
-            toastUploadResult(up, 'Price list');
-            await persistDocumentField('priceListUrl', up.url, 'Price list');
-            const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-            if (enablePageIndexPriceList && isPdf) void autoIndexPdf(f, boothId, 'priceList', up.url);
+            try {
+              const up = await uploadCmsFile(f, boothId, 'price-list');
+              setPriceListUrl(up.url);
+              toastUploadResult(up, 'Price list');
+              await persistDocumentField('priceListUrl', up.url, 'Price list');
+              const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+              if (enablePageIndexPriceList && isPdf) void autoIndexPdf(f, boothId, 'priceList', up.url);
+            } catch (e) {
+              showUploadError(e);
+            }
           }}
         />
 
@@ -1394,7 +1429,20 @@ function MediaTab({
                 <video src={galleryPreview.url} controls playsInline className="mx-auto block max-h-[72vh] w-full max-w-full" />
               )}
               {galleryPreview.type === 'pdf' && (
-                <iframe title={galleryPreview.label} src={galleryPreview.url} className="h-[min(72vh,640px)] w-full min-w-[min(90vw,720px)] rounded bg-white" />
+                /^https?:\/\//i.test(galleryPreview.url.trim()) ? (
+                  <iframe title={galleryPreview.label} src={galleryPreview.url} className="h-[min(72vh,640px)] w-full min-w-[min(90vw,720px)] rounded bg-white" />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 p-8 text-center">
+                    <p className="text-sm text-amber-200/90">PDF is stored in the browser only. Open in a new tab, or upload to R2 on a server with Node.</p>
+                    <button
+                      type="button"
+                      className="rounded-lg bg-[#d4af37] px-4 py-2 text-xs font-bold uppercase text-black"
+                      onClick={() => openUrlInNewTab(galleryPreview.url)}
+                    >
+                      Open PDF
+                    </button>
+                  </div>
+                )
               )}
               {galleryPreview.type === 'model' && (
                 <p className="p-8 text-center text-sm text-white/50">GLB / GLTF preview is not embedded here. Download from your files or open the asset URL in a 3D viewer.</p>
