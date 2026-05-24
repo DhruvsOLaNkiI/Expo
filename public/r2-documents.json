@@ -1,0 +1,14 @@
+{
+  "_readme": "Set publicBase to your R2 public URL (Cloudflare → R2 → virtual-expo-pdfs → Settings → Public Bucket URL). Paths must match objects under booths/ in the bucket — not virtual-expo-pdfs/booths/. Redeploy after editing.",
+  "publicBase": "",
+  "documents": {
+    "builder-4": {
+      "brochureUrl": "booths/builder-4/brochure/REPLACE-WITH-YOUR-PDF-FILENAME.pdf",
+      "priceListUrl": ""
+    },
+    "vertex-elite": {
+      "brochureUrl": "booths/vertex-elite/brochure/REPLACE-WITH-YOUR-PDF-FILENAME.pdf",
+      "priceListUrl": ""
+    }
+  }
+}

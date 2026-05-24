@@ -1,11 +1,14 @@
 import type { CompanyProfile, MediaItem, PlacedImage } from '@/features/shared/data/boothLayouts';
 import { isPdfUrl } from './pageindexAutoIndex';
-import { normalizeR2PublicUrl } from './r2Urls';
+import { getR2PublicBase } from '@/config/r2Public';
+import { normalizeR2PublicUrl, resolvePublicAssetUrl } from './r2Urls';
 
 export function normalizeCtaUrl(url: string): string {
   const raw = url.trim();
   if (!raw) return '';
-  if (raw.startsWith('data:') || raw.startsWith('/')) return raw;
+  if (raw.startsWith('data:') || (raw.startsWith('/') && !raw.startsWith('//'))) return raw;
+  const resolved = resolvePublicAssetUrl(raw, getR2PublicBase());
+  if (resolved !== raw || !raw.startsWith('http')) return resolved;
   return normalizeR2PublicUrl(raw);
 }
 

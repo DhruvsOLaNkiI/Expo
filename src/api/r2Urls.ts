@@ -38,3 +38,38 @@ export function buildPublicR2Url(publicBase: string, objectKey: string, bucket =
   }
   return `${base}/${key}`;
 }
+
+const R2_SCHEME = 'r2:';
+
+/** True when value is a relative R2 object key (not http, data, or site path). */
+export function isRelativeR2ObjectKey(value: string): boolean {
+  const raw = value.trim();
+  if (!raw || raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) {
+    return false;
+  }
+  if (raw.startsWith('/')) return false;
+  if (raw.startsWith(R2_SCHEME)) return true;
+  return raw.startsWith('booths/') || raw.startsWith(`${R2_BUCKET_NAME}/`);
+}
+
+/**
+ * Resolve CMS asset URLs for production:
+ * - `https://…` → normalized public R2 URL
+ * - `r2:booths/…` or `booths/…` → `${publicBase}/booths/…`
+ * - `/maps/…` and `data:…` → unchanged
+ */
+export function resolvePublicAssetUrl(url: string, publicBase?: string): string {
+  const raw = url.trim();
+  if (!raw) return '';
+  if (raw.startsWith('data:') || (raw.startsWith('/') && !raw.startsWith('//'))) return raw;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return normalizeR2PublicUrl(raw);
+  }
+
+  const base = (publicBase ?? '').trim().replace(/\/$/, '');
+  let key = raw.startsWith(R2_SCHEME) ? raw.slice(R2_SCHEME.length) : raw;
+  key = stripBucketPrefixFromPath(key.replace(/^\/+/, ''));
+  if (!key) return raw;
+  if (!base) return raw;
+  return buildPublicR2Url(base, key);
+}

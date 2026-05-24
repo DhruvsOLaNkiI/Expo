@@ -10,6 +10,12 @@ import type {
 import { mergeSceneConfig, mergeSceneOverridesInput } from '@/features/shared/data/boothLayouts';
 import { getBootstrapSceneForDevice } from '@/utils/devicePerformance';
 import { persistBoothOverridesWithFallback, readPersistedBoothOverrides } from '@/store/persist/boothCms';
+import {
+  applyR2PublicBaseFromCmsFile,
+  loadR2DocumentDefaults,
+  resolveBoothOverridesForR2,
+} from '@/store/persist/r2Documents';
+import { getR2PublicBase } from '@/config/r2Public';
 import { commitHallLayoutTransform } from '@/store/persist/hallLayout';
 import { REG_MAIN_EXPO_SPAWN, REG_SPAWN } from '@/features/shared/data/registrationHall';
 import {
@@ -450,8 +456,11 @@ export const useStore = create<AppState>((set, get) => ({
 
   initBoothCms: async () => {
     if (get()._boothCmsHydrated) return;
+    const { publicBase: r2BaseFromManifest, defaults: fromR2Documents } = await loadR2DocumentDefaults();
+
     let fromFile: Record<string, BoothLayoutPatch> = {};
     let sceneFromFile: SceneOverridesInput = {};
+    let r2PublicBase = r2BaseFromManifest;
     try {
       const res = await fetch('/booth-cms.json', { cache: 'no-store' });
       if (res.ok) {
@@ -459,8 +468,14 @@ export const useStore = create<AppState>((set, get) => ({
         if (j?.booths && typeof j.booths === 'object') fromFile = j.booths;
         if (j?.overrides && typeof j.overrides === 'object') fromFile = j.overrides;
         if (j?.scene && typeof j.scene === 'object') sceneFromFile = j.scene;
+        const fromCms = applyR2PublicBaseFromCmsFile(j?.r2PublicBase);
+        if (fromCms) r2PublicBase = fromCms;
       }
     } catch { /* */ }
+
+    if (!r2PublicBase) {
+      r2PublicBase = getR2PublicBase();
+    }
 
     const fromBrowser = await readPersistedBoothOverrides();
 
@@ -470,10 +485,22 @@ export const useStore = create<AppState>((set, get) => ({
       if (raw) sceneFromLs = JSON.parse(raw);
     } catch { sceneFromLs = {}; }
 
-    const ids = new Set([...Object.keys(fromFile), ...Object.keys(fromBrowser)]);
+    const ids = new Set([
+      ...Object.keys(fromR2Documents),
+      ...Object.keys(fromFile),
+      ...Object.keys(fromBrowser),
+    ]);
     const merged: Record<string, BoothLayoutPatch> = {};
     for (const id of ids) {
-      merged[id] = { ...(fromFile[id] || {}), ...(fromBrowser[id] || {}) };
+      merged[id] = {
+        ...(fromR2Documents[id] || {}),
+        ...(fromFile[id] || {}),
+        ...(fromBrowser[id] || {}),
+      };
+    }
+    const resolvedMerged = resolveBoothOverridesForR2(merged, r2PublicBase);
+    for (const id of Object.keys(resolvedMerged)) {
+      merged[id] = resolvedMerged[id];
     }
     for (const id of REMOVED_BOOTH_IDS) {
       delete merged[id];
