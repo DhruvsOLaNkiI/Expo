@@ -41,6 +41,12 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+      allowedHosts: true,
+    },
+    preview: {
+      host: '0.0.0.0',
+      /** Required when Coolify/Caddy proxies expo.digitalbroker.in → Node (vite preview). */
+      allowedHosts: true,
     },
     appType: 'spa',
   };
