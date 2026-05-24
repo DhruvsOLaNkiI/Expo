@@ -19,6 +19,7 @@ import { CmsPreview3D } from './CmsPreview3D';
 import { CmsScenePanel } from './CmsScenePanel';
 import { CtaResourcePopupView } from '@/features/media/components/CtaResourcePopup';
 import { CmsUploadError, isR2Available, uploadCmsFile, type UploadResult } from '@/api/cmsUpload';
+import { isSharedServerAssetUrl, patchBoothCmsOnServer } from '@/api/boothCmsServer';
 import { normalizeR2PublicUrl } from '@/api/r2Urls';
 import { openUrlInNewTab } from '@/utils/openUrl';
 import {
@@ -375,8 +376,8 @@ export function CmsDashboard() {
 
   const toastUploadResult = useCallback(
     (result: UploadResult, label: string) => {
-      if (result.storage === 'r2') showToast(`${label} → Cloudflare R2`);
-      else showToast(`${label} saved locally (dev only — use R2 on production)`);
+      if (result.storage === 'r2') showToast(`${label} → Cloudflare R2 (uploading…)`);
+      else showToast(`${label} saved locally (this browser only — needs R2 on production)`);
     },
     [showToast],
   );
@@ -405,15 +406,28 @@ export function CmsDashboard() {
           ? url.trim()
           : normalizeR2PublicUrl(url);
       const ok = await patch(selectedId, { [field]: normalized } as BoothLayoutPatch);
-      if (ok) {
-        showToast(`${label} saved to expo`);
-        if (field === 'priceListUrl' && isPdfUrl(normalized) && enablePageIndexPriceList) {
-          void indexPdfFromUrl(normalized, selectedId, 'priceList');
+      if (!ok) {
+        showToast('Could not save (browser storage full). Try /maps/… in public/ or remove large Media gallery items.');
+        return;
+      }
+
+      if (isSharedServerAssetUrl(normalized)) {
+        const server = await patchBoothCmsOnServer(selectedId, { [field]: normalized } as BoothLayoutPatch);
+        if (server.ok) {
+          showToast(`${label} → R2 · saved for all visitors`);
+        } else if (!server.ok) {
+          showToast(`${label} saved on this device only — ${server.error}`);
         }
-        if (field === 'brochureUrl' && isPdfUrl(normalized) && enablePageIndexBrochure) {
-          void indexPdfFromUrl(normalized, selectedId, 'brochure');
-        }
-      } else showToast('Could not save (browser storage full). Try /maps/… in public/ or remove large Media gallery items.');
+      } else {
+        showToast(`${label} saved on this browser only (upload to R2 for all visitors)`);
+      }
+
+      if (field === 'priceListUrl' && isPdfUrl(normalized) && enablePageIndexPriceList) {
+        void indexPdfFromUrl(normalized, selectedId, 'priceList');
+      }
+      if (field === 'brochureUrl' && isPdfUrl(normalized) && enablePageIndexBrochure) {
+        void indexPdfFromUrl(normalized, selectedId, 'brochure');
+      }
     },
     [patch, selectedId, showToast, enablePageIndexPriceList, enablePageIndexBrochure],
   );
@@ -442,8 +456,13 @@ export function CmsDashboard() {
       const { siteMapUrl, siteMapGallery } = siteMapToStorageFields(next);
       setSiteMapSlides(siteMapUrlsFromConfig({ siteMapUrl, siteMapGallery }));
       const ok = await patch(selectedId, { siteMapUrl, siteMapGallery });
-      if (ok) showToast('Site map saved to expo');
-      else showToast('Could not save (browser storage full). Use /maps/… paths or fewer large uploads.');
+      if (!ok) {
+        showToast('Could not save (browser storage full). Use /maps/… paths or fewer large uploads.');
+        return;
+      }
+      const server = await patchBoothCmsOnServer(selectedId, { siteMapUrl, siteMapGallery });
+      if (server.ok) showToast('Site map → saved for all visitors');
+      else if (!server.ok) showToast(`Site map saved on this device only — ${server.error}`);
     },
     [patch, selectedId, showToast],
   );
@@ -1227,7 +1246,12 @@ function MediaTab({
       </p>
       {r2ApiOnline === false && (
         <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-100/90">
-          R2 upload API is offline on this server (static hosting or missing Node). CMS PDF upload will fail until you redeploy with <span className="font-mono">npm run start:prod</span>.
+          R2 upload API is offline — brochures save in this browser only. Fix: Coolify start command <span className="font-mono">npm run start</span>, all <span className="font-mono">R2_*</span> Runtime ON, redeploy.
+        </p>
+      )}
+      {r2ApiOnline === true && (
+        <p className="mb-3 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[10px] leading-relaxed text-emerald-100/90">
+          R2 upload is online. After upload you should see: <strong>“→ R2 · saved for all visitors”</strong> — then every guest sees the same brochure.
         </p>
       )}
 

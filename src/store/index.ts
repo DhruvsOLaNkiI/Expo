@@ -15,6 +15,7 @@ import {
   loadR2DocumentDefaults,
   resolveBoothOverridesForR2,
 } from '@/store/persist/r2Documents';
+import { mergeSharedBoothDocs } from '@/api/boothCmsServer';
 import { getR2PublicBase } from '@/config/r2Public';
 import { commitHallLayoutTransform } from '@/store/persist/hallLayout';
 import { REG_MAIN_EXPO_SPAWN, REG_SPAWN } from '@/features/shared/data/registrationHall';
@@ -494,8 +495,9 @@ export const useStore = create<AppState>((set, get) => ({
     for (const id of ids) {
       merged[id] = {
         ...(fromR2Documents[id] || {}),
-        ...(fromFile[id] || {}),
         ...(fromBrowser[id] || {}),
+        ...(fromFile[id] || {}),
+        ...mergeSharedBoothDocs(fromFile[id], fromBrowser[id]),
       };
     }
     const resolvedMerged = resolveBoothOverridesForR2(merged, r2PublicBase);
