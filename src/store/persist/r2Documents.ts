@@ -2,7 +2,7 @@ import type { BoothLayoutPatch } from '@/features/shared/data/boothLayouts';
 import { buildPublicR2Url, isRelativeR2ObjectKey, normalizeR2PublicUrl, resolvePublicAssetUrl } from '@/api/r2Urls';
 import { setR2PublicBase } from '@/config/r2Public';
 
-const DOC_URL_FIELDS = ['brochureUrl', 'priceListUrl', 'unitLayoutUrl', 'siteMapUrl', 'videoUrl'] as const;
+const DOC_URL_FIELDS = ['brochureUrl', 'priceListUrl', 'unitLayoutUrl', 'siteMapUrl', 'videoUrl', 'stageScreenUrl', 'signageImageUrl'] as const;
 
 export type R2DocumentsManifest = {
   publicBase?: string;

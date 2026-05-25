@@ -14,7 +14,7 @@ function isRegLobbySelection(selection: string): boolean {
   return selection.startsWith('reg-lobby-') || selection.startsWith('reg-imported-');
 }
 
-const EDITABLE_PREFIXES = ['reg-', 'hall-', 'booth-root-'] as const;
+const EDITABLE_PREFIXES = ['reg-', 'hall-', 'booth-root-', 'booth-display-'] as const;
 
 function isEditableName(name: string): boolean {
   return EDITABLE_PREFIXES.some((p) => name.startsWith(p));

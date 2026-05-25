@@ -14,9 +14,39 @@ type LedVideoPlaneProps = {
 
 export function isScreenImageUrl(url: string): boolean {
   const u = url.trim().toLowerCase();
+  if (!u) return false;
   if (u.startsWith('data:image/')) return true;
+  if (isScreenVideoUrl(url)) return false;
   const path = u.split('?')[0].toLowerCase();
-  return /\.(png|jpe?g|webp|gif)$/.test(path);
+  if (/\.(png|jpe?g|webp|gif|svg|bmp|avif)(\?|#|$)/i.test(path)) return true;
+  // R2 / CMS uploads often omit extensions — folder names distinguish image vs video
+  if (/(^|[/-])(stage-image|signage|ballroom-stage-image|hall-canopy-image|logo|brochure|price-list|unit-layout|screen-image)([/-]|$)/i.test(path)) {
+    return true;
+  }
+  return false;
+}
+
+export function isScreenVideoUrl(url: string): boolean {
+  const u = url.trim().toLowerCase();
+  if (u.startsWith('data:video/')) return true;
+  const path = u.split('?')[0].toLowerCase();
+  if (/\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i.test(path)) return true;
+  if (/(^|[/-])(stage-video|walkthrough|ballroom-stage-video|hall-canopy-video)([/-]|$)/i.test(path)) return true;
+  return false;
+}
+
+/** Large back-wall + counter LED — explicit {@link stageScreenUrl} wins over legacy {@link videoUrl} fallback. */
+export function resolveBoothLedScreenUrl(
+  stageScreenUrl: string | undefined,
+  videoUrl: string,
+  showVideos: boolean,
+): string {
+  const stage = (stageScreenUrl ?? '').trim();
+  const video = (videoUrl ?? '').trim();
+  const raw = stage || video;
+  if (!raw) return '';
+  if (isScreenImageUrl(raw)) return raw;
+  return showVideos ? raw : '';
 }
 
 export function LedScreenSuspenseFallback({
@@ -59,7 +89,9 @@ function LedImagePlane({ args, url, polygonOffset = true, ...meshProps }: LedVid
   const sceneOverrides = useStore((s) => s.sceneOverrides);
   const cfg = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
   const tier = getVideoPlaybackTier(isRenderQuality(cfg.renderQuality) ? cfg.renderQuality : 'hd');
-  const tex = useTexture(url);
+  const tex = useTexture(url, undefined, (loader) => {
+    if (/^https?:\/\//i.test(url.trim())) loader.setCrossOrigin('anonymous');
+  });
 
   useLayoutEffect(() => {
     tex.colorSpace = gl.outputColorSpace;
@@ -74,9 +106,12 @@ function LedImagePlane({ args, url, polygonOffset = true, ...meshProps }: LedVid
   return (
     <mesh position={[0, 0, 0.1]} {...meshProps}>
       <planeGeometry args={args} />
-      <meshBasicMaterial
+      <meshStandardMaterial
         map={tex}
-        toneMapped
+        emissiveMap={tex}
+        emissive="#ffffff"
+        emissiveIntensity={0.85}
+        toneMapped={false}
         depthWrite
         polygonOffset={polygonOffset}
         polygonOffsetFactor={polygonOffset ? -0.5 : 0}
@@ -271,18 +306,18 @@ export function LedScreenSurface({ args, url, polygonOffset = true, ...meshProps
   if (!trimmed) {
     return <FallbackBlackPlane args={args} polygonOffset={polygonOffset} {...meshProps} />;
   }
-  if (isScreenImageUrl(trimmed)) {
+  if (isScreenVideoUrl(trimmed)) {
     return (
-      <Suspense
-        fallback={<LedScreenSuspenseFallback args={args} polygonOffset={polygonOffset} />}
-      >
-        <LedImagePlane key={trimmed} url={trimmed} args={args} polygonOffset={polygonOffset} {...meshProps} />
+      <Suspense fallback={<LedScreenSuspenseFallback args={args} polygonOffset={polygonOffset} />}>
+        <LedVideoPlane url={trimmed} args={args} polygonOffset={polygonOffset} {...meshProps} />
       </Suspense>
     );
   }
   return (
-    <Suspense fallback={<LedScreenSuspenseFallback args={args} polygonOffset={polygonOffset} />}>
-      <LedVideoPlane url={trimmed} args={args} polygonOffset={polygonOffset} {...meshProps} />
+    <Suspense
+      fallback={<LedScreenSuspenseFallback args={args} polygonOffset={polygonOffset} />}
+    >
+      <LedImagePlane key={trimmed} url={trimmed} args={args} polygonOffset={polygonOffset} {...meshProps} />
     </Suspense>
   );
 }

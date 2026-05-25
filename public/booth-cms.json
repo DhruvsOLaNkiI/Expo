@@ -34,7 +34,23 @@
     "builder-8": {
       "position": [22.72, 0, -8],
       "rotation": [0, 0.04188790258767373, 0],
-      "scale": [1.05, 1, 1]
+      "scale": [1.05, 1, 1],
+      "color": "#ffffff",
+      "accent": "#164e2f",
+      "counterColor": "#ffffff",
+      "lighting": {
+        "spotlightIntensity": 55,
+        "spotlightColor": "#fff8ef",
+        "ledStripColor": "#fff4d6",
+        "ledStripIntensity": 2.2,
+        "emissiveGlow": 0.12,
+        "ambientIntensity": 0.38
+      },
+      "company": {
+        "brandPrimary": "#3d9a5a",
+        "brandSecondary": "#164e2f",
+        "tagline": "LUXURY RESIDENCES"
+      }
     },
     "builder-9": {
       "position": [22.27, 0, 8],
@@ -47,6 +63,8 @@
     "showVideos": true,
     "showHallCanopy": true,
     "showBallroom": true,
+    "ballroomStageScreenUrl": "/images/first ever expo.jpg",
+    "showBoothHostess": true,
     "fogEnabled": false,
     "fogNear": 14,
     "fogFar": 55,

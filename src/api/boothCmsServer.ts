@@ -6,6 +6,8 @@ export const SHARED_BOOTH_DOC_KEYS = [
   'priceListUrl',
   'unitLayoutUrl',
   'videoUrl',
+  'stageScreenUrl',
+  'signageImageUrl',
   'siteMapUrl',
   'siteMapGallery',
 ] as const;

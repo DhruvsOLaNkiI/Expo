@@ -7,6 +7,11 @@ import {
   type HallLayoutConfig,
   type RegistrationLayoutConfig,
 } from '@/features/shared/data/boothLayouts';
+import {
+  mergeBoothDisplayLayout,
+  parseBoothDisplayObjectName,
+  type BoothDisplayLayout,
+} from '@/features/shared/data/boothDisplayLayout';
 import { REG_RECEPTION_Z } from '@/features/shared/data/registrationHall';
 import { getLayoutObject } from '@/features/shared/layoutRegistry';
 
@@ -113,6 +118,24 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
     return false;
   }
 
+  if (selection.startsWith('hall-standee-')) {
+    const id = selection.slice('hall-standee-'.length);
+    const hall = mergeHallLayout(get().sceneOverrides.hallLayout);
+    patchSceneOverride({
+      hallLayout: {
+        aisleStandeeTransforms: {
+          ...hall.aisleStandeeTransforms,
+          [id]: {
+            position: [obj.position.x, obj.position.y, obj.position.z],
+            rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+            scale: [obj.scale.x, obj.scale.y, obj.scale.z],
+          },
+        },
+      },
+    });
+    return true;
+  }
+
   if (selection.startsWith('booth-root-')) {
     const id = selection.slice('booth-root-'.length);
     void patchBoothOverride(id, {
@@ -120,6 +143,27 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
       rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
       scale: [obj.scale.x, obj.scale.y, obj.scale.z],
     });
+    return true;
+  }
+
+  const display = parseBoothDisplayObjectName(selection);
+  if (display) {
+    const { boothId, slot } = display;
+    const cur = get().boothOverrides[boothId]?.displayLayout ?? {};
+    const next: BoothDisplayLayout = mergeBoothDisplayLayout(cur, {
+      [slot]: {
+        position: [obj.position.x, obj.position.y, obj.position.z],
+        rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+        scale: [obj.scale.x, obj.scale.y, obj.scale.z],
+      },
+    }) ?? {
+      [slot]: {
+        position: [obj.position.x, obj.position.y, obj.position.z],
+        rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+        scale: [obj.scale.x, obj.scale.y, obj.scale.z],
+      },
+    };
+    void patchBoothOverride(boothId, { displayLayout: next });
     return true;
   }
 

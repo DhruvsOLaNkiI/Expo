@@ -2,9 +2,11 @@ import { Suspense, useMemo } from 'react';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
-import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
+import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
+import { BoothDisplayEditable } from './BoothDisplayEditable';
+import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
 function useBoothGradient() {
@@ -37,6 +39,7 @@ export function CrownEstatesBooth({
   id,
   name,
   videoUrl,
+  stageScreenUrl,
   headerLogoUrl,
   placedImages,
   brochureUrl = '',
@@ -47,6 +50,7 @@ export function CrownEstatesBooth({
   company,
   hostessQuickReplies,
   showVideos = true,
+  displayLayout,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -57,6 +61,7 @@ export function CrownEstatesBooth({
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
   headerLogoUrl?: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -68,8 +73,10 @@ export function CrownEstatesBooth({
   company?: CompanyProfile;
   hostessQuickReplies: HostessQuickReply[];
   showVideos?: boolean;
+  displayLayout?: BoothDisplayLayout;
 }) {
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   
   const gradTex = useBoothGradient();
   
@@ -201,19 +208,24 @@ export function CrownEstatesBooth({
         </Text>
 
         {/* Counter LED TV */}
-        <group position={[1.2, 0.8, -0.2]} rotation={[-0.2, -0.3, 0]}>
+        <BoothDisplayEditable
+          boothId={id}
+          slot="counter"
+          layout={displayLayout}
+          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
+        >
           <mesh castShadow>
             <boxGeometry args={[1.6, 1.0, 0.1]} />
             <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
           </mesh>
           <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={effectiveVideoUrl} position={[0, 0, 0.01]} />
+            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
           </Suspense>
           <mesh position={[0, -0.6, 0]}>
             <boxGeometry args={[0.4, 0.2, 0.2]} />
             <meshStandardMaterial color="#111" />
           </mesh>
-        </group>
+        </BoothDisplayEditable>
 
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
@@ -221,22 +233,26 @@ export function CrownEstatesBooth({
       </group>
 
       {/* Main Display Screen (Large TV) */}
-      <group position={[0, 3, -3.7]}>
+      <BoothDisplayEditable
+        boothId={id}
+        slot="main"
+        layout={displayLayout}
+        defaults={{ ...LUXURY_BOOTH_DISPLAY_DEFAULTS.main, position: [0, 3, -3.7] }}
+      >
         <mesh castShadow>
           <boxGeometry args={[6.6, 3.8, 0.2]} />
           <meshStandardMaterial color="#0a0a0a" metalness={0.9} roughness={0.1} />
         </mesh>
         <group position={[0, 0, 0.11]}>
           <Suspense fallback={<LedScreenSuspenseFallback args={[6.4, 3.6]} />}>
-            <LedScreenSurface args={[6.4, 3.6]} url={effectiveVideoUrl} />
+            <LedScreenSurface args={[6.4, 3.6]} url={stageLedUrl} />
           </Suspense>
         </group>
-        {/* Screen ambient backlight (glow) */}
         <mesh position={[0, 0, -0.1]}>
           <planeGeometry args={[7, 4.2]} />
           <meshStandardMaterial color={glowColor} emissive={glowColor} emissiveIntensity={0.6} />
         </mesh>
-      </group>
+      </BoothDisplayEditable>
 
       {/* Cinematic Spotlight */}
       <spotLight
@@ -251,7 +267,7 @@ export function CrownEstatesBooth({
         castShadow
       />
 
-      <BoothStandee name={name} accent={champagneGold} />
+      <BoothStandee name={name} accent={champagneGold} boothId={id} displayLayout={displayLayout} />
 
       <VertexEliteProximityPanels
         boothId={id}

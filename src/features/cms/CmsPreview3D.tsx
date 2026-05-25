@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text, useTexture, Grid, GizmoHelper, GizmoViewport } from '@react-three/drei';
 import { Suspense, useLayoutEffect, useCallback } from 'react';
 import * as THREE from 'three';
-import { LedScreenSurface } from '@/features/media/components/LedVideoPlane';
+import { LedScreenSurface, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothPlacedImageInteractive } from '@/features/booths/components/BoothPlacedImageInteractive';
 import { VertexEliteBooth } from '@/features/booths/components/Booths';
 import type { BoothLighting, PlacedImage, HostessQuickReply } from '@/features/shared/data/boothLayouts';
@@ -18,6 +18,7 @@ export type PreviewProps = {
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
   headerLogoUrl: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -90,7 +91,7 @@ function PreviewHeaderLogo({ url, accent, tagline }: { url: string; accent: stri
 
 /* ─── Booth geometry ─── */
 function BoothScene({
-  boothId, name, color, accent, counterColor, videoUrl, headerLogoUrl, lighting,
+  boothId, name, color, accent, counterColor, videoUrl, stageScreenUrl, headerLogoUrl, lighting,
   placedImages, placingImageUrl, onSurfaceClick, selectedImageId, onSelectImage, onDragImage,
   brochureUrl = '',
   priceListUrl = '',
@@ -102,6 +103,7 @@ function BoothScene({
   const siteMapUrls = siteMapUrlsFromConfig({ siteMapUrl, siteMapGallery });
   const hasLogo = Boolean(headerLogoUrl?.trim()) && !isVertexElite;
   const placing = Boolean(placingImageUrl);
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, true);
 
   const handleHit = useCallback((pos: [number, number, number], normal: [number, number, number]) => {
     onSurfaceClick(pos, normal);
@@ -243,14 +245,14 @@ function BoothScene({
         </mesh>
         <group position={[1.2, 0.8, -0.2]} rotation={[-0.2, -0.3, 0]}>
           <mesh castShadow><boxGeometry args={[1.6, 1.0, 0.1]} /><meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} /></mesh>
-          <LedScreenSurface args={[1.5, 0.9]} url={videoUrl} position={[0, 0, 0.01]} />
+          <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
         </group>
       </group>
 
       {/* Main TV */}
       <group position={[0, 3, -3.8]}>
         <mesh castShadow><boxGeometry args={[6.4, 3.6, 0.2]} /><meshStandardMaterial color="#111" metalness={0.85} roughness={0.12} /></mesh>
-        <group position={[0, 0, 0.11]}><LedScreenSurface args={[6.2, 3.4]} url={videoUrl} /></group>
+        <group position={[0, 0, 0.11]}><LedScreenSurface args={[6.2, 3.4]} url={stageLedUrl} /></group>
       </group>
 
       {/* Pedestal */}

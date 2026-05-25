@@ -20,6 +20,7 @@ export type LuxuryBoothProps = {
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
   headerLogoUrl?: string;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: import('@/features/shared/data/boothLayouts').PlacedImage[];
@@ -31,6 +32,7 @@ export type LuxuryBoothProps = {
   company?: import('@/features/shared/data/boothLayouts').CompanyProfile;
   hostessQuickReplies: HostessQuickReply[];
   showVideos?: boolean;
+  displayLayout?: import('@/features/shared/data/boothDisplayLayout').BoothDisplayLayout;
 };
 
 /** 3 per side — full AURUM-style booths facing the center aisle. */
@@ -94,6 +96,7 @@ export function SideExpoBooths({
           accent={b.accent}
           counterColor={b.counterColor}
           videoUrl={b.videoUrl}
+          stageScreenUrl={b.stageScreenUrl}
           headerLogoUrl={b.headerLogoUrl}
           lighting={b.lighting}
           placedImages={b.placedImages}
@@ -105,6 +108,7 @@ export function SideExpoBooths({
           company={b.company}
           hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_REPLIES}
           showVideos={showVideos}
+          displayLayout={b.displayLayout}
         />
       ))}
     </>

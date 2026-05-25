@@ -3,7 +3,9 @@ import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
 import { BoothHostessGreeter } from './Booths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
-import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
+import { BoothDisplayEditable } from './BoothDisplayEditable';
+import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
+import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
 export function MonarchBooth({
@@ -13,6 +15,7 @@ export function MonarchBooth({
   id,
   name,
   videoUrl,
+  stageScreenUrl,
   headerLogoUrl,
   lighting,
   placedImages,
@@ -24,6 +27,7 @@ export function MonarchBooth({
   company,
   hostessQuickReplies,
   showVideos = true,
+  displayLayout,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -34,6 +38,7 @@ export function MonarchBooth({
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
   headerLogoUrl?: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -45,8 +50,10 @@ export function MonarchBooth({
   company?: CompanyProfile;
   hostessQuickReplies: HostessQuickReply[];
   showVideos?: boolean;
+  displayLayout?: BoothDisplayLayout;
 }) {
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   
   // Premium Monarch color palette
   const maroon = '#3c1015'; // Deep rich maroon
@@ -177,19 +184,24 @@ export function MonarchBooth({
         </Text>
 
         {/* Counter LED TV */}
-        <group position={[1.2, 0.8, -0.2]} rotation={[-0.2, -0.3, 0]}>
+        <BoothDisplayEditable
+          boothId={id}
+          slot="counter"
+          layout={displayLayout}
+          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
+        >
           <mesh castShadow>
             <boxGeometry args={[1.6, 1.0, 0.1]} />
             <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
           </mesh>
           <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={effectiveVideoUrl} position={[0, 0, 0.01]} />
+            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
           </Suspense>
           <mesh position={[0, -0.6, 0]}>
             <boxGeometry args={[0.4, 0.2, 0.2]} />
             <meshStandardMaterial color="#111" />
           </mesh>
-        </group>
+        </BoothDisplayEditable>
 
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
@@ -197,22 +209,26 @@ export function MonarchBooth({
       </group>
 
       {/* Main Display Screen (Large TV) */}
-      <group position={[0, 3, -3.7]}>
+      <BoothDisplayEditable
+        boothId={id}
+        slot="main"
+        layout={displayLayout}
+        defaults={{ ...LUXURY_BOOTH_DISPLAY_DEFAULTS.main, position: [0, 3, -3.7] }}
+      >
         <mesh castShadow>
           <boxGeometry args={[6.6, 3.8, 0.2]} />
           <meshStandardMaterial color="#0a0a0a" metalness={0.9} roughness={0.1} />
         </mesh>
         <group position={[0, 0, 0.11]}>
           <Suspense fallback={<LedScreenSuspenseFallback args={[6.4, 3.6]} />}>
-            <LedScreenSurface args={[6.4, 3.6]} url={effectiveVideoUrl} />
+            <LedScreenSurface args={[6.4, 3.6]} url={stageLedUrl} />
           </Suspense>
         </group>
-        {/* Screen ambient backlight (glow) */}
         <mesh position={[0, 0, -0.1]}>
           <planeGeometry args={[7, 4.2]} />
           <meshStandardMaterial color="#ffedd6" emissive="#ffedd6" emissiveIntensity={0.5} />
         </mesh>
-      </group>
+      </BoothDisplayEditable>
 
       {/* Cinematic Lighting */}
       <spotLight

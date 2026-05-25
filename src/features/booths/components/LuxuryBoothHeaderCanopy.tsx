@@ -8,6 +8,8 @@ export function LuxuryBoothHeaderCanopy({
   title,
   subtitle,
   accent = '#d4af37',
+  fasciaColor = '#e6e4de',
+  subtitleColor = '#4a4844',
   width = 12.5,
   height = 1.45,
   depth = 0.72,
@@ -16,6 +18,9 @@ export function LuxuryBoothHeaderCanopy({
   title: string;
   subtitle?: string;
   accent?: string;
+  /** Header beam face — white for eco booths, grey satin for gold luxury booths. */
+  fasciaColor?: string;
+  subtitleColor?: string;
   width?: number;
   height?: number;
   depth?: number;
@@ -30,7 +35,7 @@ export function LuxuryBoothHeaderCanopy({
       <mesh castShadow receiveShadow>
         <boxGeometry args={[width, height, depth]} />
         <meshPhysicalMaterial
-          color="#e6e4de"
+          color={fasciaColor}
           roughness={0.22}
           metalness={0}
           clearcoat={0.45}
@@ -72,7 +77,7 @@ export function LuxuryBoothHeaderCanopy({
         <Text
           position={[0, -0.22, zFace]}
           fontSize={subSize}
-          color="#4a4844"
+          color={subtitleColor}
           anchorX="center"
           anchorY="middle"
           letterSpacing={0.14}

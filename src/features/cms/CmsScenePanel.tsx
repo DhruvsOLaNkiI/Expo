@@ -7,8 +7,9 @@ import {
   isRenderQuality,
   type RenderQuality,
 } from '@/features/shared/data/renderQuality';
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { SIDE_SPECS } from '@/features/booths/components/SideExpoBooths';
+import { uploadCmsFile } from '@/api/cmsUpload';
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-2">{children}</h3>;
@@ -22,6 +23,79 @@ function CmsColor({ label, value, onChange }: { label: string; value: string; on
         <input type="color" className="h-8 w-8 cursor-pointer rounded border border-white/[0.08] bg-transparent p-0" value={value} onChange={(e) => onChange(e.target.value)} />
         <input className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white outline-none focus:border-[#d4af37]/40 font-mono" value={value} onChange={(e) => onChange(e.target.value)} />
       </div>
+    </div>
+  );
+}
+
+export function HallLedMediaField({
+  label,
+  hint,
+  value,
+  onChange,
+  uploadFolder,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (url: string) => void;
+  uploadFolder: string;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const onUpload = async (file: File) => {
+    setStatus('Uploading…');
+    try {
+      const folder = file.type.startsWith('video/') ? `${uploadFolder}-video` : `${uploadFolder}-image`;
+      const up = await uploadCmsFile(file, 'hall', folder);
+      onChange(up.url);
+      setStatus(up.storage === 'r2' ? 'Uploaded to R2' : 'Saved (local preview)');
+      setTimeout(() => setStatus(null), 2500);
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : 'Upload failed');
+    }
+  };
+
+  return (
+    <div className="mb-3 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
+      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-white/50">{label}</label>
+      <p className="mb-2 text-[9px] leading-relaxed text-white/35">{hint}</p>
+      <input
+        className="mb-2 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white outline-none focus:border-[#d4af37]/40 font-mono"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="/expo-led-video.mp4 or https://…/render.jpg"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#d4af37] hover:bg-[#d4af37]/20"
+          onClick={() => fileRef.current?.click()}
+        >
+          Upload image or video
+        </button>
+        {value.trim() && (
+          <button
+            type="button"
+            className="rounded-lg border border-white/10 px-2 py-1.5 text-[10px] text-white/50 hover:bg-white/5"
+            onClick={() => onChange('')}
+          >
+            Reset to default
+          </button>
+        )}
+        {status && <span className="text-[9px] text-white/40">{status}</span>}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,video/*,.mp4,.webm"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void onUpload(f);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }
@@ -202,6 +276,26 @@ export function CmsScenePanel() {
           </span>
         </span>
       </label>
+
+      <SectionTitle>Hall LED branding (stage &amp; center ring)</SectionTitle>
+      <p className="mb-2 text-[9px] leading-relaxed text-white/35">
+        Same as booth <strong className="text-white/50">Main stage screen</strong>: MP4/WebM video or PNG/JPG image.
+        Images show even when <em>Show video planes</em> is off. Leave URL empty to use the default expo video.
+      </p>
+      <HallLedMediaField
+        label="Ballroom stage screen (east wall)"
+        hint="Large LED behind the podium — Fast Travel → Ballroom stage."
+        value={cfg.ballroomStageScreenUrl ?? ''}
+        onChange={(url) => patchScene({ ballroomStageScreenUrl: url })}
+        uploadFolder="ballroom-stage"
+      />
+      <HallLedMediaField
+        label="Center canopy ring (circular LED)"
+        hint="Suspended screens above the help desk — Fast Travel → Center plaza / Reception."
+        value={cfg.hallCanopyScreenUrl ?? ''}
+        onChange={(url) => patchScene({ hallCanopyScreenUrl: url })}
+        uploadFolder="hall-canopy"
+      />
       
       <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
         <input

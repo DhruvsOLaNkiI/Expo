@@ -456,12 +456,13 @@ function CtaResourcePopupContent({
 
           <div className="flex min-h-0 flex-1 items-center justify-center px-2 pb-8 pt-14 sm:px-6 sm:pb-10 sm:pt-16">
             {showSvg ? (
-              <object
+              <img
                 key={currentUrl}
-                type="image/svg+xml"
-                data={currentUrl}
-                title={popup.title}
+                src={currentUrl}
+                alt={popup.title}
                 className="max-h-full max-w-full select-none object-contain"
+                draggable={false}
+                decoding="async"
                 onError={() => setImageError(true)}
               />
             ) : (

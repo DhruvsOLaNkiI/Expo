@@ -1,9 +1,11 @@
 import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
-import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
+import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
+import { BoothDisplayEditable } from './BoothDisplayEditable';
+import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
 /** Matte trim — no mirror hotspots. */
@@ -33,6 +35,7 @@ export function HorizonVistasBooth({
   id,
   name,
   videoUrl,
+  stageScreenUrl,
   headerLogoUrl,
   placedImages,
   brochureUrl = '',
@@ -43,6 +46,7 @@ export function HorizonVistasBooth({
   company,
   hostessQuickReplies,
   showVideos = true,
+  displayLayout,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -53,6 +57,7 @@ export function HorizonVistasBooth({
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
   headerLogoUrl?: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -64,8 +69,10 @@ export function HorizonVistasBooth({
   company?: CompanyProfile;
   hostessQuickReplies: HostessQuickReply[];
   showVideos?: boolean;
+  displayLayout?: BoothDisplayLayout;
 }) {
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
 
   // Royal blue palette — deep, saturated, no harsh chrome
   const royalDeep = '#142454';
@@ -190,19 +197,24 @@ export function HorizonVistasBooth({
           <meshStandardMaterial attach="material" color={platinum} roughness={0.45} metalness={0.2} />
         </Text>
 
-        <group position={[1.2, 0.8, -0.2]} rotation={[-0.2, -0.3, 0]}>
+        <BoothDisplayEditable
+          boothId={id}
+          slot="counter"
+          layout={displayLayout}
+          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
+        >
           <mesh castShadow>
             <boxGeometry args={[1.6, 1.0, 0.1]} />
             <meshStandardMaterial color="#0c1028" roughness={0.85} metalness={0.1} />
           </mesh>
           <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={effectiveVideoUrl} position={[0, 0, 0.01]} />
+            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
           </Suspense>
           <mesh position={[0, -0.6, 0]}>
             <boxGeometry args={[0.4, 0.2, 0.2]} />
             <meshStandardMaterial color="#0c1028" />
           </mesh>
-        </group>
+        </BoothDisplayEditable>
 
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
@@ -210,7 +222,12 @@ export function HorizonVistasBooth({
       </group>
 
       {/* Main LED — matte royal frame */}
-      <group position={[0, 3, -3.7]}>
+      <BoothDisplayEditable
+        boothId={id}
+        slot="main"
+        layout={displayLayout}
+        defaults={{ ...LUXURY_BOOTH_DISPLAY_DEFAULTS.main, position: [0, 3, -3.7] }}
+      >
         <mesh castShadow>
           <boxGeometry args={[6.65, 3.85, 0.18]} />
           {royalMat(royalDeep)}
@@ -221,12 +238,12 @@ export function HorizonVistasBooth({
         </mesh>
         <group position={[0, 0, 0.1]}>
           <Suspense fallback={<LedScreenSuspenseFallback args={[6.4, 3.6]} />}>
-            <LedScreenSurface args={[6.4, 3.6]} url={effectiveVideoUrl} />
+            <LedScreenSurface args={[6.4, 3.6]} url={stageLedUrl} />
           </Suspense>
         </group>
-      </group>
+      </BoothDisplayEditable>
 
-      <BoothStandee name={name} accent={uiGlow} />
+      <BoothStandee name={name} accent={uiGlow} boothId={id} displayLayout={displayLayout} />
 
       <VertexEliteProximityPanels
         boothId={id}

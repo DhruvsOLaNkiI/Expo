@@ -4,11 +4,17 @@ import {
   applyBoothOverrides,
   buildDefaultBoothLayoutList,
   deg3ToRad3,
+  mergeHallLayout,
   mergeRegistrationLayout,
   rad3ToDeg3,
   type RegistrationImportedModel,
 } from '@/features/shared/data/boothLayouts';
+import { standeeGapLabel, standeePlacementsFromBooths } from '@/features/booths/components/HallAisleStandees';
 import { commitHallLayoutTransform, findLayoutObject, persistHallLayoutTransform } from '@/store/persist/hallLayout';
+import {
+  BOOTH_DISPLAY_SLOT_LABELS,
+  type BoothDisplaySlot,
+} from '@/features/shared/data/boothDisplayLayout';
 
 const HALL_OPTIONS: { id: string; label: string }[] = [
   { id: 'hall-entrance-lobby', label: 'Entrance lobby (desk + zone)' },
@@ -116,6 +122,27 @@ export function HallLayoutEditHud() {
       })),
     [boothLayouts],
   );
+
+  const boothDisplayOptions = useMemo(() => {
+    const slots: BoothDisplaySlot[] = ['main', 'counter', 'standee', 'signage', 'kiosk'];
+    return boothLayouts.flatMap((b) =>
+      slots
+        .filter((slot) => slot !== 'signage' || b.id === 'builder-8')
+        .filter((slot) => slot !== 'kiosk' || b.id === 'vertex-elite')
+        .map((slot) => ({
+          id: `booth-display-${b.id}__${slot}`,
+          label: `${b.name} · ${BOOTH_DISPLAY_SLOT_LABELS[slot]}`,
+        })),
+    );
+  }, [boothLayouts]);
+
+  const aisleStandeeOptions = useMemo(() => {
+    const nameById = new Map(boothLayouts.map((b) => [b.id, b.name]));
+    return standeePlacementsFromBooths(boothLayouts).map((p) => ({
+      id: `hall-standee-${p.id}`,
+      label: standeeGapLabel(p.id, nameById),
+    }));
+  }, [boothLayouts]);
 
   const selectedBoothId = sel?.startsWith('booth-root-') ? sel.slice('booth-root-'.length) : null;
 
@@ -291,6 +318,9 @@ export function HallLayoutEditHud() {
           </div>
           <p className="mt-1 text-[10px] leading-relaxed text-white/55">
             <strong className="text-white/75">Click object</strong> to select · <strong className="text-white/75">G</strong> move · <strong className="text-white/75">R</strong> rotate · <strong className="text-white/75">S</strong> resize
+            {!inRegistration && (
+              <> · Pick an <strong className="text-white/75">aisle standee</strong> or booth display below</>
+            )}
           </p>
           {saveHint && (
             <p className="mt-1 text-[10px] font-semibold text-emerald-400/90">{saveHint}</p>
@@ -498,7 +528,23 @@ export function HallLayoutEditHud() {
                     {o.label}
                   </option>
                 ))}
-                <optgroup label="Booths">
+                {aisleStandeeOptions.length > 0 && (
+                  <optgroup label="Aisle digital standees (GLB)">
+                    {aisleStandeeOptions.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Booth displays (LED / standee)">
+                  {boothDisplayOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Whole booths">
                   {boothOptions.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.label}

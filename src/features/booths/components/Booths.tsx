@@ -4,7 +4,7 @@ import { useStore } from '@/store';
 import { Suspense, useRef, useMemo, useLayoutEffect, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl } from '@/features/media/components/LedVideoPlane';
+import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
 import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
@@ -13,6 +13,8 @@ import { HallAisleStandees } from './HallAisleStandees';
 import { HallSuspendedCanopies } from './HallSuspendedCanopy.tsx';
 import { SideExpoBooths } from './SideExpoBooths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
+import { BoothDisplayEditable } from './BoothDisplayEditable';
+import { LUXURY_BOOTH_DISPLAY_DEFAULTS, VERTEX_ELITE_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
 import {
   applyBoothOverrides,
@@ -344,6 +346,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
 
   const showStandardBooths = sceneOverrides.showStandardBooths ?? DEFAULT_SCENE_CONFIG.showStandardBooths;
   const showHallCanopy = sceneOverrides.showHallCanopy ?? DEFAULT_SCENE_CONFIG.showHallCanopy;
+  const hallCanopyScreenUrl = sceneOverrides.hallCanopyScreenUrl ?? DEFAULT_SCENE_CONFIG.hallCanopyScreenUrl;
   const showHallPlants = sceneOverrides.showHallPlants ?? DEFAULT_SCENE_CONFIG.showHallPlants;
   const showVertexEliteCtaKiosk =
     sceneOverrides.showVertexEliteCtaKiosk ?? DEFAULT_SCENE_CONFIG.showVertexEliteCtaKiosk;
@@ -386,10 +389,14 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
         </Suspense>
       )}
 
-      {showHallAisleStandees && !hideDecorativeGlbs && <HallAisleStandees layouts={layouts} />}
+      {showHallAisleStandees && !hideDecorativeGlbs && (
+        <HallAisleStandees layouts={layoutsToRender} aisleStandeeTransforms={hallLayout.aisleStandeeTransforms} />
+      )}
 
       {/* Single suspended LED ring above help desk */}
-      {showHallCanopy && <HallSuspendedCanopies showVideos={showVideos} />}
+      {showHallCanopy && (
+        <HallSuspendedCanopies showVideos={showVideos} screenUrl={hallCanopyScreenUrl} />
+      )}
 
       {/* Side expo booths (6 total) — using full luxury booth shell */}
       <SideExpoBooths layouts={layouts} showVideos={showVideos} BoothComponent={StandardLuxuryBooth} hiddenBooths={hiddenBooths} />
@@ -408,6 +415,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               accent={b.accent}
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
+              stageScreenUrl={b.stageScreenUrl}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -417,8 +425,38 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
               showCtaKiosk={showVertexEliteCtaKiosk}
+              displayLayout={b.displayLayout}
               media={b.media}
               company={b.company}
+            />
+          );
+        } else if (b.id === 'builder-8') {
+          return (
+            <EcoEdenBooth
+              key={b.id}
+              position={b.position}
+              rotation={b.rotation}
+              boothScale={b.scale}
+              id={b.id}
+              name={b.name}
+              color={b.color}
+              accent={b.accent}
+              counterColor={b.counterColor}
+              videoUrl={b.videoUrl}
+              stageScreenUrl={b.stageScreenUrl}
+              headerLogoUrl={b.headerLogoUrl}
+              lighting={b.lighting}
+              placedImages={b.placedImages}
+              brochureUrl={b.brochureUrl}
+              priceListUrl={b.priceListUrl}
+              unitLayoutUrl={b.unitLayoutUrl}
+              signageImageUrl={b.signageImageUrl}
+              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
+              media={b.media}
+              company={b.company}
+              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
+              showVideos={showVideos}
+              displayLayout={b.displayLayout}
             />
           );
         } else if (b.id === 'builder-5') {
@@ -434,6 +472,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               accent={b.accent}
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
+              stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={b.headerLogoUrl}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -445,6 +484,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               company={b.company}
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
+              displayLayout={b.displayLayout}
             />
           );
         } else if (b.id === 'builder-6') {
@@ -460,6 +500,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               accent={b.accent}
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
+              stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={b.headerLogoUrl}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -471,6 +512,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               company={b.company}
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
+              displayLayout={b.displayLayout}
             />
           );
         } else if (b.id === 'builder-4') {
@@ -486,6 +528,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               accent={b.accent}
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
+              stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={b.headerLogoUrl}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -497,6 +540,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               company={b.company}
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
+              displayLayout={b.displayLayout}
             />
           );
         } else {
@@ -512,6 +556,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               accent={b.accent}
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
+              stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={b.headerLogoUrl}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -523,6 +568,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               company={b.company}
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
+              displayLayout={b.displayLayout}
             />
           );
         }
@@ -706,6 +752,7 @@ export function StandardLuxuryBooth({
   accent,
   counterColor,
   videoUrl,
+  stageScreenUrl,
   headerLogoUrl,
   lighting,
   placedImages,
@@ -717,6 +764,7 @@ export function StandardLuxuryBooth({
   company,
   hostessQuickReplies,
   showVideos = true,
+  displayLayout,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -727,6 +775,7 @@ export function StandardLuxuryBooth({
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
   headerLogoUrl?: string;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
@@ -738,9 +787,13 @@ export function StandardLuxuryBooth({
   company?: CompanyProfile;
   hostessQuickReplies: HostessQuickReply[];
   showVideos?: boolean;
+  displayLayout?: BoothDisplayLayout;
 }) {
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   const glow = accent || '#d4af37';
+  const floorPadColor = '#f0ede4';
+  const headerSubtitle = company?.tagline?.trim() || 'LUXURY RESIDENCES';
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -773,7 +826,7 @@ export function StandardLuxuryBooth({
       {/* Floor Pad with Recessed LED Strip */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
         <boxGeometry args={[12, 0.1, 5.5]} />
-        <meshStandardMaterial color="#f0ede4" roughness={0.6} />
+        <meshStandardMaterial color={floorPadColor} roughness={0.6} />
       </mesh>
       <mesh position={[0, 0.06, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[12, 0.05]} />
@@ -802,7 +855,7 @@ export function StandardLuxuryBooth({
       ) : (
         <LuxuryBoothHeaderCanopy
           title={name}
-          subtitle="LUXURY RESIDENCES"
+          subtitle={headerSubtitle}
           accent={accent}
           width={12.5}
           height={1.5}
@@ -823,19 +876,24 @@ export function StandardLuxuryBooth({
         </mesh>
 
         {/* Counter LED TV */}
-        <group position={[1.2, 0.8, -0.2]} rotation={[-0.2, -0.3, 0]}>
+        <BoothDisplayEditable
+          boothId={id}
+          slot="counter"
+          layout={displayLayout}
+          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
+        >
           <mesh castShadow>
             <boxGeometry args={[1.6, 1.0, 0.1]} />
             <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
           </mesh>
           <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={effectiveVideoUrl} position={[0, 0, 0.01]} />
+            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
           </Suspense>
           <mesh position={[0, -0.6, 0]}>
             <boxGeometry args={[0.4, 0.2, 0.2]} />
             <meshStandardMaterial color="#111" />
           </mesh>
-        </group>
+        </BoothDisplayEditable>
 
         {/* Hostess: behind reception counter, facing aisle (+Z booth local); anchored to desk group */}
         <Suspense fallback={null}>
@@ -844,17 +902,29 @@ export function StandardLuxuryBooth({
       </group>
 
       {/* Main Display Screen (Large TV) */}
-      <group position={[0, 3, -3.8]}>
+      <BoothDisplayEditable
+        boothId={id}
+        slot="main"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.main}
+      >
         <mesh castShadow>
           <boxGeometry args={[6.4, 3.6, 0.2]} />
           <meshStandardMaterial color="#111" metalness={0.9} roughness={0.1} />
         </mesh>
         <group position={[0, 0, 0.11]}>
           <Suspense fallback={<LedScreenSuspenseFallback args={[6.2, 3.4]} />}>
-            <LedScreenSurface args={[6.2, 3.4]} url={effectiveVideoUrl} />
+            <LedScreenSurface args={[6.2, 3.4]} url={stageLedUrl} />
           </Suspense>
         </group>
-      </group>
+        <pointLight
+          position={[0, 0, -0.15]}
+          intensity={12}
+          distance={4}
+          decay={2}
+          color="#e8f0ff"
+        />
+      </BoothDisplayEditable>
 
 
       <spotLight
@@ -868,7 +938,7 @@ export function StandardLuxuryBooth({
         target-position={[0, 3, -3.8]}
       />
 
-      <BoothStandee name={name} accent={accent} />
+      <BoothStandee name={name} accent={accent} boothId={id} displayLayout={displayLayout} />
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -918,17 +988,30 @@ export function BoothPlacedImage({ item }: { item: PlacedImage }) {
   );
 }
 
-/* ─── Futuristic Vertex Elite Studio Booth ─── */
-export function VertexEliteBooth({
+export function EcoSignageImage({ url }: { url: string }) {
+  const tex = useTexture(url);
+  useLayoutEffect(() => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+  }, [tex]);
+  return (
+    <mesh>
+      <planeGeometry args={[1.1, 2.3]} />
+      <meshStandardMaterial map={tex} transparent alphaTest={0.05} toneMapped={false} />
+    </mesh>
+  );
+}
+
+/* ─── Eco luxury booth (builder-8) — white + green palette ─── */
+export function EcoEdenBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  videoUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, siteMapUrls,
+  videoUrl, stageScreenUrl, headerLogoUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, siteMapUrls,
+  signageImageUrl,
   media = [],
   company,
   hostessQuickReplies,
-  cmsPreview,
-  cmsPlacedImageEdit,
   showVideos = true,
-  showCtaKiosk = true,
+  displayLayout,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -939,6 +1022,292 @@ export function VertexEliteBooth({
   accent: string;
   counterColor: string;
   videoUrl: string;
+  stageScreenUrl?: string;
+  headerLogoUrl?: string;
+  lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
+  placedImages: PlacedImage[];
+  brochureUrl?: string;
+  priceListUrl?: string;
+  unitLayoutUrl?: string;
+  siteMapUrls?: string[];
+  signageImageUrl?: string;
+  media?: MediaItem[];
+  company?: CompanyProfile;
+  hostessQuickReplies: HostessQuickReply[];
+  showVideos?: boolean;
+  displayLayout?: BoothDisplayLayout;
+}) {
+  const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
+  const darkGreen = accent || '#164e2f';
+  const leafGreen = company?.brandPrimary?.trim() || '#3d9a5a';
+  const whiteMatte = color || '#ffffff';
+  const glow = leafGreen;
+  const headerSubtitle = company?.tagline?.trim() || 'LUXURY RESIDENCES';
+
+  return (
+    <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
+      {/* ── Main Structure ── */}
+      {/* Back Wall */}
+      <mesh position={[0, 3, -4]} receiveShadow castShadow>
+        <boxGeometry args={[12, 6, 0.5]} />
+        <meshStandardMaterial color="#e4e8e5" roughness={0.55} metalness={0.08} />
+      </mesh>
+
+      {/* Side Walls */}
+      <mesh position={[-5.75, 3, -2]} receiveShadow castShadow>
+        <boxGeometry args={[0.5, 6, 4]} />
+        <meshStandardMaterial color={whiteMatte} roughness={0.4} />
+      </mesh>
+      <mesh position={[5.75, 3, -2]} receiveShadow castShadow>
+        <boxGeometry args={[0.5, 6, 4]} />
+        <meshStandardMaterial color={whiteMatte} roughness={0.4} />
+      </mesh>
+
+      {/* Dark Green Premium Trims */}
+      {/* Vertical pillars */}
+      {[-5.8, 5.8].map((x, i) => (
+        <mesh key={`pillar-${i}`} position={[x, 3, -3.9]}>
+          <boxGeometry args={[0.2, 6.2, 0.6]} />
+          <meshStandardMaterial color={darkGreen} metalness={0.8} roughness={0.2} />
+        </mesh>
+      ))}
+      {/* Top horizontal trim */}
+      <mesh position={[0, 6.1, -3.9]}>
+        <boxGeometry args={[12.2, 0.2, 0.6]} />
+        <meshStandardMaterial color={darkGreen} metalness={0.8} roughness={0.2} />
+      </mesh>
+
+      {/* Vertical Green Plant Wall Panel (Left Side) */}
+      <group position={[-5.45, 3, -1.8]}>
+        <mesh receiveShadow>
+          <boxGeometry args={[0.1, 5.8, 3.8]} />
+          <meshStandardMaterial color="#0a2a12" roughness={0.9} />
+        </mesh>
+        {/* Decorative "leaves" - simple meshes for performance */}
+        {Array.from({ length: 40 }).map((_, i) => (
+          <mesh
+            key={`leaf-${i}`}
+            position={[
+              0.08,
+              (Math.random() - 0.5) * 5.5,
+              (Math.random() - 0.5) * 3.5
+            ]}
+            rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+          >
+            <planeGeometry args={[0.3, 0.15]} />
+            <meshStandardMaterial color={leafGreen} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Floor Pad with Hidden LED Strip */}
+      <mesh position={[0, 0.05, -1.5]} receiveShadow>
+        <boxGeometry args={[12, 0.1, 5.5]} />
+        <meshStandardMaterial color="#f4f6f4" roughness={0.6} />
+      </mesh>
+      {/* Subtle floor lighting under platform edge */}
+      <mesh position={[0, 0.06, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.05]} />
+        <meshStandardMaterial color="#fff4d6" emissive="#fff4d6" emissiveIntensity={1.5} />
+      </mesh>
+
+      {headerLogoUrl ? (
+        <>
+          <mesh position={[0, 6.5, -4]} castShadow>
+            <boxGeometry args={[12.5, 1.5, 0.6]} />
+            <meshPhysicalMaterial
+              color="#fcfcfc"
+              roughness={0.2}
+              metalness={0}
+              clearcoat={0.48}
+              clearcoatRoughness={0.22}
+              envMapIntensity={0.15}
+              reflectivity={0.35}
+            />
+          </mesh>
+          <Suspense fallback={null}>
+            <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={darkGreen} />
+          </Suspense>
+        </>
+      ) : (
+        <LuxuryBoothHeaderCanopy
+          title={name}
+          subtitle={headerSubtitle}
+          accent={darkGreen}
+          fasciaColor="#fcfcfc"
+          subtitleColor={leafGreen}
+          width={12.5}
+          height={1.5}
+          depth={0.72}
+          position={[0, 6.5, -3.64]}
+        />
+      )}
+
+      {/* Premium Reception Desk */}
+      <group position={[0, 0.5, 0]}>
+        <mesh position={[0, 0, 0]} castShadow receiveShadow>
+          <boxGeometry args={[4, 1, 1]} />
+          <meshStandardMaterial color={whiteMatte} metalness={0.1} roughness={0.2} />
+        </mesh>
+        {/* Green Trim */}
+        <mesh position={[0, -0.48, 0]} castShadow receiveShadow>
+          <boxGeometry args={[4.2, 0.14, 1.15]} />
+          <meshStandardMaterial color={darkGreen} metalness={0.35} roughness={0.28} />
+        </mesh>
+        {/* Counter LED TV */}
+        <BoothDisplayEditable
+          boothId={id}
+          slot="counter"
+          layout={displayLayout}
+          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
+        >
+          <mesh castShadow>
+            <boxGeometry args={[1.6, 1.0, 0.1]} />
+            <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
+          </mesh>
+          <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
+            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
+          </Suspense>
+        </BoothDisplayEditable>
+
+        {/* Hostess */}
+        <Suspense fallback={null}>
+          <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
+        </Suspense>
+      </group>
+
+      {/* Main Display Screen (Large TV) */}
+      <BoothDisplayEditable
+        boothId={id}
+        slot="main"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.main}
+      >
+        <mesh castShadow>
+          <boxGeometry args={[6.4, 3.6, 0.2]} />
+          <meshStandardMaterial color="#111" metalness={0.9} roughness={0.1} />
+        </mesh>
+        <group position={[0, 0, 0.11]}>
+          <Suspense fallback={<LedScreenSuspenseFallback args={[6.2, 3.4]} />}>
+            <LedScreenSurface args={[6.2, 3.4]} url={stageLedUrl} />
+          </Suspense>
+        </group>
+        <pointLight
+          position={[0, 0, -0.15]}
+          intensity={12}
+          distance={4}
+          decay={2}
+          color="#e8f0ff"
+        />
+      </BoothDisplayEditable>
+
+      {/* Indoor Plants near reception desk corners */}
+      <Suspense fallback={null}>
+        <Plant name="desk-plant-left" position={[-2.5, 0.1, 0.5]} scale={0.4} />
+        <Plant name="desk-plant-right" position={[2.5, 0.1, 0.5]} scale={0.4} />
+      </Suspense>
+
+      {/* Elegant Standing Digital Signage Board (Right Side) */}
+      <BoothDisplayEditable
+        boothId={id}
+        slot="signage"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.signage}
+      >
+        <mesh position={[0, 1.2, 0]} castShadow>
+          <boxGeometry args={[1.2, 2.4, 0.1]} />
+          <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
+        </mesh>
+        <mesh position={[0, 0.05, 0]}>
+          <boxGeometry args={[1.4, 0.1, 0.4]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+        {/* Signage Content */}
+        <group position={[0, 1.2, 0.06]}>
+          <mesh>
+            <planeGeometry args={[1.1, 2.3]} />
+            <meshStandardMaterial color={whiteMatte} />
+          </mesh>
+          {signageImageUrl ? (
+            <Suspense fallback={null}>
+              <EcoSignageImage url={signageImageUrl} />
+            </Suspense>
+          ) : (
+            <>
+              <Text position={[0, 0.8, 0.01]} fontSize={0.12} color={darkGreen} maxWidth={1} textAlign="center">
+                {name}
+              </Text>
+              <Text position={[0, 0.65, 0.01]} fontSize={0.06} color={leafGreen} maxWidth={1} textAlign="center">
+                {headerSubtitle}
+              </Text>
+              <mesh position={[0, -0.1, 0.01]}>
+                <planeGeometry args={[0.4, 0.4]} />
+                <meshStandardMaterial color={leafGreen} transparent opacity={0.8} />
+              </mesh>
+            </>
+          )}
+        </group>
+      </BoothDisplayEditable>
+
+      <spotLight
+        position={[0, 7.5, -1.2]}
+        angle={0.45}
+        penumbra={0.7}
+        intensity={lighting.spotlightIntensity}
+        color="#fff8ef"
+        distance={18}
+        decay={2}
+        target-position={[0, 3, -3.8]}
+      />
+
+      <VertexEliteProximityPanels
+        boothId={id}
+        glow={glow}
+        brochureUrl={brochureUrl}
+        priceListUrl={priceListUrl}
+        unitLayoutUrl={unitLayoutUrl}
+        siteMapUrls={siteMapUrls}
+        videoUrl={effectiveVideoUrl}
+        media={media}
+        placedImages={placedImages}
+        company={company}
+        entranceLocal={[0, 0, 2.5]}
+      />
+
+      {/* CMS-placed custom images */}
+      {placedImages.map((img) => (
+        <Suspense key={img.id} fallback={null}>
+          <BoothPlacedImage item={img} />
+        </Suspense>
+      ))}
+    </BoothLayoutRoot>
+  );
+}
+
+/* ─── Futuristic Vertex Elite Studio Booth ─── */
+export function VertexEliteBooth({
+  position, rotation, boothScale, id, name, color, accent, counterColor,
+  videoUrl, stageScreenUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, siteMapUrls,
+  media = [],
+  company,
+  hostessQuickReplies,
+  cmsPreview,
+  cmsPlacedImageEdit,
+  showVideos = true,
+  showCtaKiosk = true,
+  displayLayout,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  boothScale: [number, number, number];
+  id: string;
+  name: string;
+  color: string;
+  accent: string;
+  counterColor: string;
+  videoUrl: string;
+  stageScreenUrl?: string;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -957,6 +1326,7 @@ export function VertexEliteBooth({
   };
   showVideos?: boolean;
   showCtaKiosk?: boolean;
+  displayLayout?: BoothDisplayLayout;
 }) {
   const glow = accent;
   const dark = '#0c0c12';
@@ -967,6 +1337,7 @@ export function VertexEliteBooth({
   );
   const hq = hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES;
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
+  const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -1089,7 +1460,12 @@ export function VertexEliteBooth({
       </Suspense>
 
       {/* ── Main LED wall display (large) ── */}
-      <group position={[0, 3.2, -4.25]}>
+      <BoothDisplayEditable
+        boothId={id}
+        slot="main"
+        layout={displayLayout}
+        defaults={VERTEX_ELITE_DISPLAY_DEFAULTS.main}
+      >
         <mesh>
           <boxGeometry args={[8.5, 4.5, 0.12]} />
           <meshStandardMaterial color="#030308" metalness={0.35} roughness={0.55} envMapIntensity={0.1} />
@@ -1100,10 +1476,10 @@ export function VertexEliteBooth({
         </mesh>
         <group position={[0, 0, 0.07]}>
           <Suspense fallback={<LedScreenSuspenseFallback args={[8.3, 4.3]} />}>
-            <LedScreenSurface args={[8.3, 4.3]} url={effectiveVideoUrl} />
+            <LedScreenSurface args={[8.3, 4.3]} url={stageLedUrl} />
           </Suspense>
         </group>
-      </group>
+      </BoothDisplayEditable>
 
       {/* ── Floating reception desk ── */}
       <group position={[0, 0.55, 0.8]}>
@@ -1120,13 +1496,25 @@ export function VertexEliteBooth({
           <boxGeometry args={[5, 0.04, 0.01]} />
           {ledStrip(0.95)}
         </mesh>
-        {/* Counter tablet display */}
-        <group position={[1.5, 0.9, -0.1]} rotation={[-0.25, -0.2, 0]}>
-          <mesh>
+        {/* Counter tablet — mounted on desk (not floating) */}
+        <BoothDisplayEditable
+          boothId={id}
+          slot="counter"
+          layout={displayLayout}
+          defaults={VERTEX_ELITE_DISPLAY_DEFAULTS.counter}
+        >
+          <mesh castShadow>
             <boxGeometry args={[1.4, 0.9, 0.06]} />
             <meshStandardMaterial color="#05050a" metalness={0.3} roughness={0.55} envMapIntensity={0.08} />
           </mesh>
-        </group>
+          <Suspense fallback={<LedScreenSuspenseFallback args={[1.3, 0.82]} />}>
+            <LedScreenSurface args={[1.3, 0.82]} url={stageLedUrl} position={[0, 0, 0.04]} />
+          </Suspense>
+          <mesh position={[0, -0.52, 0.02]}>
+            <boxGeometry args={[0.38, 0.12, 0.22]} />
+            <meshStandardMaterial color="#111118" metalness={0.35} roughness={0.5} />
+          </mesh>
+        </BoothDisplayEditable>
         {/* Hostess */}
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} cmsPreview={cmsPreview} hostessQuickReplies={hq} />
@@ -1134,14 +1522,19 @@ export function VertexEliteBooth({
       </group>
 
       {showCtaKiosk && (
-        <VertexEliteCtaKiosk
-          glow={glow}
-          brochureUrl={brochureUrl}
-          priceListUrl={priceListUrl}
-          siteMapUrls={siteMapUrls}
-          position={[4.48, 0.03, 2.02]}
-          rotation={[0, 0.13, 0]}
-        />
+        <BoothDisplayEditable
+          boothId={id}
+          slot="kiosk"
+          layout={displayLayout}
+          defaults={VERTEX_ELITE_DISPLAY_DEFAULTS.kiosk}
+        >
+          <VertexEliteCtaKiosk
+            glow={glow}
+            brochureUrl={brochureUrl}
+            priceListUrl={priceListUrl}
+            siteMapUrls={siteMapUrls}
+          />
+        </BoothDisplayEditable>
       )}
 
       <VertexEliteProximityPanels
@@ -1220,7 +1613,7 @@ export function VertexEliteBooth({
         </group>
       ))}
 
-      {/* ── Pedestal ── */}
+      {/* ── Pedestal (display base — model via CMS placed images or standee) ── */}
       <group position={[-3.5, 0, -2.5]}>
         <Cylinder args={[0.7, 0.7, 0.9, 20]} position={[0, 0.45, 0]}>
           <meshStandardMaterial color="#111116" roughness={0.1} metalness={0.9} />
@@ -1229,9 +1622,6 @@ export function VertexEliteBooth({
           <ringGeometry args={[0.55, 0.68, 32]} />
           <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.85} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
         </mesh>
-        <Box args={[0.45, 1.4, 0.45]} position={[0, 1.6, 0]}>
-          <meshStandardMaterial color="#fff" roughness={0.1} metalness={0.1} />
-        </Box>
       </group>
 
       {placedImages.map((img) => (
@@ -1253,7 +1643,17 @@ export function VertexEliteBooth({
 }
 
 /** Roll-up style stand facing visitors approaching from the hall center */
-export function BoothStandee({ name, accent }: { name: string; accent: string }) {
+export function BoothStandee({
+  name,
+  accent,
+  boothId,
+  displayLayout,
+}: {
+  name: string;
+  accent: string;
+  boothId: string;
+  displayLayout?: BoothDisplayLayout;
+}) {
   const showBoothStandee = useStore(
     (s) => mergeSceneConfig(s.sceneOverrides).showBoothStandee,
   );
@@ -1262,10 +1662,13 @@ export function BoothStandee({ name, accent }: { name: string; accent: string })
   const w = 1.45;
   const h = 2.4;
   const frameT = 0.05;
-  // Local +X = toward TV side of counter; +Z = aisle — matches standee beside desk edge
-  const standeePosition: [number, number, number] = [2.76, 0, 3.4];
   return (
-    <group position={standeePosition}>
+    <BoothDisplayEditable
+      boothId={boothId}
+      slot="standee"
+      layout={displayLayout}
+      defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.standee}
+    >
       {/* Weighted base plate */}
       <mesh position={[0, 0.0, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.72, 0.1, 0.45]} />
@@ -1323,7 +1726,7 @@ export function BoothStandee({ name, accent }: { name: string; accent: string })
           LUXURY RESIDENCES
         </Text>
       </group>
-    </group>
+    </BoothDisplayEditable>
   );
 }
 
@@ -1772,6 +2175,9 @@ export function BoothHostessGreeter({
   cmsPreview?: boolean;
   hostessQuickReplies: HostessQuickReply[];
 }) {
+  const showHostess = useStore((s) => mergeSceneConfig(s.sceneOverrides).showBoothHostess);
+  if (!showHostess) return null;
+
   const bubbleLocal: [number, number, number] = [
     BOOTH_HOSTESS_DESK_LOCAL[0],
     BOOTH_HOSTESS_BUBBLE_LOCAL_Y,
@@ -1803,7 +2209,9 @@ const CONCIERGE_HOSTESS_ROT: [number, number, number] = [0, CONCIERGE_PANEL_YAW,
 const CONCIERGE_HOSTESS_BUBBLE_Y = HELP_DESK_COUNTER_HEIGHT + 0.95;
 
 function HelpDeskCustomGirl() {
+  const showHostess = useStore((s) => mergeSceneConfig(s.sceneOverrides).showBoothHostess);
   const hostessReplies = useMemo(() => buildHelpDeskHostessReplies(), []);
+  if (!showHostess) return null;
   const [px, , pz] = CONCIERGE_HOSTESS_POS;
   const bubblePos: [number, number, number] = [px, CONCIERGE_HOSTESS_BUBBLE_Y, pz];
 

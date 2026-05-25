@@ -4,6 +4,7 @@ import {
   applyBoothOverrides,
   buildDefaultBoothLayoutList,
   deg3ToRad3,
+  mergeSceneConfig,
   rad3ToDeg3,
   siteMapToStorageFields,
   siteMapUrlsFromConfig,
@@ -14,9 +15,11 @@ import {
   type MediaItem,
   type PlacedImage,
   type HostessQuickReply,
+  type SceneConfig,
 } from '@/features/shared/data/boothLayouts';
 import { CmsPreview3D } from './CmsPreview3D';
-import { CmsScenePanel } from './CmsScenePanel';
+import { CmsHallDisplayPreview } from './CmsHallDisplayPreview';
+import { CmsScenePanel, HallLedMediaField } from './CmsScenePanel';
 import { CtaResourcePopupView } from '@/features/media/components/CtaResourcePopup';
 import { CmsUploadError, isR2Available, uploadCmsFile, type UploadResult } from '@/api/cmsUpload';
 import { isSharedServerAssetUrl, patchBoothCmsOnServer } from '@/api/boothCmsServer';
@@ -279,11 +282,12 @@ function readFile(file: File): Promise<string> {
   });
 }
 
-type Tab = 'layout' | 'branding' | 'images' | 'media' | 'company' | 'lighting' | 'scene';
+type Tab = 'layout' | 'branding' | 'displays' | 'images' | 'media' | 'company' | 'lighting' | 'scene';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
+const BOOTH_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'layout', label: 'Layout', icon: '⊞' },
   { id: 'branding', label: 'Branding', icon: '◈' },
+  { id: 'displays', label: 'Displays', icon: '▣' },
   { id: 'images', label: 'Images', icon: '◫' },
   { id: 'media', label: 'Media', icon: '▶' },
   { id: 'company', label: 'Company', icon: '◉' },
@@ -291,9 +295,16 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scene', label: 'Scene', icon: '⛶' },
 ];
 
+/** CMS sidebar entry for hall-wide LED screens (ballroom + center canopy). */
+export const HALL_BIG_DISPLAY_ID = '__hall-big-display__';
+/** CMS sidebar entry — every LED / screen across hall + all booths. */
+export const ALL_DISPLAYS_ID = '__all-displays__';
+
 export function CmsDashboard() {
   const overrides = useStore((s) => s.boothOverrides);
+  const sceneOverrides = useStore((s) => s.sceneOverrides);
   const patch = useStore((s) => s.patchBoothOverride);
+  const patchScene = useStore((s) => s.patchSceneOverride);
   const resetBooth = useStore((s) => s.resetBoothOverride);
   const resetAll = useStore((s) => s.resetAllBoothOverrides);
   const initCms = useStore((s) => s.initBoothCms);
@@ -313,6 +324,17 @@ export function CmsDashboard() {
   const [toast, setToast] = useState('');
 
   const selected = useMemo(() => mergedList.find((b) => b.id === selectedId), [mergedList, selectedId]);
+  const isHallDisplay = selectedId === HALL_BIG_DISPLAY_ID;
+  const isAllDisplays = selectedId === ALL_DISPLAYS_ID;
+  const isSpecialView = isHallDisplay || isAllDisplays;
+  const sceneConfig = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
+
+  useEffect(() => {
+    if (isHallDisplay || isAllDisplays) setTab('displays');
+  }, [isHallDisplay, isAllDisplays]);
+
+  const [hallBallroomUrl, setHallBallroomUrl] = useState('');
+  const [hallCanopyUrl, setHallCanopyUrl] = useState('');
 
   const [px, setPx] = useState('0'); const [py, setPy] = useState('0'); const [pz, setPz] = useState('0');
   const [rxDeg, setRxDeg] = useState('0'); const [ryDeg, setRyDeg] = useState('0'); const [rzDeg, setRzDeg] = useState('0');
@@ -320,11 +342,13 @@ export function CmsDashboard() {
   const [name, setName] = useState(''); const [color, setColor] = useState(''); const [accent, setAccent] = useState('');
   const [counterColor, setCounterColor] = useState('');
   const [videoUrl, setVideoUrl] = useState(''); const [headerLogoUrl, setHeaderLogoUrl] = useState('');
+  const [stageScreenUrl, setStageScreenUrl] = useState('');
   const [description, setDescription] = useState('');
   const [brochureUrl, setBrochureUrl] = useState('');
   const [siteMapSlides, setSiteMapSlides] = useState<string[]>([]);
   const [priceListUrl, setPriceListUrl] = useState('');
   const [unitLayoutUrl, setUnitLayoutUrl] = useState('');
+  const [signageImageUrl, setSignageImageUrl] = useState('');
   const [company, setCompany] = useState<CompanyProfile>({ companyName: '', tagline: '', website: '', phone: '', email: '', whatsapp: '', facebook: '', instagram: '', twitter: '', brandPrimary: '#d4af37', brandSecondary: '#1a1a1a' });
   const [lighting, setLighting] = useState<BoothLighting>({ spotlightIntensity: 55, spotlightColor: '#ffe7bf', ledStripColor: '#d4af37', ledStripIntensity: 2, emissiveGlow: 0.15, ambientIntensity: 0.35 });
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -337,6 +361,12 @@ export function CmsDashboard() {
   const [enablePageIndexBrochure, setEnablePageIndexBrochure] = useState(false);
   const [enablePageIndexPriceList, setEnablePageIndexPriceList] = useState(false);
 
+  useEffect(() => {
+    if (!isHallDisplay) return;
+    setHallBallroomUrl(sceneConfig.ballroomStageScreenUrl ?? '');
+    setHallCanopyUrl(sceneConfig.hallCanopyScreenUrl ?? '');
+  }, [isHallDisplay, sceneConfig.ballroomStageScreenUrl, sceneConfig.hallCanopyScreenUrl]);
+
   const loadForm = useCallback((b: BoothLayoutConfig) => {
     setPx(String(b.position[0])); setPy(String(b.position[1])); setPz(String(b.position[2]));
     const [dx, dy, dz] = rad3ToDeg3(b.rotation[0], b.rotation[1], b.rotation[2]);
@@ -344,11 +374,13 @@ export function CmsDashboard() {
     setSx(String(b.scale[0])); setSy(String(b.scale[1])); setSz(String(b.scale[2]));
     setName(b.name); setColor(b.color); setAccent(b.accent); setCounterColor(b.counterColor);
     setVideoUrl(b.videoUrl); setHeaderLogoUrl(b.headerLogoUrl ?? '');
+    setStageScreenUrl(b.stageScreenUrl ?? '');
     setDescription(b.description);
     setBrochureUrl(b.brochureUrl);
     setSiteMapSlides(siteMapUrlsFromConfig(b));
     setPriceListUrl(b.priceListUrl);
     setUnitLayoutUrl(b.unitLayoutUrl ?? '');
+    setSignageImageUrl(b.signageImageUrl ?? '');
     setCompany({ ...b.company }); setLighting({ ...b.lighting }); setMedia([...b.media]);
     setPlacedImages([...(b.placedImages || [])]);
     setHostessQuickReplies([...(b.hostessQuickReplies ?? [])]);
@@ -360,6 +392,7 @@ export function CmsDashboard() {
   const prevSelectedIdRef = useRef<string | null>(null);
   const prevHydratedRef = useRef(false);
   useEffect(() => {
+    if (isSpecialView) return;
     const b = mergedList.find((x) => x.id === selectedId);
     if (!b) return;
     const switchedBooth = prevSelectedIdRef.current !== selectedId;
@@ -367,7 +400,7 @@ export function CmsDashboard() {
     const becameHydrated = boothCmsHydrated && !prevHydratedRef.current;
     if (becameHydrated) prevHydratedRef.current = true;
     if (switchedBooth || becameHydrated) loadForm(b);
-  }, [selectedId, mergedList, loadForm, boothCmsHydrated]);
+  }, [selectedId, mergedList, loadForm, boothCmsHydrated, isSpecialView]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -395,24 +428,26 @@ export function CmsDashboard() {
     [showToast],
   );
 
-  const persistDocumentField = useCallback(
+  const persistBoothDocumentField = useCallback(
     async (
-      field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl',
+      boothId: string,
+      field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
       url: string,
       label: string,
+      pageIndexFlags?: { brochure?: boolean; priceList?: boolean },
     ) => {
       const normalized =
-        field === 'videoUrl' || url.startsWith('data:') || url.startsWith('/')
+        field === 'videoUrl' || field === 'stageScreenUrl' || field === 'signageImageUrl' || url.startsWith('data:') || url.startsWith('/')
           ? url.trim()
           : normalizeR2PublicUrl(url);
-      const ok = await patch(selectedId, { [field]: normalized } as BoothLayoutPatch);
+      const ok = await patch(boothId, { [field]: normalized } as BoothLayoutPatch);
       if (!ok) {
         showToast('Could not save (browser storage full). Try /maps/… in public/ or remove large Media gallery items.');
         return;
       }
 
       if (isSharedServerAssetUrl(normalized)) {
-        const server = await patchBoothCmsOnServer(selectedId, { [field]: normalized } as BoothLayoutPatch);
+        const server = await patchBoothCmsOnServer(boothId, { [field]: normalized } as BoothLayoutPatch);
         if (server.ok) {
           showToast(`${label} → R2 · saved for all visitors`);
         } else if (!server.ok) {
@@ -422,14 +457,33 @@ export function CmsDashboard() {
         showToast(`${label} saved on this browser only (upload to R2 for all visitors)`);
       }
 
-      if (field === 'priceListUrl' && isPdfUrl(normalized) && enablePageIndexPriceList) {
-        void indexPdfFromUrl(normalized, selectedId, 'priceList');
+      const piBrochure = pageIndexFlags?.brochure ?? (boothId === selectedId && enablePageIndexBrochure);
+      const piPriceList = pageIndexFlags?.priceList ?? (boothId === selectedId && enablePageIndexPriceList);
+      if (field === 'priceListUrl' && isPdfUrl(normalized) && piPriceList) {
+        void indexPdfFromUrl(normalized, boothId, 'priceList');
       }
-      if (field === 'brochureUrl' && isPdfUrl(normalized) && enablePageIndexBrochure) {
-        void indexPdfFromUrl(normalized, selectedId, 'brochure');
+      if (field === 'brochureUrl' && isPdfUrl(normalized) && piBrochure) {
+        void indexPdfFromUrl(normalized, boothId, 'brochure');
       }
     },
     [patch, selectedId, showToast, enablePageIndexPriceList, enablePageIndexBrochure],
+  );
+
+  const persistDocumentField = useCallback(
+    async (
+      field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
+      url: string,
+      label: string,
+    ) => persistBoothDocumentField(selectedId, field, url, label),
+    [persistBoothDocumentField, selectedId],
+  );
+
+  const persistHallDisplayField = useCallback(
+    async (field: 'ballroomStageScreenUrl' | 'hallCanopyScreenUrl', url: string, label: string) => {
+      patchScene({ [field]: url.trim() });
+      showToast(`${label} saved`);
+    },
+    [patchScene, showToast],
   );
 
   const persistPageIndexFlag = useCallback(
@@ -472,6 +526,16 @@ export function CmsDashboard() {
   }, [persistSiteMapSlides]);
 
   const handleApply = async () => {
+    if (isHallDisplay) {
+      patchScene({
+        ballroomStageScreenUrl: hallBallroomUrl.trim(),
+        hallCanopyScreenUrl: hallCanopyUrl.trim(),
+      });
+      showToast('Hall display saved');
+      return;
+    }
+    if (isAllDisplays) return;
+
     const sm = siteMapToStorageFields(siteMapSlides);
     const hqFiltered = hostessQuickReplies.filter((x) => x.label.trim() && (x.response.trim() || x.action === 'askAi'));
     const ok = await patch(selectedId, {
@@ -483,6 +547,7 @@ export function CmsDashboard() {
       accent: accent.trim() || undefined,
       counterColor: counterColor.trim() || undefined,
       videoUrl: videoUrl.trim() || undefined,
+      stageScreenUrl: stageScreenUrl.trim() || undefined,
       headerLogoUrl: headerLogoUrl.trim() || undefined,
       description,
       brochureUrl,
@@ -490,6 +555,7 @@ export function CmsDashboard() {
       siteMapGallery: sm.siteMapGallery,
       priceListUrl,
       unitLayoutUrl: unitLayoutUrl.trim() || undefined,
+      signageImageUrl: signageImageUrl.trim() || undefined,
       pageIndexBrochure: enablePageIndexBrochure,
       pageIndexPriceList: enablePageIndexPriceList,
       company, lighting, media, placedImages,
@@ -537,6 +603,25 @@ export function CmsDashboard() {
     const q = search.toLowerCase();
     return b.id.toLowerCase().includes(q) || b.name.toLowerCase().includes(q);
   });
+
+  const showDisplaySidebarEntries = useMemo(() => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      'hall big display'.includes(q)
+      || 'all displays'.includes(q)
+      || q.includes('hall')
+      || q.includes('display')
+      || q.includes('led')
+      || q.includes('screen')
+    );
+  }, [search]);
+
+  const visibleTabs = isHallDisplay
+    ? BOOTH_TABS.filter((t) => t.id === 'displays')
+    : isAllDisplays
+      ? []
+      : BOOTH_TABS;
 
   const handleSurfaceClick = useCallback((pos: [number, number, number], normal: [number, number, number]) => {
     if (!placingImageUrl) return;
@@ -601,6 +686,7 @@ export function CmsDashboard() {
           />
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
+          <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-white/25">Booths</p>
           {filteredBooths.map((b) => (
             <button
               key={b.id}
@@ -614,6 +700,19 @@ export function CmsDashboard() {
               </div>
             </button>
           ))}
+          <div className="my-2 border-t border-white/[0.06]" />
+          <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-white/25">Hall</p>
+          <button
+            type="button"
+            className={`group w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all ${isHallDisplay ? 'bg-cyan-500/15 text-cyan-200' : 'text-white/60 hover:bg-white/[0.04] hover:text-white/80'}`}
+            onClick={() => setSelectedId(HALL_BIG_DISPLAY_ID)}
+          >
+            <div className={`flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-sm text-[8px] font-bold ${isHallDisplay ? 'bg-cyan-400 text-black' : 'bg-white/20 text-white/50'}`}>▶</div>
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold">Hall Big Display</div>
+              <div className="truncate text-[10px] text-white/30">Ballroom + center LED</div>
+            </div>
+          </button>
         </div>
         <div className="space-y-1 border-t border-white/[0.06] p-3">
           <button className="w-full rounded-lg bg-[#d4af37]/10 px-3 py-2 text-[11px] font-semibold text-[#d4af37] hover:bg-[#d4af37]/20 transition-colors" onClick={handleExport}>
@@ -637,22 +736,45 @@ export function CmsDashboard() {
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0d0d14]/80 px-6 py-3 backdrop-blur-lg">
           <div className="flex items-center gap-4">
-            <h2 className="text-base font-bold tracking-wider">{name || 'Select a booth'}</h2>
-            <span className="rounded bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40 font-mono">{selectedId}</span>
+            <h2 className="text-base font-bold tracking-wider">
+              {isHallDisplay ? 'Hall Big Display' : isAllDisplays ? 'All Displays' : (name || 'Select a booth')}
+            </h2>
+            <span className="rounded bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40 font-mono">
+              {isHallDisplay ? 'hall-led' : isAllDisplays ? 'all-displays' : selectedId}
+            </span>
           </div>
           <div className="flex items-center gap-2">
+            {!isSpecialView && (
             <button type="button" className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[11px] text-white/50 hover:bg-white/[0.05] transition-colors" onClick={() => void resetBooth(selectedId)}>
               Reset Booth
             </button>
+            )}
+            {isHallDisplay && (
+            <button
+              type="button"
+              className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[11px] text-white/50 hover:bg-white/[0.05] transition-colors"
+              onClick={() => {
+                patchScene({ ballroomStageScreenUrl: '', hallCanopyScreenUrl: '' });
+                setHallBallroomUrl('');
+                setHallCanopyUrl('');
+                showToast('Hall displays reset to defaults');
+              }}
+            >
+              Reset Hall LEDs
+            </button>
+            )}
+            {!isAllDisplays && (
             <button type="button" className="rounded-lg bg-gradient-to-r from-[#d4af37] to-[#b08d29] px-5 py-1.5 text-xs font-bold text-black hover:brightness-110 transition-all shadow-lg shadow-[#d4af37]/20" onClick={() => void handleApply()}>
               Apply Changes
             </button>
+            )}
           </div>
         </header>
 
         {/* Tabs */}
+        {visibleTabs.length > 0 && (
         <div className="flex border-b border-white/[0.06] bg-[#0d0d14]/50 px-6">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -662,12 +784,15 @@ export function CmsDashboard() {
             </button>
           ))}
         </div>
+        )}
 
         {/* Content */}
         <div className="flex flex-1 overflow-hidden">
-          {/* 3D Preview */}
+          {!isAllDisplays && (
           <div className="flex-1 min-w-0 relative">
-            {selected && (
+            {isHallDisplay ? (
+              <CmsHallDisplayPreview stageScreenUrl={hallBallroomUrl} />
+            ) : selected ? (
               <CmsPreview3D
                 boothId={selectedId}
                 name={name}
@@ -675,6 +800,7 @@ export function CmsDashboard() {
                 accent={accent}
                 counterColor={counterColor}
                 videoUrl={videoUrl}
+                stageScreenUrl={stageScreenUrl}
                 headerLogoUrl={headerLogoUrl}
                 lighting={lighting}
                 placedImages={placedImages}
@@ -689,13 +815,56 @@ export function CmsDashboard() {
                 siteMapGallery={siteMapFields.siteMapGallery}
                 hostessQuickReplies={hostessQuickReplies}
               />
-            )}
+            ) : null}
           </div>
+          )}
 
           {/* Properties panel */}
-          <div className="w-80 shrink-0 border-l border-white/[0.06] bg-[#0d0d14] overflow-y-auto">
-            <div className="p-5 space-y-4">
+          <div className={`${isAllDisplays ? 'flex-1' : 'w-80 shrink-0'} border-l border-white/[0.06] bg-[#0d0d14] overflow-y-auto`}>
+            <div className={`${isAllDisplays ? 'p-6 max-w-4xl mx-auto' : 'p-5'} space-y-4`}>
+              {isAllDisplays ? (
+                <AllDisplaysPanel
+                  booths={mergedList}
+                  sceneConfig={sceneConfig}
+                  patchScene={patchScene}
+                  persistBoothDocumentField={persistBoothDocumentField}
+                  toastUploadResult={toastUploadResult}
+                  showUploadError={showUploadError}
+                  onOpenBooth={(boothId) => {
+                    setSelectedId(boothId);
+                    setTab('displays');
+                  }}
+                />
+              ) : isHallDisplay ? (
+                <HallBigDisplayPanel
+                  ballroomUrl={hallBallroomUrl}
+                  setBallroomUrl={(url) => {
+                    setHallBallroomUrl(url);
+                    patchScene({ ballroomStageScreenUrl: url.trim() });
+                  }}
+                  canopyUrl={hallCanopyUrl}
+                  setCanopyUrl={(url) => {
+                    setHallCanopyUrl(url);
+                    patchScene({ hallCanopyScreenUrl: url.trim() });
+                  }}
+                />
+              ) : (
+              <>
               {tab === 'layout' && <LayoutTab px={px} setPx={setPx} py={py} setPy={setPy} pz={pz} setPz={setPz} rxDeg={rxDeg} setRxDeg={setRxDeg} ryDeg={ryDeg} setRyDeg={setRyDeg} rzDeg={rzDeg} setRzDeg={setRzDeg} sx={sx} setSx={setSx} sy={sy} setSy={setSy} sz={sz} setSz={setSz} />}
+              {tab === 'displays' && !isSpecialView && (
+                <BoothDisplaysTab
+                  boothId={selectedId}
+                  stageScreenUrl={stageScreenUrl}
+                  setStageScreenUrl={setStageScreenUrl}
+                  videoUrl={videoUrl}
+                  setVideoUrl={setVideoUrl}
+                  signageImageUrl={signageImageUrl}
+                  setSignageImageUrl={setSignageImageUrl}
+                  toastUploadResult={toastUploadResult}
+                  persistDocumentField={persistDocumentField}
+                  showUploadError={showUploadError}
+                />
+              )}
               {tab === 'branding' && (
                 <BrandingTab
                   name={name}
@@ -706,8 +875,8 @@ export function CmsDashboard() {
                   setAccent={setAccent}
                   counterColor={counterColor}
                   setCounterColor={setCounterColor}
-                  videoUrl={videoUrl}
-                  setVideoUrl={setVideoUrl}
+                  stageScreenUrl={stageScreenUrl}
+                  setStageScreenUrl={setStageScreenUrl}
                   headerLogoUrl={headerLogoUrl}
                   setHeaderLogoUrl={setHeaderLogoUrl}
                   description={description}
@@ -716,6 +885,8 @@ export function CmsDashboard() {
                   setHostessQuickReplies={setHostessQuickReplies}
                   boothId={selectedId}
                   toastUploadResult={toastUploadResult}
+                  persistDocumentField={persistDocumentField}
+                  showUploadError={showUploadError}
                 />
               )}
               {tab === 'images' && (
@@ -753,8 +924,12 @@ export function CmsDashboard() {
                   setEnablePageIndexPriceList={setEnablePageIndexPriceList}
                   videoUrl={videoUrl}
                   setVideoUrl={setVideoUrl}
+                  stageScreenUrl={stageScreenUrl}
+                  setStageScreenUrl={setStageScreenUrl}
                   unitLayoutUrl={unitLayoutUrl}
                   setUnitLayoutUrl={setUnitLayoutUrl}
+                  signageImageUrl={signageImageUrl}
+                  setSignageImageUrl={setSignageImageUrl}
                   persistDocumentField={persistDocumentField}
                   persistPageIndexFlag={persistPageIndexFlag}
                   onUseBundledSiteMapPath={switchSiteMapToBundledPublicPath}
@@ -763,6 +938,8 @@ export function CmsDashboard() {
               {tab === 'company' && <CompanyTab company={company} setCompany={setCompany} />}
               {tab === 'lighting' && <LightingTab lighting={lighting} setLighting={setLighting} />}
               {tab === 'scene' && <CmsScenePanel />}
+              </>
+              )}
             </div>
           </div>
         </div>
@@ -787,6 +964,334 @@ export function CmsDashboard() {
 }
 
 /* ─── Sub-panels ─── */
+
+function BoothDisplaysTab({
+  boothId,
+  stageScreenUrl,
+  setStageScreenUrl,
+  videoUrl,
+  setVideoUrl,
+  signageImageUrl,
+  setSignageImageUrl,
+  toastUploadResult,
+  persistDocumentField,
+  showUploadError,
+}: {
+  boothId: string;
+  stageScreenUrl: string;
+  setStageScreenUrl: (v: string) => void;
+  videoUrl: string;
+  setVideoUrl: (v: string) => void;
+  signageImageUrl: string;
+  setSignageImageUrl: (v: string) => void;
+  toastUploadResult: (result: UploadResult, label: string) => void;
+  persistDocumentField: (
+    field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
+    url: string,
+    label: string,
+  ) => Promise<void>;
+  showUploadError: (err: unknown) => void;
+}) {
+  return (
+    <>
+      <SectionTitle>Booth LED screens</SectionTitle>
+      <p className="mb-3 text-[10px] leading-relaxed text-white/40">
+        Manage this booth&apos;s large back-wall LED and walk-through video. Changes preview live on the left — click <strong className="text-white/60">Apply Changes</strong> to save.
+      </p>
+      <SectionTitle>Main stage screen (large LED)</SectionTitle>
+      <CmsDocFieldWithPreview
+        label="Stage screen URL"
+        value={stageScreenUrl}
+        onChange={setStageScreenUrl}
+        placeholder="/images/first ever expo.jpg or .mp4"
+        uploadLabel="Upload image or video"
+        uploadAccept="image/*,video/*,.mp4,.webm"
+        previewColumnTitle="Stage preview"
+        onUploadFile={async (f) => {
+          try {
+            const folder = f.type.startsWith('video/') ? 'stage-video' : 'stage-image';
+            const up = await uploadCmsFile(f, boothId, folder);
+            setStageScreenUrl(up.url);
+            toastUploadResult(up, 'Stage screen');
+            await persistDocumentField('stageScreenUrl', up.url, 'Stage screen');
+          } catch (e) {
+            showUploadError(e);
+          }
+        }}
+      />
+      <SectionTitle>Walk-through video (booth button)</SectionTitle>
+      <p className="mb-2 text-[10px] leading-relaxed text-white/35">
+        Used when visitors tap <strong className="text-white/50">Walk Through</strong> — separate from the main stage screen.
+      </p>
+      <CmsDocFieldWithPreview
+        label="Walk-through URL"
+        value={videoUrl}
+        onChange={setVideoUrl}
+        placeholder="/13391496_3840_2160_60fps.mp4"
+        uploadLabel="Upload video"
+        uploadAccept="video/*,.mp4,.webm"
+        previewColumnTitle="Video preview"
+        onUploadFile={async (f) => {
+          try {
+            const up = await uploadCmsFile(f, boothId, 'walkthrough-video');
+            setVideoUrl(up.url);
+            toastUploadResult(up, 'Walk-through video');
+            await persistDocumentField('videoUrl', up.url, 'Walk-through video');
+          } catch (e) {
+            showUploadError(e);
+          }
+        }}
+      />
+      {boothId === 'builder-8' && (
+        <>
+          <SectionTitle>Standing signage board</SectionTitle>
+          <CmsDocFieldWithPreview
+            label="Signage image URL"
+            value={signageImageUrl}
+            onChange={setSignageImageUrl}
+            placeholder="/images/signage.jpg"
+            uploadLabel="Upload signage image"
+            uploadAccept="image/*"
+            previewColumnTitle="Signage preview"
+            onUploadFile={async (f) => {
+              try {
+                const up = await uploadCmsFile(f, boothId, 'signage-image');
+                setSignageImageUrl(up.url);
+                toastUploadResult(up, 'Signage image');
+                await persistDocumentField('signageImageUrl', up.url, 'Signage image');
+              } catch (e) {
+                showUploadError(e);
+              }
+            }}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+function AllDisplaysPanel({
+  booths,
+  sceneConfig,
+  patchScene,
+  persistBoothDocumentField,
+  toastUploadResult,
+  showUploadError,
+  onOpenBooth,
+}: {
+  booths: BoothLayoutConfig[];
+  sceneConfig: SceneConfig;
+  patchScene: (patch: { ballroomStageScreenUrl?: string; hallCanopyScreenUrl?: string }) => void;
+  persistBoothDocumentField: (
+    boothId: string,
+    field: 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
+    url: string,
+    label: string,
+  ) => Promise<void>;
+  toastUploadResult: (result: UploadResult, label: string) => void;
+  showUploadError: (err: unknown) => void;
+  onOpenBooth: (boothId: string) => void;
+}) {
+  const [ballroomUrl, setBallroomUrl] = useState(sceneConfig.ballroomStageScreenUrl ?? '');
+  const [canopyUrl, setCanopyUrl] = useState(sceneConfig.hallCanopyScreenUrl ?? '');
+
+  useEffect(() => {
+    setBallroomUrl(sceneConfig.ballroomStageScreenUrl ?? '');
+    setCanopyUrl(sceneConfig.hallCanopyScreenUrl ?? '');
+  }, [sceneConfig.ballroomStageScreenUrl, sceneConfig.hallCanopyScreenUrl]);
+
+  const saveHall = (field: 'ballroomStageScreenUrl' | 'hallCanopyScreenUrl', url: string) => {
+    patchScene({ [field]: url.trim() });
+  };
+
+  return (
+    <>
+      <SectionTitle>All displays — hall & booths</SectionTitle>
+      <p className="mb-4 text-[10px] leading-relaxed text-white/40">
+        Edit every LED screen and display in the expo from one place. Uploads save immediately to R2 when online. Booth changes also need <strong className="text-white/55">Apply Changes</strong> if you typed a URL manually in a single booth view.
+      </p>
+
+      <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] p-4">
+        <h4 className="mb-2 text-xs font-bold text-cyan-200">Hall displays</h4>
+        <HallLedMediaField
+          label="Ballroom stage (east wall)"
+          hint="Large LED behind the podium — Fast Travel → Ballroom stage."
+          value={ballroomUrl}
+          onChange={(url) => {
+            setBallroomUrl(url);
+            saveHall('ballroomStageScreenUrl', url);
+          }}
+          uploadFolder="ballroom-stage"
+        />
+        <HallLedMediaField
+          label="Center canopy ring"
+          hint="Suspended circular LED above the help desk."
+          value={canopyUrl}
+          onChange={(url) => {
+            setCanopyUrl(url);
+            saveHall('hallCanopyScreenUrl', url);
+          }}
+          uploadFolder="hall-canopy"
+        />
+      </div>
+
+      <SectionTitle>Booth stage screens</SectionTitle>
+      <div className="space-y-3">
+        {booths.map((b) => (
+          <BoothDisplayRow
+            key={b.id}
+            booth={b}
+            persistBoothDocumentField={persistBoothDocumentField}
+            toastUploadResult={toastUploadResult}
+            showUploadError={showUploadError}
+            onOpenBooth={onOpenBooth}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function BoothDisplayRow({
+  booth,
+  persistBoothDocumentField,
+  toastUploadResult,
+  showUploadError,
+  onOpenBooth,
+}: {
+  booth: BoothLayoutConfig;
+  persistBoothDocumentField: (
+    boothId: string,
+    field: 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
+    url: string,
+    label: string,
+  ) => Promise<void>;
+  toastUploadResult: (result: UploadResult, label: string) => void;
+  showUploadError: (err: unknown) => void;
+  onOpenBooth: (boothId: string) => void;
+}) {
+  const [stageUrl, setStageUrl] = useState(booth.stageScreenUrl ?? booth.videoUrl ?? '');
+
+  useEffect(() => {
+    setStageUrl(booth.stageScreenUrl ?? booth.videoUrl ?? '');
+  }, [booth.stageScreenUrl, booth.videoUrl, booth.id]);
+
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-xs font-semibold text-white/85">{booth.name}</div>
+          <div className="truncate font-mono text-[10px] text-white/30">{booth.id}</div>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 text-[10px] font-semibold text-[#d4af37] hover:text-[#f5d060]"
+          onClick={() => onOpenBooth(booth.id)}
+        >
+          Open booth →
+        </button>
+      </div>
+      <input
+        className="mb-2 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white outline-none focus:border-[#d4af37]/40 font-mono"
+        value={stageUrl}
+        onChange={(e) => setStageUrl(e.target.value)}
+        onBlur={() => void persistBoothDocumentField(booth.id, 'stageScreenUrl', stageUrl, `${booth.name} stage`)}
+        placeholder="Stage screen image or video URL"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="cursor-pointer rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#d4af37] hover:bg-[#d4af37]/20">
+          Upload
+          <input
+            type="file"
+            accept="image/*,video/*,.mp4,.webm"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              void (async () => {
+                try {
+                  const folder = f.type.startsWith('video/') ? 'stage-video' : 'stage-image';
+                  const up = await uploadCmsFile(f, booth.id, folder);
+                  setStageUrl(up.url);
+                  toastUploadResult(up, `${booth.name} stage`);
+                  await persistBoothDocumentField(booth.id, 'stageScreenUrl', up.url, `${booth.name} stage`);
+                } catch (err) {
+                  showUploadError(err);
+                }
+              })();
+              e.target.value = '';
+            }}
+          />
+        </label>
+        {stageUrl.trim() && (
+          <div className="h-10 w-16 overflow-hidden rounded border border-white/10 bg-black/50">
+            {/\.(mp4|webm)(\?|$)/i.test(stageUrl.trim()) ? (
+              <video src={stageUrl.trim()} className="h-full w-full object-cover" muted playsInline />
+            ) : (
+              <img src={stageUrl.trim()} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HallBigDisplayPanel({
+  ballroomUrl,
+  setBallroomUrl,
+  canopyUrl,
+  setCanopyUrl,
+}: {
+  ballroomUrl: string;
+  setBallroomUrl: (v: string) => void;
+  canopyUrl: string;
+  setCanopyUrl: (v: string) => void;
+}) {
+  return (
+    <>
+      <SectionTitle>Hall Big Display</SectionTitle>
+      <p className="mb-3 text-[10px] leading-relaxed text-white/40">
+        Manage the large hall LED screens — upload an image or video; changes save automatically and preview live on the left.
+      </p>
+      <HallLedMediaField
+        label="Ballroom stage (east wall)"
+        hint="Main hall big screen behind the podium. Fast Travel → Ballroom stage."
+        value={ballroomUrl}
+        onChange={setBallroomUrl}
+        uploadFolder="ballroom-stage"
+      />
+      {ballroomUrl.trim() && (
+        <div className="mb-3 overflow-hidden rounded-lg border border-white/[0.08]">
+          {/\.(mp4|webm)(\?|$)/i.test(ballroomUrl.trim()) ? (
+            <video src={ballroomUrl.trim()} className="max-h-28 w-full object-contain bg-black" muted playsInline controls />
+          ) : (
+            <img src={ballroomUrl.trim()} alt="Ballroom preview" className="max-h-28 w-full object-contain bg-black" />
+          )}
+        </div>
+      )}
+      <HallLedMediaField
+        label="Center canopy ring"
+        hint="Suspended circular LED above the help desk — Fast Travel → Center plaza."
+        value={canopyUrl}
+        onChange={setCanopyUrl}
+        uploadFolder="hall-canopy"
+      />
+      {canopyUrl.trim() && (
+        <div className="mb-3 overflow-hidden rounded-lg border border-white/[0.08]">
+          {/\.(mp4|webm)(\?|$)/i.test(canopyUrl.trim()) ? (
+            <video src={canopyUrl.trim()} className="max-h-28 w-full object-contain bg-black" muted playsInline controls />
+          ) : (
+            <img src={canopyUrl.trim()} alt="Canopy preview" className="max-h-28 w-full object-contain bg-black" />
+          )}
+        </div>
+      )}
+      <p className="text-[9px] leading-relaxed text-white/30">
+        Tip: use <code className="text-white/45">/images/first ever expo.jpg</code> for the default expo banner.
+      </p>
+    </>
+  );
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-2">{children}</h3>;
@@ -959,16 +1464,24 @@ function HostessQuickRepliesEditor({
 
 /* ─── BRANDING TAB ─── */
 function BrandingTab({
-  name, setName, color, setColor, accent, setAccent, counterColor, setCounterColor, videoUrl, setVideoUrl, headerLogoUrl, setHeaderLogoUrl, description, setDescription,
-  hostessQuickReplies, setHostessQuickReplies, boothId, toastUploadResult,
+  name, setName, color, setColor, accent, setAccent, counterColor, setCounterColor,
+  stageScreenUrl, setStageScreenUrl, headerLogoUrl, setHeaderLogoUrl, description, setDescription,
+  hostessQuickReplies, setHostessQuickReplies, boothId, toastUploadResult, persistDocumentField, showUploadError,
 }: {
   name: string; setName: (v: string) => void; color: string; setColor: (v: string) => void; accent: string; setAccent: (v: string) => void;
-  counterColor: string; setCounterColor: (v: string) => void; videoUrl: string; setVideoUrl: (v: string) => void;
+  counterColor: string; setCounterColor: (v: string) => void;
+  stageScreenUrl: string; setStageScreenUrl: (v: string) => void;
   headerLogoUrl: string; setHeaderLogoUrl: (v: string) => void; description: string; setDescription: (v: string) => void;
   hostessQuickReplies: HostessQuickReply[];
   setHostessQuickReplies: (next: HostessQuickReply[]) => void;
   boothId: string;
   toastUploadResult: (result: UploadResult, label: string) => void;
+  persistDocumentField: (
+    field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
+    url: string,
+    label: string,
+  ) => Promise<void>;
+  showUploadError: (err: unknown) => void;
 }) {
   return (
     <>
@@ -985,16 +1498,28 @@ function BrandingTab({
         <CmsColor label="Accent" value={accent} onChange={setAccent} />
         <CmsColor label="Counter" value={counterColor} onChange={setCounterColor} />
       </div>
-      <SectionTitle>Screen Content</SectionTitle>
-      <CmsField label="LED Screen URL (video/image)" value={videoUrl} onChange={setVideoUrl} />
-      <p className="-mt-1 text-[9px] text-white/30">Walkthrough booth button: upload in <strong className="text-white/45">Media</strong> tab → “Walkthrough — booth button”.</p>
-      <UploadButton
-        label="Upload screen image"
-        accept="image/*"
-        onFile={async (f) => {
-          const up = await uploadCmsFile(f, boothId, 'screen');
-          setVideoUrl(up.url);
-          toastUploadResult(up, 'Screen image');
+      <SectionTitle>Main stage screen (large LED)</SectionTitle>
+      <p className="mb-2 text-[10px] leading-relaxed text-white/40">
+        Powers the <strong className="text-white/55">large back-wall LED</strong> and counter screen. Upload a project render (PNG/JPG) or a walkthrough video (MP4).
+      </p>
+      <CmsDocFieldWithPreview
+        label="Stage screen URL"
+        value={stageScreenUrl}
+        onChange={setStageScreenUrl}
+        placeholder="/13391496_3840_2160_60fps.mp4 or https://…/render.jpg"
+        uploadLabel="Upload image or video"
+        uploadAccept="image/*,video/*,.mp4,.webm"
+        previewColumnTitle="Stage preview"
+        onUploadFile={async (f) => {
+          try {
+            const folder = f.type.startsWith('video/') ? 'stage-video' : 'stage-image';
+            const up = await uploadCmsFile(f, boothId, folder);
+            setStageScreenUrl(up.url);
+            toastUploadResult(up, 'Stage screen');
+            await persistDocumentField('stageScreenUrl', up.url, 'Stage screen');
+          } catch (e) {
+            showUploadError(e);
+          }
         }}
       />
       <SectionTitle>Header Logo</SectionTitle>
@@ -1046,7 +1571,16 @@ function CmsMediaPreviewThumb({ url }: { url: string }) {
   }
 
   const isSvg = /\.svg(\?|#|$)/i.test(u) || /^data:image\/svg\+xml/i.test(u);
+  const isVideo = /\.(mp4|webm|ogg|mov)(\?|#|$)/i.test(u) || /^data:video\//i.test(u);
   const remote = /^https?:\/\//i.test(u);
+
+  if (isVideo) {
+    return (
+      <div className="flex h-[5.5rem] w-[5.5rem] items-center justify-center overflow-hidden rounded-lg border border-white/[0.08] bg-black/50">
+        <video src={u} muted playsInline preload="metadata" className="max-h-full max-w-full object-contain" />
+      </div>
+    );
+  }
 
   if (isSvg) {
     return (
@@ -1186,8 +1720,12 @@ function MediaTab({
   setEnablePageIndexPriceList,
   videoUrl,
   setVideoUrl,
+  stageScreenUrl,
+  setStageScreenUrl,
   unitLayoutUrl,
   setUnitLayoutUrl,
+  signageImageUrl,
+  setSignageImageUrl,
   persistDocumentField,
   persistPageIndexFlag,
   onUseBundledSiteMapPath,
@@ -1212,10 +1750,14 @@ function MediaTab({
   setEnablePageIndexPriceList: (v: boolean) => void;
   videoUrl: string;
   setVideoUrl: (v: string) => void;
+  stageScreenUrl: string;
+  setStageScreenUrl: (v: string) => void;
   unitLayoutUrl: string;
   setUnitLayoutUrl: (v: string) => void;
+  signageImageUrl: string;
+  setSignageImageUrl: (v: string) => void;
   persistDocumentField: (
-    field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl',
+    field: 'brochureUrl' | 'priceListUrl' | 'unitLayoutUrl' | 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
     url: string,
     label: string,
   ) => Promise<void>;
@@ -1240,6 +1782,33 @@ function MediaTab({
 
   return (
     <>
+      <SectionTitle>Main stage screen (large LED)</SectionTitle>
+      <p className="mb-3 text-[10px] leading-relaxed text-white/40">
+        The <strong className="text-white/55">big back-wall screen</strong> in the booth. Upload a project image (PNG/JPG) or video (MP4). Saves immediately when uploaded to R2.
+      </p>
+      <div className="mb-5 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3">
+        <CmsDocFieldWithPreview
+          label="Stage screen"
+          value={stageScreenUrl}
+          onChange={setStageScreenUrl}
+          placeholder="/13391496_3840_2160_60fps.mp4 or https://…/render.jpg"
+          uploadLabel="Upload image or video"
+          uploadAccept="image/*,video/*,.mp4,.webm"
+          previewColumnTitle="Stage preview"
+          onUploadFile={async (f) => {
+            try {
+              const folder = f.type.startsWith('video/') ? 'stage-video' : 'stage-image';
+              const up = await uploadCmsFile(f, boothId, folder);
+              setStageScreenUrl(up.url);
+              toastUploadResult(up, 'Stage screen');
+              await persistDocumentField('stageScreenUrl', up.url, 'Stage screen');
+            } catch (e) {
+              showUploadError(e);
+            }
+          }}
+        />
+      </div>
+
       <SectionTitle>Booth side menu — visitor buttons</SectionTitle>
       <p className="mb-3 text-[10px] leading-relaxed text-white/40">
         Upload here for each gold button at your booth. Production uploads need Coolify running <span className="font-mono text-white/50">npm run start:prod</span> with all <span className="font-mono text-white/50">R2_*</span> env vars (Runtime ON). Otherwise upload PDFs in Cloudflare R2 and edit <span className="font-mono text-white/50">public/r2-documents.json</span>.
@@ -1334,7 +1903,7 @@ function MediaTab({
         </div>
 
         <CmsDocFieldWithPreview
-          label="Walkthrough — booth button (video)"
+          label="Walkthrough — booth button"
           value={videoUrl}
           onChange={setVideoUrl}
           placeholder="/13391496_3840_2160_60fps.mp4"
@@ -1348,6 +1917,9 @@ function MediaTab({
           }}
           previewColumnTitle="Preview"
         />
+        <p className="-mt-2 mb-1 text-[9px] text-white/30">
+          Opens when visitors tap <strong className="text-white/45">Walk Through</strong> — separate from the main stage screen above.
+        </p>
         <CmsDocFieldWithPreview
           label="Unit layout — booth button"
           value={unitLayoutUrl}
@@ -1361,6 +1933,21 @@ function MediaTab({
             toastUploadResult(up, 'Unit layout');
             await persistDocumentField('unitLayoutUrl', up.url, 'Unit layout');
           }}
+        />
+        <CmsDocFieldWithPreview
+          label="Signage image — digital board"
+          value={signageImageUrl}
+          onChange={setSignageImageUrl}
+          placeholder="https://…/signage.png"
+          uploadLabel="Upload signage image"
+          uploadAccept="image/*"
+          onUploadFile={async (f) => {
+            const up = await uploadCmsFile(f, boothId, 'signage');
+            setSignageImageUrl(up.url);
+            toastUploadResult(up, 'Signage image');
+            await persistDocumentField('signageImageUrl', up.url, 'Signage image');
+          }}
+          previewColumnTitle="Preview"
         />
       </div>
 
@@ -1581,6 +2168,64 @@ function CompanyTab({ company, setCompany }: { company: CompanyProfile; setCompa
   );
 }
 
+function PlacedImageSizeFields({
+  size,
+  onCommit,
+}: {
+  size: [number, number];
+  onCommit: (size: [number, number]) => void;
+}) {
+  const [widthText, setWidthText] = useState(String(size[0]));
+  const [heightText, setHeightText] = useState(String(size[1]));
+
+  useEffect(() => {
+    setWidthText(String(size[0]));
+    setHeightText(String(size[1]));
+  }, [size[0], size[1]]);
+
+  const commit = useCallback(() => {
+    const w = parseFloat(widthText);
+    const h = parseFloat(heightText);
+    if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) {
+      onCommit([w, h]);
+      setWidthText(String(w));
+      setHeightText(String(h));
+    } else {
+      setWidthText(String(size[0]));
+      setHeightText(String(size[1]));
+    }
+  }, [widthText, heightText, onCommit, size]);
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <label className="mb-0.5 block text-[9px] uppercase text-white/30">Width (m)</label>
+        <input
+          className="w-full rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] text-white outline-none"
+          value={widthText}
+          onChange={(e) => setWidthText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+      <div>
+        <label className="mb-0.5 block text-[9px] uppercase text-white/30">Height (m)</label>
+        <input
+          className="w-full rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] text-white outline-none"
+          value={heightText}
+          onChange={(e) => setHeightText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ─── IMAGES TAB (click-to-place) ─── */
 function ImagesTab({
   boothId, toastUploadResult, placedImages, placingImageUrl, setPlacingImageUrl, setPlacingLabel,
@@ -1634,26 +2279,26 @@ function ImagesTab({
         {placedImages.map((img) => (
           <div
             key={img.id}
-            className={`rounded-lg border p-2.5 cursor-pointer transition-all ${img.id === selectedImageId ? 'border-[#d4af37]/50 bg-[#d4af37]/10' : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'}`}
-            onClick={() => setSelectedImageId(img.id === selectedImageId ? null : img.id)}
+            className={`rounded-lg border p-2.5 transition-all ${img.id === selectedImageId ? 'border-[#d4af37]/50 bg-[#d4af37]/10' : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'}`}
           >
-            <div className="flex items-center gap-2 mb-1.5">
+            <div
+              className="flex items-center gap-2 mb-1.5 cursor-pointer"
+              onClick={() => setSelectedImageId(img.id === selectedImageId ? null : img.id)}
+            >
               <img src={img.url} alt={img.label} className="h-8 w-8 rounded border border-white/10 object-cover shrink-0" />
               <span className="flex-1 truncate text-[11px] text-white/60">{img.label}</span>
               <button className="text-[10px] text-red-400/50 hover:text-red-400 shrink-0" onClick={(e) => { e.stopPropagation(); removePlacedImage(img.id); }}>✕</button>
             </div>
             {img.id === selectedImageId && (
-              <div className="space-y-2 pt-1.5 border-t border-white/[0.06]">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="mb-0.5 block text-[9px] uppercase text-white/30">Width (m)</label>
-                    <input className="w-full rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] text-white outline-none" value={img.size[0]} onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updatePlacedImage(img.id, { size: [v, img.size[1]] }); }} />
-                  </div>
-                  <div>
-                    <label className="mb-0.5 block text-[9px] uppercase text-white/30">Height (m)</label>
-                    <input className="w-full rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] text-white outline-none" value={img.size[1]} onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) updatePlacedImage(img.id, { size: [img.size[0], v] }); }} />
-                  </div>
-                </div>
+              <div
+                className="space-y-2 pt-1.5 border-t border-white/[0.06]"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <PlacedImageSizeFields
+                  size={img.size}
+                  onCommit={(size) => updatePlacedImage(img.id, { size })}
+                />
                 <p className="text-[9px] text-white/20 font-mono">
                   pos: [{img.position.map((v) => v.toFixed(2)).join(', ')}]
                 </p>

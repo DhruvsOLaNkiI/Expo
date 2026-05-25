@@ -2,8 +2,15 @@ import { Text, Torus } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
+import {
+  LedScreenSurface,
+  LedScreenSuspenseFallback,
+  resolveBoothLedScreenUrl,
+} from '@/features/media/components/LedVideoPlane';
+
 import { HELP_DESK_RADIUS, HALL_HEIGHT } from '@/features/shared/data/boothLayouts';
+
+const DEFAULT_CANOPY_VIDEO = '/13391496_3840_2160_60fps.mp4';
 
 /** Original canopy was sized for ~11.6 m desk; scale to match {@link HELP_DESK_RADIUS}. */
 export const HELP_DESK_CANOPY_SCALE = HELP_DESK_RADIUS / 5.8;
@@ -91,15 +98,18 @@ function SuspendedExpoCanopy({
   position,
   name,
   showVideos = false,
+  screenUrl,
   lite = false,
   scale = 1,
 }: {
   position: [number, number, number];
   name: string;
   showVideos?: boolean;
+  screenUrl?: string;
   lite?: boolean;
   scale?: number;
 }) {
+  const ledUrl = resolveBoothLedScreenUrl(screenUrl, DEFAULT_CANOPY_VIDEO, showVideos);
   const graphicRingRef = useRef<THREE.Group>(null);
   const spinAccum = useRef(0);
   const screenCount = lite ? 4 : 8;
@@ -153,11 +163,11 @@ function SuspendedExpoCanopy({
                   <boxGeometry args={[6.27, 4.8, 0.2]} />
                   <meshStandardMaterial color="#111" metalness={0.5} roughness={0.2} />
                 </mesh>
-                {showVideos ? (
+                {ledUrl ? (
                   <Suspense fallback={<LedScreenSuspenseFallback args={[6.1, 4.5]} />}>
                     <LedScreenSurface
                       args={[6.1, 4.5]}
-                      url="/13391496_3840_2160_60fps.mp4"
+                      url={ledUrl}
                       position={[0, 0, 8.31]}
                       maxPlayDistance={lite ? 38 : 55}
                     />
@@ -284,9 +294,11 @@ export const HALL_CANOPY_PLACEMENTS = [
 
 export function HallSuspendedCanopies({
   showVideos = false,
+  screenUrl,
   lite = false,
 }: {
   showVideos?: boolean;
+  screenUrl?: string;
   lite?: boolean;
 }) {
   return (
@@ -298,6 +310,7 @@ export function HallSuspendedCanopies({
           position={canopy.position}
           scale={HELP_DESK_CANOPY_SCALE}
           showVideos={showVideos}
+          screenUrl={screenUrl}
           lite={lite}
         />
       ))}

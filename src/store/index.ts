@@ -524,6 +524,9 @@ export const useStore = create<AppState>((set, get) => ({
     if (sceneMerged.showHallAisleStandees !== true && sceneFromFile.showHallAisleStandees === true) {
       sceneMerged = { ...sceneMerged, showHallAisleStandees: true };
     }
+    if (sceneMerged.showBoothHostess !== true && sceneFromFile.showBoothHostess === true) {
+      sceneMerged = { ...sceneMerged, showBoothHostess: true };
+    }
     set({ boothOverrides: merged, sceneOverrides: sceneMerged, _boothCmsHydrated: true });
   },
 

@@ -1,4 +1,9 @@
 import type { RenderQuality } from './renderQuality';
+import {
+  mergeBoothDisplayLayout,
+  type BoothDisplayLayout,
+  type BoothDisplayTransform,
+} from './boothDisplayLayout';
 
 /**
  * Booth CMS data model — edit defaults here or override via:
@@ -71,8 +76,10 @@ export type BoothLayoutConfig = {
   color: string;
   accent: string;
   counterColor: string;
-  /** Main + counter LED: video or still image URL (or data:image/…) */
+  /** Walkthrough booth button + legacy LED fallback when {@link stageScreenUrl} is empty */
   videoUrl: string;
+  /** Main stage screen (large back-wall LED) — image or video URL */
+  stageScreenUrl?: string;
   headerLogoUrl?: string;
   /** Per-booth media gallery */
   media: MediaItem[];
@@ -92,13 +99,24 @@ export type BoothLayoutConfig = {
   priceListUrl: string;
   /** Unit layout PDF or image (booth “Unit layout” button) */
   unitLayoutUrl: string;
+  /** Custom signage board image (e.g. for EcoEden digital board) */
+  signageImageUrl?: string;
   /** CMS: auto-run PageIndex when uploading brochure PDF */
   pageIndexBrochure?: boolean;
   /** CMS: auto-run PageIndex when uploading price list PDF */
   pageIndexPriceList?: boolean;
   /** Quick-reply options when the visitor stands near the booth hostess */
   hostessQuickReplies?: HostessQuickReply[];
+  /** Edit layout → per-display position / rotation / scale (main LED, counter, standee, …) */
+  displayLayout?: BoothDisplayLayout;
 };
+
+/** Main back-wall LED content — prefers dedicated stage URL, falls back to videoUrl. */
+export function boothStageScreenUrl(b: Pick<BoothLayoutConfig, 'stageScreenUrl' | 'videoUrl'>): string {
+  const stage = (b.stageScreenUrl ?? '').trim();
+  if (stage) return stage;
+  return (b.videoUrl ?? '').trim();
+}
 
 /** Ordered URLs for the site map lightbox (primary + gallery). */
 export function siteMapUrlsFromConfig(b: Pick<BoothLayoutConfig, 'siteMapUrl' | 'siteMapGallery'>): string[] {
@@ -121,6 +139,8 @@ export type HallLayoutConfig = {
   /** Decorative tree world positions (up to four in Edit layout). */
   plantPositions: [number, number, number][];
   plantScales: number[];
+  /** Sketchfab aisle standees between booth pairs — keyed by standee id. */
+  aisleStandeeTransforms: Record<string, BoothDisplayTransform>;
 };
 
 /** Main expo hall footprint (meters) — width × depth × height. */
@@ -202,6 +222,7 @@ export const DEFAULT_HALL_LAYOUT: HallLayoutConfig = {
   receptionBannerOffset: [0, 0, 0],
   plantPositions: [],
   plantScales: [],
+  aisleStandeeTransforms: {},
 };
 
 export function mergeHallLayout(overrides?: Partial<HallLayoutConfig>): HallLayoutConfig {
@@ -211,6 +232,10 @@ export function mergeHallLayout(overrides?: Partial<HallLayoutConfig>): HallLayo
     ...overrides,
     plantPositions: overrides.plantPositions ?? DEFAULT_HALL_LAYOUT.plantPositions,
     plantScales: overrides.plantScales ?? DEFAULT_HALL_LAYOUT.plantScales,
+    aisleStandeeTransforms: {
+      ...DEFAULT_HALL_LAYOUT.aisleStandeeTransforms,
+      ...overrides.aisleStandeeTransforms,
+    },
   };
 }
 
@@ -325,6 +350,10 @@ export function mergeSceneOverridesInput(
     ...hallBrowser,
     plantPositions: hallBrowser?.plantPositions ?? hallFile?.plantPositions,
     plantScales: hallBrowser?.plantScales ?? hallFile?.plantScales,
+    aisleStandeeTransforms: {
+      ...hallFile?.aisleStandeeTransforms,
+      ...hallBrowser?.aisleStandeeTransforms,
+    },
   });
 
   const regCombined: Partial<RegistrationLayoutConfig> = {
@@ -398,6 +427,10 @@ export type SceneConfig = {
   postProcessing: boolean;
   /** Show ballroom stage, screen, and podium on the east wall. */
   showBallroom: boolean;
+  /** Ballroom east-wall stage LED — MP4/WebM or image (PNG/JPG). Empty = default expo video. */
+  ballroomStageScreenUrl?: string;
+  /** Center suspended LED ring (help desk canopy) — MP4/WebM or image. Empty = default expo video. */
+  hallCanopyScreenUrl?: string;
   /** Show roaming executive animated model. */
   showRoamingExecutive: boolean;
   /** Show video planes (expensive video decoding). */
@@ -412,6 +445,8 @@ export type SceneConfig = {
   showHallAisleStandees: boolean;
   /** Small roll-up name stand beside each luxury booth counter. */
   showBoothStandee: boolean;
+  /** 3D hostess GLB at booth counters and help desk. */
+  showBoothHostess: boolean;
   /** Array of booth IDs to hide (for selective performance tuning). */
   hiddenBooths: string[];
   /**
@@ -453,6 +488,8 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showStandardBooths: true,
   postProcessing: false,
   showBallroom: true,
+  ballroomStageScreenUrl: '',
+  hallCanopyScreenUrl: '',
   showRoamingExecutive: false,
   showVideos: true,
   showHallCanopy: true,
@@ -460,6 +497,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showVertexEliteCtaKiosk: false,
   showHallAisleStandees: false,
   showBoothStandee: true,
+  showBoothHostess: true,
   hiddenBooths: [...DEFAULT_HIDDEN_SIDE_BOOTH_IDS],
   modelCompression: '30fps',
   renderQuality: 'hd',
@@ -501,6 +539,26 @@ const DEFAULT_LIGHTING: BoothLighting = {
   ambientIntensity: 0.35,
 };
 
+/** Luxe Gardens (builder-8) — white + forest green eco palette. */
+export const BUILDER_8_GREEN_THEME = {
+  color: '#ffffff',
+  accent: '#164e2f',
+  counterColor: '#ffffff',
+  lighting: {
+    spotlightIntensity: 55,
+    spotlightColor: '#fff8ef',
+    ledStripColor: '#fff4d6',
+    ledStripIntensity: 2.2,
+    emissiveGlow: 0.12,
+    ambientIntensity: 0.38,
+  } satisfies BoothLighting,
+  company: {
+    brandPrimary: '#3d9a5a',
+    brandSecondary: '#164e2f',
+    tagline: 'LUXURY RESIDENCES',
+  },
+} as const;
+
 function makeDefaultBooth(
   id: string,
   name: string,
@@ -532,6 +590,8 @@ function makeDefaultBooth(
     siteMapGallery: [],
     priceListUrl: '',
     unitLayoutUrl: '',
+    stageScreenUrl: '',
+    signageImageUrl: '',
     pageIndexBrochure: true,
     pageIndexPriceList: true,
     hostessQuickReplies: [],
@@ -549,16 +609,18 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
     PROJECT_VIDEOS[2],
   );
   return [
-    makeDefaultBooth(
-      'builder-1',
-      'LUXE TOWERS',
-      [BOOTH_ROW_X_WEST, 0, zNorth],
-      [0, BOOTH_YAW_WEST, 0],
-      '#fcfaf5',
-      PROJECT_VIDEOS[0],
-      undefined,
-      LUXE_TOWERS_BOOTH_SCALE,
-    ),
+    {
+      ...makeDefaultBooth(
+        'builder-1',
+        'LUXE TOWERS',
+        [BOOTH_ROW_X_WEST, 0, zNorth],
+        [0, BOOTH_YAW_WEST, 0],
+        '#fcfaf5',
+        PROJECT_VIDEOS[0],
+        undefined,
+        LUXE_TOWERS_BOOTH_SCALE,
+      ),
+    },
     makeDefaultBooth('builder-2', 'AURUM RESIDENCES', [BOOTH_ROW_X_WEST, 0, zCenter], [0, BOOTH_YAW_WEST, 0], '#fcf9f2', PROJECT_VIDEOS[1]),
     {
       ...vertex,
@@ -578,16 +640,26 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
     makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, zNorth], [0, BOOTH_YAW_EAST, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
     makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, zCenter], [0, BOOTH_YAW_EAST, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
     makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, zSouth], [0, BOOTH_YAW_EAST, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
-    makeDefaultBooth(
-      'builder-8',
-      'LUXE GARDENS',
-      [BOOTH_ROW_X_EAST, 0, BOOTH_ROW_Z_NORTH_EXTRA],
-      [0, BOOTH_YAW_EAST, 0],
-      '#fcfaf5',
-      PROJECT_VIDEOS[0],
-      undefined,
-      LUXE_TOWERS_BOOTH_SCALE,
-    ),
+    {
+      ...makeDefaultBooth(
+        'builder-8',
+        'LUXE GARDENS',
+        [BOOTH_ROW_X_EAST, 0, BOOTH_ROW_Z_NORTH_EXTRA],
+        [0, BOOTH_YAW_EAST, 0],
+        BUILDER_8_GREEN_THEME.color,
+        PROJECT_VIDEOS[0],
+        undefined,
+        LUXE_TOWERS_BOOTH_SCALE,
+      ),
+      accent: BUILDER_8_GREEN_THEME.accent,
+      counterColor: BUILDER_8_GREEN_THEME.counterColor,
+      lighting: { ...BUILDER_8_GREEN_THEME.lighting },
+      company: {
+        ...DEFAULT_COMPANY,
+        companyName: 'Luxe Gardens',
+        ...BUILDER_8_GREEN_THEME.company,
+      },
+    },
     makeDefaultBooth(
       'builder-9',
       'LUXE SKYLINE',
@@ -645,6 +717,7 @@ export function applyBoothOverrides(
           ),
           company: o.company ? { ...b.company, ...o.company } : b.company,
           lighting: o.lighting ? { ...b.lighting, ...o.lighting } : b.lighting,
+          displayLayout: mergeBoothDisplayLayout(b.displayLayout, o.displayLayout),
         }
       : b;
     return {

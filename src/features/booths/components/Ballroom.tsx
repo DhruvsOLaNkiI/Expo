@@ -1,10 +1,14 @@
 import { Suspense, useRef, useLayoutEffect } from 'react';
 import * as THREE from 'three';
 import { HALL_HALF_WIDTH, HALL_HEIGHT } from '@/features/shared/data/boothLayouts';
-import { LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
+import {
+  LedScreenSurface,
+  LedScreenSuspenseFallback,
+  resolveBoothLedScreenUrl,
+} from '@/features/media/components/LedVideoPlane';
 
 /** East width wall — anchor slightly inside the hall so stage/screen are not past the perimeter. */
-const BALLROOM_WALL_X = HALL_HALF_WIDTH - 1.5;
+export const BALLROOM_WALL_X = HALL_HALF_WIDTH - 1.5;
 const BALLROOM_FACE_YAW = -Math.PI / 2;
 
 export const BALLROOM_LED = {
@@ -32,8 +36,15 @@ const BACKDROP_Z = 0.06;
 const STAGE_TOP_Y = 1;
 const PODIUM_Z = STAGE_Z + STAGE_DEPTH * 0.35;
 
-function BallroomLedDisplay({ showVideos }: { showVideos: boolean }) {
+function BallroomLedDisplay({
+  showVideos,
+  stageScreenUrl,
+}: {
+  showVideos: boolean;
+  stageScreenUrl?: string;
+}) {
   const [w, h] = LED_PANEL;
+  const screenUrl = resolveBoothLedScreenUrl(stageScreenUrl, BALLROOM_LED.videoUrl, showVideos);
 
   return (
     <group position={MAIN_SCREEN.position}>
@@ -49,8 +60,8 @@ function BallroomLedDisplay({ showVideos }: { showVideos: boolean }) {
       </mesh>
       {/* Active LED surface */}
       <Suspense fallback={<LedScreenSuspenseFallback args={LED_PANEL} />}>
-        {showVideos ? (
-          <LedScreenSurface args={LED_PANEL} url={BALLROOM_LED.videoUrl} position={[0, 0, 0.02]} />
+        {screenUrl ? (
+          <LedScreenSurface args={LED_PANEL} url={screenUrl} position={[0, 0, 0.02]} />
         ) : (
           <mesh position={[0, 0, 0.02]}>
             <planeGeometry args={LED_PANEL} />
@@ -63,6 +74,14 @@ function BallroomLedDisplay({ showVideos }: { showVideos: boolean }) {
         <boxGeometry args={[w * 0.92, 0.05, 0.03]} />
         <meshStandardMaterial color="#080808" metalness={0.8} roughness={0.3} />
       </mesh>
+      {/* LED backlight glow effect */}
+      <pointLight
+        position={[0, 0, -0.1]}
+        intensity={18}
+        distance={6}
+        decay={2}
+        color="#e8f0ff"
+      />
     </group>
   );
 }
@@ -101,7 +120,13 @@ function StagePodium() {
   );
 }
 
-export function Ballroom({ showVideos = true }: { showVideos?: boolean } = {}) {
+export function Ballroom({
+  showVideos = true,
+  stageScreenUrl,
+}: {
+  showVideos?: boolean;
+  stageScreenUrl?: string;
+} = {}) {
   return (
     <group position={[BALLROOM_WALL_X, 0, 0]} rotation={[0, BALLROOM_FACE_YAW, 0]}>
       <mesh position={[0, 0.5, STAGE_Z]} receiveShadow castShadow>
@@ -109,7 +134,7 @@ export function Ballroom({ showVideos = true }: { showVideos?: boolean } = {}) {
         <meshStandardMaterial color={STAGE_BROWN} roughness={0.62} metalness={0.06} />
       </mesh>
 
-      <BallroomLedDisplay showVideos={showVideos} />
+      <BallroomLedDisplay showVideos={showVideos} stageScreenUrl={stageScreenUrl} />
 
       <StagePodium />
 

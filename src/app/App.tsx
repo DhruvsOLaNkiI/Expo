@@ -277,7 +277,12 @@ export default function App() {
                 <ExpoHall showVideos={showVideos} />
                 <Booths showVideos={showVideos} />
                 {showRoamingExecutive && <RoamingExecutive />}
-                {showBallroom && <Ballroom showVideos={showVideos} />}
+                {showBallroom && (
+                  <Ballroom
+                    showVideos={showVideos}
+                    stageScreenUrl={sceneConfig.ballroomStageScreenUrl}
+                  />
+                )}
               </>
             )}
             <HallLayoutGizmos />
