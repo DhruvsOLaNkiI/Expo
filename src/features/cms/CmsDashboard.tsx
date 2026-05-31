@@ -19,10 +19,11 @@ import {
 } from '@/features/shared/data/boothLayouts';
 import { CmsPreview3D } from './CmsPreview3D';
 import { CmsHallDisplayPreview } from './CmsHallDisplayPreview';
+import { CmsHallMapTab } from './CmsHallMapTab';
 import { CmsScenePanel, HallLedMediaField } from './CmsScenePanel';
+import { getDashboardPublicUrl } from '@/dashboard';
 import { CtaResourcePopupView } from '@/features/media/components/CtaResourcePopup';
 import { CmsUploadError, isR2Available, uploadCmsFile, type UploadResult } from '@/api/cmsUpload';
-import { isSharedServerAssetUrl, patchBoothCmsOnServer } from '@/api/boothCmsServer';
 import { normalizeR2PublicUrl } from '@/api/r2Urls';
 import { openUrlInNewTab } from '@/utils/openUrl';
 import {
@@ -282,7 +283,7 @@ function readFile(file: File): Promise<string> {
   });
 }
 
-type Tab = 'layout' | 'branding' | 'displays' | 'images' | 'media' | 'company' | 'lighting' | 'scene';
+type Tab = 'layout' | 'branding' | 'displays' | 'images' | 'media' | 'company' | 'lighting' | 'scene' | 'hallMap';
 
 const BOOTH_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'layout', label: 'Layout', icon: '⊞' },
@@ -293,6 +294,7 @@ const BOOTH_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'company', label: 'Company', icon: '◉' },
   { id: 'lighting', label: 'Lighting', icon: '☀' },
   { id: 'scene', label: 'Scene', icon: '⛶' },
+  { id: 'hallMap', label: 'Hall Map', icon: '⊡' },
 ];
 
 /** CMS sidebar entry for hall-wide LED screens (ballroom + center canopy). */
@@ -391,6 +393,7 @@ export function CmsDashboard() {
 
   const prevSelectedIdRef = useRef<string | null>(null);
   const prevHydratedRef = useRef(false);
+  const prevBoothHashRef = useRef('');
   useEffect(() => {
     if (isSpecialView) return;
     const b = mergedList.find((x) => x.id === selectedId);
@@ -399,8 +402,13 @@ export function CmsDashboard() {
     if (switchedBooth) prevSelectedIdRef.current = selectedId;
     const becameHydrated = boothCmsHydrated && !prevHydratedRef.current;
     if (becameHydrated) prevHydratedRef.current = true;
-    if (switchedBooth || becameHydrated) loadForm(b);
-  }, [selectedId, mergedList, loadForm, boothCmsHydrated, isSpecialView]);
+
+    const boothHash = `${b.position.join(',')}|${b.rotation.join(',')}|${b.scale.join(',')}`;
+    const transformChanged = boothHash !== prevBoothHashRef.current;
+    prevBoothHashRef.current = boothHash;
+
+    if (switchedBooth || becameHydrated || (transformChanged && tab !== 'layout')) loadForm(b);
+  }, [selectedId, mergedList, loadForm, boothCmsHydrated, isSpecialView, tab]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -441,20 +449,10 @@ export function CmsDashboard() {
           ? url.trim()
           : normalizeR2PublicUrl(url);
       const ok = await patch(boothId, { [field]: normalized } as BoothLayoutPatch);
-      if (!ok) {
-        showToast('Could not save (browser storage full). Try /maps/… in public/ or remove large Media gallery items.');
-        return;
-      }
-
-      if (isSharedServerAssetUrl(normalized)) {
-        const server = await patchBoothCmsOnServer(boothId, { [field]: normalized } as BoothLayoutPatch);
-        if (server.ok) {
-          showToast(`${label} → R2 · saved for all visitors`);
-        } else if (!server.ok) {
-          showToast(`${label} saved on this device only — ${server.error}`);
-        }
+      if (ok) {
+        showToast(`${label} → saved for all visitors`);
       } else {
-        showToast(`${label} saved on this browser only (upload to R2 for all visitors)`);
+        showToast(`${label} save failed — server may be unreachable`);
       }
 
       const piBrochure = pageIndexFlags?.brochure ?? (boothId === selectedId && enablePageIndexBrochure);
@@ -499,7 +497,7 @@ export function CmsDashboard() {
           if (isPdfUrl(url)) void indexPdfFromUrl(url, selectedId, docType);
         }
       } else {
-        showToast('Could not save PageIndex setting — browser storage may be full.');
+        showToast('Could not save PageIndex setting — server may be unreachable.');
       }
     },
     [patch, selectedId, showToast, brochureUrl, priceListUrl],
@@ -510,13 +508,8 @@ export function CmsDashboard() {
       const { siteMapUrl, siteMapGallery } = siteMapToStorageFields(next);
       setSiteMapSlides(siteMapUrlsFromConfig({ siteMapUrl, siteMapGallery }));
       const ok = await patch(selectedId, { siteMapUrl, siteMapGallery });
-      if (!ok) {
-        showToast('Could not save (browser storage full). Use /maps/… paths or fewer large uploads.');
-        return;
-      }
-      const server = await patchBoothCmsOnServer(selectedId, { siteMapUrl, siteMapGallery });
-      if (server.ok) showToast('Site map → saved for all visitors');
-      else if (!server.ok) showToast(`Site map saved on this device only — ${server.error}`);
+      if (ok) showToast('Site map → saved for all visitors');
+      else showToast('Site map save failed — server may be unreachable');
     },
     [patch, selectedId, showToast],
   );
@@ -725,6 +718,20 @@ export function CmsDashboard() {
           <button className="w-full rounded-lg border border-red-500/20 px-3 py-2 text-[11px] text-red-400/70 hover:bg-red-500/10 transition-colors" onClick={() => void resetAll()}>
             Reset All Booths
           </button>
+          <button
+            className="w-full rounded-lg border border-violet-500/25 px-3 py-2 text-[11px] text-violet-200 hover:bg-violet-500/10 transition-colors mb-2"
+            onClick={() => {
+              const external = getDashboardPublicUrl();
+              if (external) {
+                window.open(external, '_blank', 'noopener,noreferrer');
+                return;
+              }
+              window.history.pushState(null, '', '/analytics');
+              setCmsPage('analytics');
+            }}
+          >
+            Visitor analytics
+          </button>
           <button className="w-full rounded-lg border border-white/[0.08] px-3 py-2 text-[11px] text-white/50 hover:bg-white/[0.04] transition-colors" onClick={() => setCmsPage('expo')}>
             ← Back to Expo
           </button>
@@ -790,7 +797,14 @@ export function CmsDashboard() {
         <div className="flex flex-1 overflow-hidden">
           {!isAllDisplays && (
           <div className="flex-1 min-w-0 relative">
-            {isHallDisplay ? (
+            {tab === 'hallMap' ? (
+              <CmsHallMapTab
+                booths={mergedList}
+                selectedId={selectedId}
+                onSelectBooth={setSelectedId}
+                onPatchBooth={patch}
+              />
+            ) : isHallDisplay ? (
               <CmsHallDisplayPreview stageScreenUrl={hallBallroomUrl} />
             ) : selected ? (
               <CmsPreview3D
@@ -938,6 +952,123 @@ export function CmsDashboard() {
               {tab === 'company' && <CompanyTab company={company} setCompany={setCompany} />}
               {tab === 'lighting' && <LightingTab lighting={lighting} setLighting={setLighting} />}
               {tab === 'scene' && <CmsScenePanel />}
+              {tab === 'hallMap' && selected && (
+                <div className="space-y-3">
+                  <div className="text-xs font-semibold text-white/60 uppercase tracking-wider">Selected Booth</div>
+                  <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
+                    <div className="text-sm font-bold text-white/90">{selected.name}</div>
+                    <div className="font-mono text-[11px] text-white/40">{selected.id}</div>
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <div className="text-center">
+                        <div className="text-[9px] text-white/30 uppercase">X</div>
+                        <div className="text-xs font-mono text-white/70">{selected.position[0].toFixed(1)}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] text-white/30 uppercase">Y</div>
+                        <div className="text-xs font-mono text-white/70">{selected.position[1].toFixed(1)}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[9px] text-white/30 uppercase">Z</div>
+                        <div className="text-xs font-mono text-white/70">{selected.position[2].toFixed(1)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rotation controls */}
+                  <div className="text-xs font-semibold text-white/60 uppercase tracking-wider pt-1">Rotation (Y-axis)</div>
+                  <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-white/40 w-8">Yaw</span>
+                      <input
+                        type="number"
+                        step={15}
+                        value={Math.round((selected.rotation[1] * 180) / Math.PI)}
+                        onChange={(e) => {
+                          const deg = parseFloat(e.target.value);
+                          if (!Number.isFinite(deg)) return;
+                          void patch(selectedId, {
+                            rotation: [selected.rotation[0], (deg * Math.PI) / 180, selected.rotation[2]],
+                          });
+                        }}
+                        className="flex-1 rounded bg-white/[0.06] border border-white/10 px-2 py-1 text-xs text-white/80 font-mono outline-none focus:border-[#d4af37]/50"
+                      />
+                      <span className="text-[10px] text-white/30">deg</span>
+                    </div>
+                    <div className="flex gap-1.5 pt-1">
+                      {[
+                        { label: '0°', deg: 0 },
+                        { label: '90°', deg: 90 },
+                        { label: '180°', deg: 180 },
+                        { label: '-90°', deg: -90 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            void patch(selectedId, {
+                              rotation: [selected.rotation[0], (preset.deg * Math.PI) / 180, selected.rotation[2]],
+                            });
+                          }}
+                          className={`flex-1 rounded px-2 py-1 text-[10px] font-medium border transition-colors ${
+                            Math.abs(Math.round((selected.rotation[1] * 180) / Math.PI) - preset.deg) < 2
+                              ? 'bg-[#d4af37]/20 border-[#d4af37]/40 text-[#d4af37]'
+                              : 'bg-white/[0.04] border-white/10 text-white/50 hover:bg-white/[0.08] hover:text-white/70'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Size controls */}
+                  <div className="text-xs font-semibold text-white/60 uppercase tracking-wider pt-1">Booth Size</div>
+                  <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
+                    {([
+                      { label: 'Width (X)', idx: 0 },
+                      { label: 'Height (Y)', idx: 1 },
+                      { label: 'Depth (Z)', idx: 2 },
+                    ] as const).map(({ label, idx }) => (
+                      <div key={label} className="flex items-center gap-2">
+                        <span className="text-[10px] text-white/40 w-16">{label}</span>
+                        <input
+                          type="number"
+                          step={0.1}
+                          value={parseFloat(selected.scale[idx].toFixed(2))}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!Number.isFinite(v) || v <= 0) return;
+                            const next: [number, number, number] = [...selected.scale];
+                            next[idx] = v;
+                            void patch(selectedId, { scale: next });
+                          }}
+                          className="flex-1 rounded bg-white/[0.06] border border-white/10 px-2 py-1 text-xs text-white/80 font-mono outline-none focus:border-[#d4af37]/50"
+                        />
+                      </div>
+                    ))}
+                    <div className="flex gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => void patch(selectedId, { scale: [1.22, 1.48, 1.22] })}
+                        className="flex-1 rounded px-2 py-1 text-[10px] font-medium border bg-white/[0.04] border-white/10 text-white/50 hover:bg-white/[0.08] hover:text-white/70 transition-colors"
+                      >
+                        Standard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void patch(selectedId, { scale: [1.3, 1.58, 1.3] })}
+                        className="flex-1 rounded px-2 py-1 text-[10px] font-medium border bg-white/[0.04] border-white/10 text-white/50 hover:bg-white/[0.08] hover:text-white/70 transition-colors"
+                      >
+                        Luxe (larger)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-white/30 leading-relaxed">
+                    Drag booths to reposition. Drag the gold handle to rotate. Adjust size above — the 2D map reflects actual scale.
+                  </div>
+                </div>
+              )}
               </>
               )}
             </div>

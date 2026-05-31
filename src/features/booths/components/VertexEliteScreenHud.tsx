@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { buildCtaOpenPayload, resolveBoothCta } from '@/api/boothCta';
+import { floorPlansFromConfig, unitLayoutsFromConfig } from '@/features/shared/data/boothLayouts';
+import { sanitizeCustomFaqQuestions } from '@/features/exhibitorDashboard/customFaqQuestions';
+import { warmPdfCache } from '@/utils/warmPdfCache';
 import { isEditableKeyboardTarget } from '@/utils/keyboard';
-import { useStore, type VertexEliteHudContext } from '@/store';
+import { useStore } from '@/store';
+import { LuxuryAnimatedMenu, type LuxuryMenuOption } from './LuxuryAnimatedMenu';
+
+function splitUnitLabel(text: string): [string, string?] {
+  const parts = text.trim().split(/\s+/);
+  if (parts.length <= 1) return [parts[0] ?? 'VIEW'];
+  const mid = Math.ceil(parts.length / 2);
+  return [parts.slice(0, mid).join(' '), parts.slice(mid).join(' ')];
+}
 
 function unlockPointer() {
   if (typeof document !== 'undefined' && document.pointerLockElement) {
@@ -61,12 +72,10 @@ function GlassCircleButton({
 function SidePanel({
   side,
   alpha,
-  glow,
   children,
 }: {
   side: 'left' | 'right';
   alpha: number;
-  glow: string;
   children: ReactNode;
 }) {
   const base =
@@ -75,20 +84,13 @@ function SidePanel({
       : 'right-3 md:right-8 pr-[max(0.75rem,env(safe-area-inset-right))]';
   return (
     <div
-      className={`pointer-events-none fixed top-1/2 z-[48] flex -translate-y-1/2 flex-col items-center gap-3 ${base}`}
+      className={`pointer-events-none fixed top-1/2 z-[48] flex -translate-y-1/2 flex-col items-center gap-3 overflow-visible ${base}`}
       style={{
         opacity: alpha,
         pointerEvents: alpha > 0.08 ? 'auto' : 'none',
       }}
     >
-      <div
-        className="flex flex-col items-center gap-3 rounded-3xl border px-3 py-5 shadow-2xl backdrop-blur-xl"
-        style={{
-          borderColor: `color-mix(in srgb, ${glow} 35%, transparent)`,
-          background: 'linear-gradient(165deg, rgba(10,10,18,0.78) 0%, rgba(4,4,10,0.88) 100%)',
-          boxShadow: `0 0 40px rgba(0,0,0,0.5), 0 0 28px ${glow}22, inset 0 1px 0 rgba(255,255,255,0.07)`,
-        }}
-      >
+      <div className="flex w-14 flex-col items-center gap-3 overflow-visible">
         {children}
       </div>
     </div>
@@ -106,6 +108,10 @@ export function VertexEliteScreenHud() {
       brochureUrl: ctx.brochureUrl,
       priceListUrl: ctx.priceListUrl,
       unitLayoutUrl: ctx.unitLayoutUrl,
+      floorPlanUrl: ctx.floorPlanUrl,
+      floorPlans: ctx.floorPlans,
+      faqUrl: ctx.faqUrl,
+      customFaqQuestions: ctx.customFaqQuestions,
       siteMapUrls: ctx.siteMapUrls,
       videoUrl: ctx.videoUrl,
       media: ctx.media,
@@ -113,6 +119,12 @@ export function VertexEliteScreenHud() {
       company: ctx.company,
     });
   }, [ctx]);
+
+  useEffect(() => {
+    if (d?.brochureUrl) warmPdfCache(d.brochureUrl);
+    if (d?.priceListUrl) warmPdfCache(d.priceListUrl);
+    if (d?.faqUrl) warmPdfCache(d.faqUrl);
+  }, [d?.brochureUrl, d?.priceListUrl, d?.faqUrl]);
 
   const openCta = useCallback((title: string, url: string, gallery?: string[]) => {
     const payload = buildCtaOpenPayload(title, url, gallery);
@@ -126,35 +138,101 @@ export function VertexEliteScreenHud() {
     });
   }, []);
 
-  const openQuote = useCallback(
-    (c: VertexEliteHudContext) => {
+  const openFaq = useCallback(() => {
+    const customQuestions = sanitizeCustomFaqQuestions(ctx?.customFaqQuestions ?? []);
+    if (customQuestions.length > 0) {
       unlockPointer();
-      const email = (c.company.email || '').trim();
-      const phone = (c.company.phone || '').trim();
-      const whatsapp = (c.company.whatsapp || '').trim();
-      const subject = encodeURIComponent(`${c.company.companyName || 'Booth'} — quote request`);
-      if (email) {
-        window.open(`mailto:${email}?subject=${subject}`, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      if (whatsapp) {
-        const digits = whatsapp.replace(/\D/g, '');
-        window.open(`https://wa.me/${digits}?text=${subject}`, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      if (phone) {
-        window.open(`tel:${phone.replace(/\s/g, '')}`, '_self');
-        return;
-      }
-      if (c.brochureUrl.trim()) openCta('QUOTE — PROJECT PDF', c.brochureUrl);
-    },
-    [openCta],
-  );
+      useStore.getState().setCtaResourcePopup({
+        title: 'FAQ',
+        url: d?.faqUrl ?? '',
+        variant: 'customFaq',
+        customFaqQuestions: customQuestions,
+        boothId: ctx.boothId,
+      });
+      return;
+    }
+    openCta('FAQ', d?.faqUrl ?? '');
+  }, [ctx, d, openCta]);
+
+  const unitLayoutOptions = useMemo((): LuxuryMenuOption[] => {
+    if (!ctx || !d?.unitOk) return [];
+    const layouts = unitLayoutsFromConfig({
+      unitLayouts: ctx.unitLayouts,
+      unitLayoutUrl: ctx.unitLayoutUrl || d.unitLayoutUrl,
+    });
+
+    const primaryUrl = layouts[0]?.imageUrl ?? d.unitLayoutUrl;
+    const gallery = layouts.map((l) => l.imageUrl).filter(Boolean);
+
+    if (layouts.length > 1) {
+      return layouts.slice(0, 4).map((layout) => ({
+        id: layout.id,
+        lines: splitUnitLabel(layout.name.trim() || 'Unit layout'),
+        onClick: () => {
+          const urls = layouts.map((l) => l.imageUrl).filter(Boolean);
+          openCta(layout.name.trim() || 'UNIT LAYOUT', layout.imageUrl, urls.length > 1 ? urls : undefined);
+        },
+      }));
+    }
+
+    return [
+      {
+        id: 'home',
+        lines: ['HOME'],
+        icon: '⌂',
+        onClick: () => openCta('UNIT LAYOUT', primaryUrl),
+      },
+      {
+        id: 'pages',
+        lines: ['PAGES'],
+        icon: '⎘',
+        onClick: () => openCta('UNIT LAYOUT', primaryUrl, gallery),
+      },
+    ];
+  }, [ctx, d, openCta]);
+
+  const floorPlanOptions = useMemo((): LuxuryMenuOption[] => {
+    if (!ctx || !d?.floorOk) return [];
+    const plans = floorPlansFromConfig({
+      floorPlans: ctx.floorPlans,
+      floorPlanUrl: ctx.floorPlanUrl,
+    });
+
+    const primaryUrl = plans[0]?.imageUrl ?? '';
+    const gallery = plans.map((p) => p.imageUrl).filter(Boolean);
+
+    if (plans.length > 1) {
+      return plans.slice(0, 4).map((plan) => ({
+        id: plan.id,
+        lines: splitUnitLabel(plan.name.trim() || 'Floor plan'),
+        onClick: () => {
+          const urls = plans.map((p) => p.imageUrl).filter(Boolean);
+          openCta(plan.name.trim() || 'FLOOR PLAN', plan.imageUrl, urls.length > 1 ? urls : undefined);
+        },
+      }));
+    }
+
+    return [
+      {
+        id: 'home',
+        lines: ['HOME'],
+        icon: '⌂',
+        onClick: () => openCta('FLOOR PLAN', primaryUrl),
+      },
+      {
+        id: 'pages',
+        lines: ['PAGES'],
+        icon: '⎘',
+        onClick: () => openCta('FLOOR PLAN', primaryUrl, gallery),
+      },
+    ];
+  }, [ctx, d, openCta]);
 
   const openChat = useCallback(() => {
+    if (!ctx) return;
     unlockPointer();
-    useStore.getState().setAiChatOpen(true);
-  }, []);
+    useStore.getState().setAiChatOpen(true, ctx.boothId);
+  }, [ctx]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -176,17 +254,28 @@ export function VertexEliteScreenHud() {
 
   return (
     <>
-      <SidePanel side="left" alpha={alpha} glow={glow}>
+      <SidePanel side="left" alpha={alpha}>
         <GlassCircleButton label="Brochure" enabled={d.brochureOk} glow={glow} onClick={() => openCta('BROCHURE', d.brochureUrl)} />
         <GlassCircleButton label={'Walk\nthrough'} enabled={d.walkOk} glow={glow} onClick={() => openCta('WALKTHROUGH', d.walkthroughUrl)} />
         <GlassCircleButton label="Images" enabled={d.imagesOk} glow={glow} onClick={() => openCta('IMAGES', d.imageGalleryUrls[0], d.imageGalleryUrls)} />
-        <GlassCircleButton label={'Unit\nlayout'} enabled={d.unitOk} glow={glow} onClick={() => openCta('UNIT LAYOUT', d.unitLayoutUrl)} />
+        <LuxuryAnimatedMenu
+          triggerLines={['UNIT', 'LAYOUT']}
+          enabled={d.unitOk}
+          options={unitLayoutOptions}
+          expandDirection="right"
+        />
+        <LuxuryAnimatedMenu
+          triggerLines={['FLOOR', 'PLAN']}
+          enabled={d.floorOk}
+          options={floorPlanOptions}
+          expandDirection="right"
+        />
       </SidePanel>
 
-      <SidePanel side="right" alpha={alpha} glow={glow}>
+      <SidePanel side="right" alpha={alpha}>
         <GlassCircleButton label={'Site\nlayout'} enabled={d.siteOk} glow={glow} onClick={() => openCta('SITE LAYOUT', d.siteSlides[0], d.siteSlides)} />
         <GlassCircleButton label={'Price\nlist'} enabled={d.priceOk} glow={glow} onClick={() => openCta('PRICE LIST', d.priceListUrl)} />
-        <GlassCircleButton label="Quote" enabled={d.quoteOk} glow={glow} onClick={() => openQuote(ctx)} />
+        <GlassCircleButton label="FAQ" enabled={d.faqOk} glow={glow} onClick={openFaq} />
         <GlassCircleButton label="Chat" enabled glow={glow} onClick={openChat} />
       </SidePanel>
 

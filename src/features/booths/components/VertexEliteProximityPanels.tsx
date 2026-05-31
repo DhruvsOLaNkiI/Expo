@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useStore, type VertexEliteHudContext } from '@/store';
-import type { CompanyProfile, MediaItem, PlacedImage } from '@/features/shared/data/boothLayouts';
+import type { CompanyProfile, CustomFaqQuestion, MediaItem, PlacedImage, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
 
 const EMPTY_COMPANY: CompanyProfile = {
   companyName: '',
@@ -29,6 +29,11 @@ export function VertexEliteProximityPanels({
   brochureUrl = '',
   priceListUrl = '',
   unitLayoutUrl = '',
+  unitLayouts = [],
+  floorPlanUrl = '',
+  floorPlans = [],
+  faqUrl = '',
+  customFaqQuestions = [],
   siteMapUrls = [],
   videoUrl = '',
   media = [],
@@ -42,6 +47,11 @@ export function VertexEliteProximityPanels({
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: UnitLayoutItem[];
+  faqUrl?: string;
+  customFaqQuestions?: CustomFaqQuestion[];
   siteMapUrls?: string[];
   videoUrl?: string;
   media?: MediaItem[];
@@ -68,6 +78,11 @@ export function VertexEliteProximityPanels({
       brochureUrl: brochureUrl ?? '',
       priceListUrl: priceListUrl ?? '',
       unitLayoutUrl: unitLayoutUrl ?? '',
+      unitLayouts: unitLayouts ?? [],
+      floorPlanUrl: floorPlanUrl ?? '',
+      floorPlans: floorPlans ?? [],
+      faqUrl: faqUrl ?? '',
+      customFaqQuestions: customFaqQuestions ?? [],
       siteMapUrls: siteMapUrls ?? [],
       videoUrl: videoUrl ?? '',
       media: media ?? [],
@@ -81,6 +96,11 @@ export function VertexEliteProximityPanels({
     brochureUrl,
     priceListUrl,
     unitLayoutUrl,
+    unitLayouts,
+    floorPlanUrl,
+    floorPlans,
+    faqUrl,
+    customFaqQuestions,
     siteMapUrls,
     videoUrl,
     media,

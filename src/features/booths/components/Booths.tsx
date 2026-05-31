@@ -421,6 +421,11 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               brochureUrl={b.brochureUrl}
               priceListUrl={b.priceListUrl}
               unitLayoutUrl={b.unitLayoutUrl}
+              unitLayouts={b.unitLayouts}
+              floorPlanUrl={b.floorPlanUrl}
+              floorPlans={b.floorPlans}
+              faqUrl={b.faqUrl}
+              customFaqQuestions={b.customFaqQuestions}
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
               showVideos={showVideos}
@@ -450,6 +455,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               brochureUrl={b.brochureUrl}
               priceListUrl={b.priceListUrl}
               unitLayoutUrl={b.unitLayoutUrl}
+              unitLayouts={b.unitLayouts}
+              floorPlanUrl={b.floorPlanUrl}
+              floorPlans={b.floorPlans}
+              faqUrl={b.faqUrl}
               signageImageUrl={b.signageImageUrl}
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               media={b.media}
@@ -479,6 +488,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               brochureUrl={b.brochureUrl}
               priceListUrl={b.priceListUrl}
               unitLayoutUrl={b.unitLayoutUrl}
+              unitLayouts={b.unitLayouts}
+              floorPlanUrl={b.floorPlanUrl}
+              floorPlans={b.floorPlans}
+              faqUrl={b.faqUrl}
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               media={b.media}
               company={b.company}
@@ -507,6 +520,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               brochureUrl={b.brochureUrl}
               priceListUrl={b.priceListUrl}
               unitLayoutUrl={b.unitLayoutUrl}
+              unitLayouts={b.unitLayouts}
+              floorPlanUrl={b.floorPlanUrl}
+              floorPlans={b.floorPlans}
+              faqUrl={b.faqUrl}
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               media={b.media}
               company={b.company}
@@ -535,6 +552,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               brochureUrl={b.brochureUrl}
               priceListUrl={b.priceListUrl}
               unitLayoutUrl={b.unitLayoutUrl}
+              unitLayouts={b.unitLayouts}
+              floorPlanUrl={b.floorPlanUrl}
+              floorPlans={b.floorPlans}
+              faqUrl={b.faqUrl}
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               media={b.media}
               company={b.company}
@@ -563,6 +584,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               brochureUrl={b.brochureUrl}
               priceListUrl={b.priceListUrl}
               unitLayoutUrl={b.unitLayoutUrl}
+              unitLayouts={b.unitLayouts}
+              floorPlanUrl={b.floorPlanUrl}
+              floorPlans={b.floorPlans}
+              faqUrl={b.faqUrl}
               siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
               media={b.media}
               company={b.company}
@@ -759,6 +784,10 @@ export function StandardLuxuryBooth({
   brochureUrl = '',
   priceListUrl = '',
   unitLayoutUrl = '',
+  unitLayouts = [],
+  floorPlanUrl = '',
+  floorPlans = [],
+  faqUrl = '',
   siteMapUrls = [],
   media = [],
   company,
@@ -782,6 +811,10 @@ export function StandardLuxuryBooth({
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  faqUrl?: string;
   siteMapUrls?: string[];
   media?: MediaItem[];
   company?: CompanyProfile;
@@ -946,6 +979,10 @@ export function StandardLuxuryBooth({
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
         unitLayoutUrl={unitLayoutUrl}
+        unitLayouts={unitLayouts}
+        floorPlanUrl={floorPlanUrl}
+        floorPlans={floorPlans}
+        faqUrl={faqUrl}
         siteMapUrls={siteMapUrls}
         videoUrl={effectiveVideoUrl}
         media={media}
@@ -1005,7 +1042,7 @@ export function EcoSignageImage({ url }: { url: string }) {
 /* ─── Eco luxury booth (builder-8) — white + green palette ─── */
 export function EcoEdenBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  videoUrl, stageScreenUrl, headerLogoUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, siteMapUrls,
+  videoUrl, stageScreenUrl, headerLogoUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', siteMapUrls,
   signageImageUrl,
   media = [],
   company,
@@ -1029,6 +1066,10 @@ export function EcoEdenBooth({
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  faqUrl?: string;
   siteMapUrls?: string[];
   signageImageUrl?: string;
   media?: MediaItem[];
@@ -1202,12 +1243,6 @@ export function EcoEdenBooth({
         />
       </BoothDisplayEditable>
 
-      {/* Indoor Plants near reception desk corners */}
-      <Suspense fallback={null}>
-        <Plant name="desk-plant-left" position={[-2.5, 0.1, 0.5]} scale={0.4} />
-        <Plant name="desk-plant-right" position={[2.5, 0.1, 0.5]} scale={0.4} />
-      </Suspense>
-
       {/* Elegant Standing Digital Signage Board (Right Side) */}
       <BoothDisplayEditable
         boothId={id}
@@ -1267,6 +1302,10 @@ export function EcoEdenBooth({
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
         unitLayoutUrl={unitLayoutUrl}
+        unitLayouts={unitLayouts}
+        floorPlanUrl={floorPlanUrl}
+        floorPlans={floorPlans}
+        faqUrl={faqUrl}
         siteMapUrls={siteMapUrls}
         videoUrl={effectiveVideoUrl}
         media={media}
@@ -1288,7 +1327,7 @@ export function EcoEdenBooth({
 /* ─── Futuristic Vertex Elite Studio Booth ─── */
 export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  videoUrl, stageScreenUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, siteMapUrls,
+  videoUrl, stageScreenUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', customFaqQuestions = [], siteMapUrls,
   media = [],
   company,
   hostessQuickReplies,
@@ -1313,6 +1352,11 @@ export function VertexEliteBooth({
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  faqUrl?: string;
+  customFaqQuestions?: import('@/features/shared/data/boothLayouts').CustomFaqQuestion[];
   siteMapUrls: string[];
   media?: MediaItem[];
   company?: CompanyProfile;
@@ -1543,6 +1587,11 @@ export function VertexEliteBooth({
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
         unitLayoutUrl={unitLayoutUrl}
+        unitLayouts={unitLayouts}
+        floorPlanUrl={floorPlanUrl}
+        floorPlans={floorPlans}
+        faqUrl={faqUrl}
+        customFaqQuestions={customFaqQuestions}
         siteMapUrls={siteMapUrls}
         videoUrl={videoUrl}
         media={media}
@@ -1816,40 +1865,40 @@ function FeaturedProperty({ position }: { position: [number, number, number] }) 
           <group position={[0, 0, 0]} rotation={[0, Math.PI * 0.8, 0]}>
             <mesh position={[0, deskH, panelZ]} castShadow>
               <boxGeometry args={[r * 1.15, deskH * 2.2, 0.04]} />
-              <meshStandardMaterial color="#ffffff" roughness={0.1} />
+              <meshStandardMaterial color="#0a0a0f" roughness={0.25} metalness={0.6} />
             </mesh>
             <Text
-              position={[0, deskH * 1.3, panelZ + 0.05]}
-              fontSize={0.095}
+              position={[0, deskH * 1.35, panelZ + 0.05]}
+              fontSize={0.18}
               color="#ffd700"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
               anchorY="middle"
-              letterSpacing={0.06}
+              letterSpacing={0.08}
             >
               HELP DESK
-              <meshStandardMaterial attach="material" color="#ffd700" emissive="#ffd700" emissiveIntensity={0.45} />
+              <meshStandardMaterial attach="material" color="#ffd700" emissive="#ffd700" emissiveIntensity={0.55} />
             </Text>
             <Text
-              position={[0, deskH * 0.95, panelZ + 0.05]}
-              fontSize={0.028}
+              position={[0, deskH * 0.92, panelZ + 0.05]}
+              fontSize={0.058}
               maxWidth={r * 1.05}
-              color="#1a1a1a"
+              color="#e0ddd5"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
               anchorY="middle"
-              letterSpacing={0.02}
+              letterSpacing={0.03}
             >
               Digital Property Expo (NOIDA)
             </Text>
             <Text
-              position={[0, deskH * 0.65, panelZ + 0.05]}
-              fontSize={0.02}
-              color="#666"
+              position={[0, deskH * 0.62, panelZ + 0.05]}
+              fontSize={0.04}
+              color="#999"
               font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
               anchorX="center"
               anchorY="middle"
-              letterSpacing={0.12}
+              letterSpacing={0.14}
             >
               Powered By
             </Text>

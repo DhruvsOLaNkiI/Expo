@@ -1,7 +1,7 @@
 import { Suspense, useMemo } from 'react';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
-import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
+import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
@@ -45,6 +45,10 @@ export function CrownEstatesBooth({
   brochureUrl = '',
   priceListUrl = '',
   unitLayoutUrl = '',
+  unitLayouts = [],
+  floorPlanUrl = '',
+  floorPlans = [],
+  faqUrl = '',
   siteMapUrls = [],
   media = [],
   company,
@@ -68,6 +72,10 @@ export function CrownEstatesBooth({
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: UnitLayoutItem[];
+  faqUrl?: string;
   siteMapUrls?: string[];
   media?: MediaItem[];
   company?: CompanyProfile;
@@ -275,6 +283,10 @@ export function CrownEstatesBooth({
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
         unitLayoutUrl={unitLayoutUrl}
+        unitLayouts={unitLayouts}
+        floorPlanUrl={floorPlanUrl}
+        floorPlans={floorPlans}
+        faqUrl={faqUrl}
         siteMapUrls={siteMapUrls}
         videoUrl={effectiveVideoUrl}
         media={media}

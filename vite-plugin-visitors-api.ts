@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
 import { computeCatalogStats } from './src/data/expoStats';
-import { getVisitorRegistrationStats, markVisitorLobbyCheckIn, saveVisitorRegistration } from './src/server/mongodb';
+import { getVisitorRegistrationStats, markVisitorLobbyCheckIn, saveVisitorRegistration, saveQuestionnaireResult } from './src/server/mongodb';
 import type { ExpoLiveStats } from './src/data/expoStats';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -155,6 +155,56 @@ function attachVisitorsApi(server: ApiConnectServer, rootDir: string, mode: stri
               await markVisitorLobbyCheckIn(visitorId);
               console.log(`✓ Visitor check-in recorded: ${visitorId}`);
               sendJson(res, 200, { ok: true, visitorId });
+            } catch (e: unknown) {
+              sendJson(res, 500, {
+                ok: false,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+          })();
+          return;
+        }
+
+        if (url === '/api/questionnaire/submit' && req.method === 'POST') {
+          void (async () => {
+            const raw = await readBody(req);
+            let body: {
+              visitorId?: string;
+              visitorName?: string;
+              visitorEmail?: string;
+              answers?: Record<number, string>;
+              totalScore?: number;
+              category?: 'hot' | 'warm' | 'cold';
+              categoryLabel?: string;
+              submittedAt?: string;
+            };
+            try {
+              body = JSON.parse(raw) as typeof body;
+            } catch {
+              sendJson(res, 400, { ok: false, error: 'Invalid JSON body' });
+              return;
+            }
+            if (!body.answers || typeof body.totalScore !== 'number' || !body.category) {
+              sendJson(res, 400, { ok: false, error: 'answers, totalScore and category are required' });
+              return;
+            }
+            if (!process.env.MONGODB_URI) {
+              sendJson(res, 200, { ok: true, stored: false, reason: 'No MongoDB — result not persisted' });
+              return;
+            }
+            try {
+              await saveQuestionnaireResult({
+                visitorId: body.visitorId,
+                visitorName: body.visitorName,
+                visitorEmail: body.visitorEmail,
+                answers: body.answers,
+                totalScore: body.totalScore,
+                category: body.category,
+                categoryLabel: body.categoryLabel ?? body.category,
+                submittedAt: body.submittedAt ?? new Date().toISOString(),
+              });
+              console.log(`✓ Questionnaire saved: ${body.category} (score ${body.totalScore}) — ${body.visitorName ?? 'anonymous'}`);
+              sendJson(res, 200, { ok: true, stored: true });
             } catch (e: unknown) {
               sendJson(res, 500, {
                 ok: false,

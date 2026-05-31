@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { isPdfUrl } from '@/api/pageindexAutoIndex';
 import { normalizeCtaUrl } from '@/api/boothCta';
+import { CustomFaqVisitorPopup } from '@/features/exhibitorDashboard/CustomFaqVisitorPopup';
 import type { CtaResourcePopup } from '@/store';
 import { isUnopenableAssetUrl, openUrlInNewTab } from '@/utils/openUrl';
 
@@ -76,6 +77,24 @@ function pdfEmbedSrc(url: string): string {
   if (!u) return u;
   if (u.includes('#')) return u;
   return `${u}#toolbar=1&navpanes=0&view=FitH`;
+}
+
+/** Instant viewer URL — streams from R2/CDN; never wait for a full download in JS. */
+function pdfViewerSrc(url: string): string {
+  const u = normalizeCtaUrl(url).trim();
+  if (!u || u.startsWith('data:')) return '';
+  return pdfEmbedSrc(u);
+}
+
+/** data:application/pdf → blob: so Safari can render inside the viewer. */
+async function pdfDataUrlToBlobUrl(dataUrl: string): Promise<string> {
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0) throw new Error('invalid data url');
+  const payload = dataUrl.slice(comma + 1);
+  const binary = atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
 }
 
 /** Sites like w3.org block iframe embeds — open those in a new tab instead. */
@@ -177,27 +196,51 @@ function EmbeddedPdfPanel({
 }) {
   const resolvedUrl = useMemo(() => normalizeCtaUrl(url), [url]);
   const embedAllowed = useMemo(
-    () => canEmbedPdfInIframe(url) && !isUnopenableAssetUrl(resolvedUrl) && !resolvedUrl.startsWith('data:'),
+    () => canEmbedPdfInIframe(url) && !isUnopenableAssetUrl(resolvedUrl),
     [url, resolvedUrl],
   );
   const [loadFailed, setLoadFailed] = useState(!embedAllowed);
-  const embedSrc = useMemo(() => pdfEmbedSrc(url), [url]);
-  const loadedRef = useRef(false);
+  const [dataBlobSrc, setDataBlobSrc] = useState('');
+  const blobRef = useRef<string | null>(null);
+  const isDataPdf = resolvedUrl.startsWith('data:application/pdf');
+  const streamSrc = useMemo(
+    () => (embedAllowed && !isDataPdf ? pdfViewerSrc(resolvedUrl) : ''),
+    [embedAllowed, isDataPdf, resolvedUrl],
+  );
+  const viewerSrc = isDataPdf ? dataBlobSrc : streamSrc;
 
   useLayoutEffect(() => {
-    loadedRef.current = false;
     const resolved = normalizeCtaUrl(url);
-    setLoadFailed(!canEmbedPdfInIframe(url) || isUnopenableAssetUrl(resolved) || resolved.startsWith('data:'));
+    setLoadFailed(!canEmbedPdfInIframe(url) || isUnopenableAssetUrl(resolved));
+    setDataBlobSrc('');
   }, [url]);
 
   useEffect(() => {
-    if (!embedAllowed) return;
-    loadedRef.current = false;
-    const t = window.setTimeout(() => {
-      if (!loadedRef.current) setLoadFailed(true);
-    }, 8000);
-    return () => window.clearTimeout(t);
-  }, [embedAllowed, embedSrc]);
+    if (!embedAllowed || !isDataPdf) return;
+
+    let cancelled = false;
+    void pdfDataUrlToBlobUrl(resolvedUrl)
+      .then((blobUrl) => {
+        if (cancelled) {
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+        blobRef.current = blobUrl;
+        setDataBlobSrc(blobUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current);
+        blobRef.current = null;
+      }
+    };
+  }, [embedAllowed, isDataPdf, resolvedUrl]);
 
   const overlay = overlayClassName?.trim() || DEFAULT_OVERLAY;
   const openTab = () => {
@@ -242,19 +285,15 @@ function EmbeddedPdfPanel({
         </div>
 
         <div className="relative min-h-0 flex-1 bg-[#1a1a22]">
-          {!loadFailed ? (
+          {!loadFailed && viewerSrc ? (
             <iframe
-              key={embedSrc}
+              key={viewerSrc}
               title={title}
-              src={embedSrc}
+              src={viewerSrc}
               className="absolute inset-0 h-full w-full border-0 bg-white"
-              onLoad={() => {
-                loadedRef.current = true;
-                setLoadFailed(false);
-              }}
               onError={() => setLoadFailed(true)}
             />
-          ) : (
+          ) : loadFailed ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
               <p className="text-sm text-amber-200/90">
                 {isUnopenableAssetUrl(resolvedUrl)
@@ -271,7 +310,11 @@ function EmbeddedPdfPanel({
                 Open PDF
               </button>
             </div>
-          )}
+          ) : isDataPdf ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-white/60">Preparing brochure…</p>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-2.5 md:px-5">
@@ -300,6 +343,20 @@ export function CtaResourcePopupView({
 }) {
   const variant = popup.variant ?? 'document';
   const docUrl = normalizeCtaUrl(popup.url);
+
+  if (variant === 'customFaq') {
+    return (
+      <CustomFaqVisitorPopup
+        title={popup.title}
+        questions={popup.customFaqQuestions ?? []}
+        boothId={popup.boothId}
+        faqPdfUrl={docUrl || undefined}
+        onClose={onClose}
+        overlayClassName={overlayClassName}
+      />
+    );
+  }
+
   const showEmbeddedVideo = variant === 'video' && Boolean(docUrl);
   const showEmbeddedPdf = variant === 'document' && docUrl && isPdfUrl(docUrl);
 

@@ -20,7 +20,7 @@ export function isScreenImageUrl(url: string): boolean {
   const path = u.split('?')[0].toLowerCase();
   if (/\.(png|jpe?g|webp|gif|svg|bmp|avif)(\?|#|$)/i.test(path)) return true;
   // R2 / CMS uploads often omit extensions — folder names distinguish image vs video
-  if (/(^|[/-])(stage-image|signage|ballroom-stage-image|hall-canopy-image|logo|brochure|price-list|unit-layout|screen-image)([/-]|$)/i.test(path)) {
+  if (/(^|[/-])(stage-image|signage|ballroom-stage-image|hall-canopy-image|logo|brochure|price-list|unit-layout|floor-plan|screen-image)([/-]|$)/i.test(path)) {
     return true;
   }
   return false;

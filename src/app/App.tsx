@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { KeyboardControls } from '@react-three/drei';
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '@/store';
 import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
 import { getRenderQualityPreset } from '@/features/shared/data/renderQuality';
@@ -31,9 +31,27 @@ import {
   SharedVideoTextureUpdater,
   VideoEnabledHint,
 } from '@/features/media';
+import { BuyerQuestionnairePopup, isQuestionnaireDone, markQuestionnaireDone } from '@/features/questionnaire';
+import { getDashboardPublicUrl, useVisitorTracking } from '@/dashboard';
+
+function openAnalyticsDashboard(setCmsPage: (page: 'analytics') => void) {
+  const external = getDashboardPublicUrl();
+  if (external) {
+    window.open(external, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  window.history.pushState(null, '', '/analytics');
+  setCmsPage('analytics');
+}
 
 const CmsDashboard = lazy(() =>
   import('@/features/cms').then((m) => ({ default: m.CmsDashboard })),
+);
+const AnalyticsDashboard = lazy(() =>
+  import('@/dashboard').then((m) => ({ default: m.AnalyticsDashboard })),
+);
+const ExhibitorRoutePage = lazy(() =>
+  import('@/features/exhibitorDashboard').then((m) => ({ default: m.ExhibitorRoutePage })),
 );
 const PageIndexPortal = lazy(() =>
   import('@/features/pageindex').then((m) => ({ default: m.PageIndexPortal })),
@@ -167,8 +185,20 @@ export default function App() {
   const skipToMainExpo = useStore((s) => s.skipToMainExpo);
   const visitorProfile = useStore((s) => s.visitorProfile);
   const [isTouch, setIsTouch] = useState(false);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [isExhibitorRoute, setIsExhibitorRoute] = useState(() => {
+    const p = window.location.pathname.replace(/\/$/, '') || '/';
+    return p.toLowerCase() === '/exbidash';
+  });
+
+  useVisitorTracking();
 
   const needsOnboarding = !visitorProfile;
+
+  const handleQuestionnaireClose = useCallback(() => {
+    markQuestionnaireDone();
+    setShowQuestionnaire(false);
+  }, []);
 
   const sceneBg = inRegistration ? '#FAF7F0' : sceneConfig.bgColor || '#f5f2ec';
   const fogEnabled = sceneConfig.fogEnabled === true;
@@ -190,31 +220,74 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const syncRoute = () => {
+      const p = window.location.pathname.replace(/\/$/, '') || '/';
+      setIsExhibitorRoute(p.toLowerCase() === '/exbidash');
+    };
+    syncRoute();
+    window.addEventListener('popstate', syncRoute);
+    return () => window.removeEventListener('popstate', syncRoute);
+  }, []);
+
+  useEffect(() => {
     const normalized = window.location.pathname.replace(/\/$/, '') || '/';
+    if (normalized.toLowerCase() === '/exbidash') return;
     if (normalized === '/cms') {
       setCmsPage('cms');
       window.history.replaceState(null, '', '/cms');
     } else if (normalized === '/pageindex') {
       setCmsPage('pageindex');
       window.history.replaceState(null, '', '/pageindex');
+    } else if (normalized === '/analytics') {
+      setCmsPage('analytics');
+      window.history.replaceState(null, '', '/analytics');
     }
   }, [setCmsPage]);
 
   useEffect(() => {
+    const path = (window.location.pathname.replace(/\/$/, '') || '/').toLowerCase();
+    const onExhibitorDash = path === '/exbidash' || isExhibitorRoute;
+
+    if (onExhibitorDash) {
+      if (document.pointerLockElement) document.exitPointerLock();
+      if (path !== '/exbidash') window.history.replaceState(null, '', '/exbidash');
+      return;
+    }
     if (cmsPage === 'cms') {
       if (document.pointerLockElement) document.exitPointerLock();
       window.history.replaceState(null, '', '/cms');
     } else if (cmsPage === 'pageindex') {
       if (document.pointerLockElement) document.exitPointerLock();
       window.history.replaceState(null, '', '/pageindex');
-    } else {
+    } else if (cmsPage === 'analytics') {
+      if (document.pointerLockElement) document.exitPointerLock();
+      window.history.replaceState(null, '', '/analytics');
+    } else if (path === '/' || path === '') {
       window.history.replaceState(null, '', '/');
     }
-  }, [cmsPage]);
+  }, [cmsPage, isExhibitorRoute]);
 
   useEffect(() => {
     if (ctaResourcePopup && document.pointerLockElement) document.exitPointerLock();
   }, [ctaResourcePopup]);
+
+  // Show questionnaire once when visitor enters the main expo floor
+  useEffect(() => {
+    if (expoPhase !== 'expo' || needsOnboarding || isQuestionnaireDone()) return;
+    const t = window.setTimeout(() => setShowQuestionnaire(true), 1200);
+    return () => window.clearTimeout(t);
+  }, [expoPhase, needsOnboarding]);
+
+  const pathNow = (window.location.pathname.replace(/\/$/, '') || '/').toLowerCase();
+  const onExhibitorDash = pathNow === '/exbidash' || isExhibitorRoute;
+
+  if (onExhibitorDash) {
+    return (
+      <Suspense fallback={<AdminRouteFallback label="Exhibitor Dashboard" />}>
+        <ExhibitorRoutePage />
+      </Suspense>
+    );
+  }
 
   if (cmsPage === 'cms') {
     return (
@@ -227,6 +300,13 @@ export default function App() {
     return (
       <Suspense fallback={<AdminRouteFallback label="PageIndex" />}>
         <PageIndexPortal />
+      </Suspense>
+    );
+  }
+  if (cmsPage === 'analytics') {
+    return (
+      <Suspense fallback={<AdminRouteFallback label="Analytics" />}>
+        <AnalyticsDashboard />
       </Suspense>
     );
   }
@@ -304,7 +384,18 @@ export default function App() {
       <HallLayoutEditHud />
 
       {inRegistration && !showInstructions && registrationUi === 'none' && !needsOnboarding && (
-        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] flex flex-col sm:flex-row items-center gap-2 pointer-events-auto">
+        <>
+          <button
+            type="button"
+            className="fixed bottom-3 left-3 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
+            onClick={() => {
+              setHallLayoutSelection('reg-reception-root');
+              setHallLayoutEditMode(true);
+            }}
+          >
+            Edit layout
+          </button>
+          <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] flex flex-col sm:flex-row items-center gap-2 pointer-events-auto">
           <button
             type="button"
             className="rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md hover:bg-black transition-all"
@@ -319,7 +410,8 @@ export default function App() {
           >
             Skip to expo
           </button>
-        </div>
+          </div>
+        </>
       )}
 
       {!needsOnboarding && !inRegistration && (
@@ -340,6 +432,13 @@ export default function App() {
             onClick={() => setCmsPage('pageindex')}
           >
             PageIndex
+          </button>
+          <button
+            type="button"
+            className="fixed bottom-14 right-3 z-[55] rounded-lg border border-violet-500/30 bg-violet-950/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-violet-200 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-violet-900/90 transition-all"
+            onClick={() => openAnalyticsDashboard(setCmsPage)}
+          >
+            Analytics
           </button>
           <button
             type="button"
@@ -433,6 +532,10 @@ export default function App() {
 
       {!isTouch && (
         <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-black/50 rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30" />
+      )}
+
+      {showQuestionnaire && (
+        <BuyerQuestionnairePopup onClose={handleQuestionnaireClose} />
       )}
     </div>
   );

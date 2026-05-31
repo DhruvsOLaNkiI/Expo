@@ -3,21 +3,20 @@ import type {
   BoothLayoutPatch,
   SceneConfig,
   CompanyProfile,
+  CustomFaqQuestion,
   MediaItem,
   PlacedImage,
   SceneOverridesInput,
+  UnitLayoutItem,
 } from '@/features/shared/data/boothLayouts';
 import { mergeSceneConfig, mergeSceneOverridesInput } from '@/features/shared/data/boothLayouts';
 import { getBootstrapSceneForDevice } from '@/utils/devicePerformance';
-import { persistBoothOverridesWithFallback, readPersistedBoothOverrides } from '@/store/persist/boothCms';
-import {
-  applyR2PublicBaseFromCmsFile,
-  loadR2DocumentDefaults,
-  resolveBoothOverridesForR2,
-} from '@/store/persist/r2Documents';
-import { mergeSharedBoothDocs } from '@/api/boothCmsServer';
-import { getR2PublicBase } from '@/config/r2Public';
+import { setR2PublicBase, getR2PublicBase } from '@/config/r2Public';
 import { commitHallLayoutTransform } from '@/store/persist/hallLayout';
+import {
+  persistBoothOverridesWithFallback,
+  readPersistedBoothOverrides,
+} from '@/store/persist/boothCms';
 import { REG_MAIN_EXPO_SPAWN, REG_SPAWN } from '@/features/shared/data/registrationHall';
 import {
   CAMERA_MODE_ORDER,
@@ -86,10 +85,14 @@ function persistSceneConfig(config: SceneOverridesInput) {
 export type CtaResourcePopup = {
   title: string;
   url: string;
-  /** `image` = gallery; `document` = PDF / link; `video` = embedded walkthrough. */
-  variant?: 'document' | 'image' | 'video';
+  /** `image` = gallery; `document` = PDF / link; `video` = embedded walkthrough; `customFaq` = exhibitor Q&A. */
+  variant?: 'document' | 'image' | 'video' | 'customFaq';
   /** Full site map carousel (includes first URL). When length > 1, lightbox shows prev/next. */
   imageGallery?: string[];
+  /** Booth-specific multiple-choice FAQ (exhibitor dashboard). */
+  customFaqQuestions?: CustomFaqQuestion[];
+  /** Booth that owns this FAQ quiz (for analytics). */
+  boothId?: string;
 };
 
 /** Payload for the screen-fixed booth HUD (not world-space HTML). */
@@ -99,6 +102,11 @@ export type VertexEliteHudContext = {
   brochureUrl: string;
   priceListUrl: string;
   unitLayoutUrl: string;
+  unitLayouts?: UnitLayoutItem[];
+  floorPlanUrl: string;
+  floorPlans?: UnitLayoutItem[];
+  faqUrl: string;
+  customFaqQuestions?: CustomFaqQuestion[];
   siteMapUrls: string[];
   videoUrl: string;
   media: MediaItem[];
@@ -115,10 +123,12 @@ interface AppState {
   ctaResourcePopup: CtaResourcePopup | null;
   setCtaResourcePopup: (popup: CtaResourcePopup | null) => void;
   aiChatOpen: boolean;
+  /** Booth pinned when visitor opens chat from booth HUD (Chat button). */
+  aiChatBoothId: string | null;
   /** When set, Ask AI uses expo-wide live stats (Help Desk / registration hostess). */
   aiChatContext: 'expo-concierge' | null;
-  setAiChatOpen: (open: boolean) => void;
-  openAiChat: (context?: 'expo-concierge') => void;
+  setAiChatOpen: (open: boolean, boothId?: string | null) => void;
+  openAiChat: (context?: 'expo-concierge', boothId?: string | null) => void;
   /** Smart Help Desk concierge panel (center lobby). */
   helpDeskOpen: boolean;
   setHelpDeskOpen: (open: boolean) => void;
@@ -142,8 +152,8 @@ interface AppState {
 
   boothCmsOpen: boolean;
   setBoothCmsOpen: (open: boolean) => void;
-  cmsPage: 'expo' | 'cms' | 'pageindex';
-  setCmsPage: (page: 'expo' | 'cms' | 'pageindex') => void;
+  cmsPage: 'expo' | 'cms' | 'pageindex' | 'analytics';
+  setCmsPage: (page: 'expo' | 'cms' | 'pageindex' | 'analytics') => void;
 
   boothOverrides: Record<string, BoothLayoutPatch>;
   sceneOverrides: SceneOverridesInput;
@@ -157,6 +167,8 @@ interface AppState {
   patchSceneOverride: (patch: SceneOverridesInput) => void;
   resetSceneOverrides: () => void;
   getSceneConfig: () => SceneConfig;
+  /** Merge latest local/IDB booth CMS patches into memory (e.g. after exhibitor save). */
+  syncBoothOverridesFromPersistence: () => Promise<void>;
 
   /** In-expo hall layout editor (TransformControls + saves to scene overrides). */
   hallLayoutEditMode: boolean;
@@ -224,12 +236,21 @@ export const useStore = create<AppState>((set, get) => ({
   ctaResourcePopup: null,
   setCtaResourcePopup: (popup) => set({ ctaResourcePopup: popup }),
   aiChatOpen: false,
+  aiChatBoothId: null,
   aiChatContext: null,
-  setAiChatOpen: (open) =>
-    set(open ? { aiChatOpen: true } : { aiChatOpen: false, aiChatContext: null }),
-  openAiChat: (context) =>
+  setAiChatOpen: (open, boothId) =>
+    set(
+      open
+        ? {
+            aiChatOpen: true,
+            aiChatBoothId: boothId ?? get().vertexEliteHudContext?.boothId ?? null,
+          }
+        : { aiChatOpen: false, aiChatContext: null, aiChatBoothId: null },
+    ),
+  openAiChat: (context, boothId) =>
     set({
       aiChatOpen: true,
+      aiChatBoothId: boothId ?? get().vertexEliteHudContext?.boothId ?? null,
       aiChatContext: context === 'expo-concierge' ? 'expo-concierge' : null,
     }),
   helpDeskOpen: false,
@@ -457,77 +478,82 @@ export const useStore = create<AppState>((set, get) => ({
 
   initBoothCms: async () => {
     if (get()._boothCmsHydrated) return;
-    const { publicBase: r2BaseFromManifest, defaults: fromR2Documents } = await loadR2DocumentDefaults();
 
-    let fromFile: Record<string, BoothLayoutPatch> = {};
-    let sceneFromFile: SceneOverridesInput = {};
-    let r2PublicBase = r2BaseFromManifest;
+    let booths: Record<string, BoothLayoutPatch> = {};
+    let sceneFromApi: SceneOverridesInput = {};
+    let r2PublicBase = '';
+
+    // Primary: fetch from MongoDB API
     try {
-      const res = await fetch('/booth-cms.json', { cache: 'no-store' });
+      const res = await fetch('/api/expo/config', { cache: 'no-store' });
       if (res.ok) {
         const j = await res.json();
-        if (j?.booths && typeof j.booths === 'object') fromFile = j.booths;
-        if (j?.overrides && typeof j.overrides === 'object') fromFile = j.overrides;
-        if (j?.scene && typeof j.scene === 'object') sceneFromFile = j.scene;
-        const fromCms = applyR2PublicBaseFromCmsFile(j?.r2PublicBase);
-        if (fromCms) r2PublicBase = fromCms;
+        if (j?.booths && typeof j.booths === 'object') booths = j.booths;
+        if (j?.scene && typeof j.scene === 'object') sceneFromApi = j.scene;
+        if (typeof j?.r2PublicBase === 'string' && j.r2PublicBase) r2PublicBase = j.r2PublicBase;
       }
-    } catch { /* */ }
+    } catch { /* API unavailable — try fallback */ }
 
-    if (!r2PublicBase) {
-      r2PublicBase = getR2PublicBase();
+    // Fallback: read-only seed from booth-cms.json if API returned nothing
+    if (Object.keys(booths).length === 0) {
+      try {
+        const res = await fetch('/booth-cms.json', { cache: 'no-store' });
+        if (res.ok) {
+          const j = await res.json();
+          if (j?.booths && typeof j.booths === 'object') booths = j.booths;
+          if (j?.overrides && typeof j.overrides === 'object') booths = j.overrides;
+          if (j?.scene && typeof j.scene === 'object') sceneFromApi = j.scene;
+          if (typeof j?.r2PublicBase === 'string' && j.r2PublicBase) r2PublicBase = j.r2PublicBase;
+        }
+      } catch { /* */ }
     }
 
-    const fromBrowser = await readPersistedBoothOverrides();
+    if (!r2PublicBase) r2PublicBase = getR2PublicBase();
+    if (r2PublicBase) setR2PublicBase(r2PublicBase);
 
-    let sceneFromLs: SceneOverridesInput = {};
-    try {
-      const raw = localStorage.getItem(SCENE_CMS_LS_KEY);
-      if (raw) sceneFromLs = JSON.parse(raw);
-    } catch { sceneFromLs = {}; }
+    for (const id of REMOVED_BOOTH_IDS) delete booths[id];
 
-    const ids = new Set([
-      ...Object.keys(fromR2Documents),
-      ...Object.keys(fromFile),
-      ...Object.keys(fromBrowser),
-    ]);
-    const merged: Record<string, BoothLayoutPatch> = {};
-    for (const id of ids) {
-      merged[id] = {
-        ...(fromR2Documents[id] || {}),
-        ...(fromBrowser[id] || {}),
-        ...(fromFile[id] || {}),
-        ...mergeSharedBoothDocs(fromFile[id], fromBrowser[id]),
-      };
+    const localBooths = await readPersistedBoothOverrides();
+    for (const id of new Set([...Object.keys(booths), ...Object.keys(localBooths)])) {
+      booths[id] = { ...(booths[id] || {}), ...(localBooths[id] || {}) };
     }
-    const resolvedMerged = resolveBoothOverridesForR2(merged, r2PublicBase);
-    for (const id of Object.keys(resolvedMerged)) {
-      merged[id] = resolvedMerged[id];
-    }
-    for (const id of REMOVED_BOOTH_IDS) {
-      delete merged[id];
-    }
+
+    // Device-specific scene baseline, then layer API scene on top
+    const sceneFromLs: SceneOverridesInput = (() => {
+      try {
+        const raw = localStorage.getItem(SCENE_CMS_LS_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    })();
+
     let sceneMerged = mergeSceneOverridesInput(
       getBootstrapSceneForDevice(),
-      sceneFromFile,
+      sceneFromApi,
       sceneFromLs,
     );
-    if (sceneMerged.showVideos !== true && sceneFromFile.showVideos === true) {
-      sceneMerged = { ...sceneMerged, showVideos: true };
+    const boolSceneKeys = [
+      'showVideos', 'showBallroom', 'showStandardBooths',
+      'showHallAisleStandees', 'showBoothHostess',
+    ] as const;
+    for (const k of boolSceneKeys) {
+      if (sceneFromApi[k] === true && sceneMerged[k] !== true) {
+        sceneMerged = { ...sceneMerged, [k]: true };
+      }
     }
-    if (sceneMerged.showBallroom !== true && sceneFromFile.showBallroom === true) {
-      sceneMerged = { ...sceneMerged, showBallroom: true };
+
+    set({ boothOverrides: booths, sceneOverrides: sceneMerged, _boothCmsHydrated: true });
+  },
+
+  syncBoothOverridesFromPersistence: async () => {
+    const local = await readPersistedBoothOverrides();
+    const current = get().boothOverrides;
+    const ids = new Set([...Object.keys(current), ...Object.keys(local)]);
+    if (ids.size === 0) return;
+    const merged: Record<string, BoothLayoutPatch> = { ...current };
+    for (const id of ids) {
+      merged[id] = { ...(current[id] || {}), ...(local[id] || {}) };
     }
-    if (sceneMerged.showStandardBooths === false && sceneFromFile.showStandardBooths === true) {
-      sceneMerged = { ...sceneMerged, showStandardBooths: true };
-    }
-    if (sceneMerged.showHallAisleStandees !== true && sceneFromFile.showHallAisleStandees === true) {
-      sceneMerged = { ...sceneMerged, showHallAisleStandees: true };
-    }
-    if (sceneMerged.showBoothHostess !== true && sceneFromFile.showBoothHostess === true) {
-      sceneMerged = { ...sceneMerged, showBoothHostess: true };
-    }
-    set({ boothOverrides: merged, sceneOverrides: sceneMerged, _boothCmsHydrated: true });
+    set({ boothOverrides: merged });
   },
 
   patchBoothOverride: async (id, patch) => {
@@ -537,21 +563,32 @@ export const useStore = create<AppState>((set, get) => ({
     ) as BoothLayoutPatch;
     const nextEntry = { ...prev, ...definedPatch };
     const nextAll = { ...get().boothOverrides, [id]: nextEntry };
-    const ok = await persistBoothOverridesWithFallback(nextAll);
     set({ boothOverrides: nextAll });
-    return ok;
+    void persistBoothOverridesWithFallback(nextAll);
+
+    try {
+      const res = await fetch('/api/booth-cms/patch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boothId: id, patch: definedPatch }),
+      });
+      const data = await res.json();
+      return !!data?.ok;
+    } catch {
+      return false;
+    }
   },
 
   resetBoothOverride: async (id) => {
     const { [id]: _, ...rest } = get().boothOverrides;
-    await persistBoothOverridesWithFallback(rest);
     set({ boothOverrides: rest });
+    try { await fetch(`/api/booth-cms/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch { /* */ }
   },
 
   deleteBoothOverride: async (id) => {
     const { [id]: _, ...rest } = get().boothOverrides;
-    await persistBoothOverridesWithFallback(rest);
     set({ boothOverrides: rest });
+    try { await fetch(`/api/booth-cms/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch { /* */ }
   },
 
   duplicateBoothOverride: async (fromId, newId) => {
@@ -560,33 +597,42 @@ export const useStore = create<AppState>((set, get) => ({
     const clone = JSON.parse(JSON.stringify(source)) as BoothLayoutPatch;
     if (clone.position) clone.position = [clone.position[0] + 5, clone.position[1], clone.position[2]];
     const nextAll = { ...get().boothOverrides, [newId]: clone };
-    await persistBoothOverridesWithFallback(nextAll);
     set({ boothOverrides: nextAll });
+    try {
+      await fetch('/api/booth-cms/patch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boothId: newId, patch: clone }),
+      });
+    } catch { /* */ }
   },
 
   resetAllBoothOverrides: async () => {
-    await persistBoothOverridesWithFallback({});
     set({ boothOverrides: {} });
+    try {
+      await fetch('/api/booth-cms/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booths: {}, scene: {} }),
+      });
+    } catch { /* */ }
   },
 
   patchSceneOverride: (patch) => {
     const cur = get().sceneOverrides;
     const next: SceneOverridesInput = { ...cur, ...patch };
-    
-    // Deep merge hallLayout
+
     if (patch.hallLayout !== undefined) {
       next.hallLayout = { ...(cur.hallLayout || {}), ...patch.hallLayout };
     }
-    
-    // Deep merge registrationLayout
+
     if (patch.registrationLayout !== undefined) {
       const prevReg = cur.registrationLayout || {};
       const incomingReg = patch.registrationLayout;
-      
+
       next.registrationLayout = {
         ...prevReg,
         ...incomingReg,
-        // Ensure nested objects/arrays are merged or preserved
         loungeRotations: incomingReg.loungeRotations
           ? { ...(prevReg.loungeRotations || {}), ...incomingReg.loungeRotations }
           : prevReg.loungeRotations,
@@ -594,14 +640,22 @@ export const useStore = create<AppState>((set, get) => ({
         importedModels: incomingReg.importedModels ?? prevReg.importedModels,
       };
     }
-    
+
     persistSceneConfig(next);
     set({ sceneOverrides: next });
+
+    // Fire-and-forget: persist to MongoDB so all visitors see updated scene
+    void fetch('/api/scene/patch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch: next }),
+    }).catch(() => { /* API may be unavailable */ });
   },
 
   resetSceneOverrides: () => {
     persistSceneConfig({});
     set({ sceneOverrides: {} });
+    void fetch('/api/scene', { method: 'DELETE' }).catch(() => {});
   },
 
   getSceneConfig: () => mergeSceneConfig(get().sceneOverrides),

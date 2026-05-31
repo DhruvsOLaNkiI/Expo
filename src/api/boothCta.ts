@@ -1,7 +1,9 @@
-import type { CompanyProfile, MediaItem, PlacedImage } from '@/features/shared/data/boothLayouts';
+import type { CompanyProfile, MediaItem, PlacedImage, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
+import { floorPlansFromConfig } from '@/features/shared/data/boothLayouts';
 import { isPdfUrl } from './pageindexAutoIndex';
 import { getR2PublicBase } from '@/config/r2Public';
 import { normalizeR2PublicUrl, resolvePublicAssetUrl } from './r2Urls';
+import { warmPdfCache } from '@/utils/warmPdfCache';
 
 export function normalizeCtaUrl(url: string): string {
   const raw = url.trim();
@@ -39,8 +41,11 @@ export type ResolvedBoothCta = {
   walkOk: boolean;
   imagesOk: boolean;
   unitOk: boolean;
+  floorOk: boolean;
   siteOk: boolean;
   priceOk: boolean;
+  faqUrl: string;
+  faqOk: boolean;
   quoteOk: boolean;
 };
 
@@ -48,6 +53,10 @@ export function resolveBoothCta(input: {
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  floorPlanUrl?: string;
+  floorPlans?: UnitLayoutItem[];
+  faqUrl?: string;
+  customFaqQuestions?: { question: string; options: { text: string }[] }[];
   siteMapUrls?: string[];
   videoUrl?: string;
   media?: MediaItem[];
@@ -56,6 +65,10 @@ export function resolveBoothCta(input: {
 }): ResolvedBoothCta {
   const brochureUrl = normalizeCtaUrl(input.brochureUrl ?? '');
   const priceListUrl = normalizeCtaUrl(input.priceListUrl ?? '');
+  const faqUrl = normalizeCtaUrl(input.faqUrl ?? '');
+  const hasCustomFaq = (input.customFaqQuestions ?? []).some(
+    (q) => q.question.trim() && q.options.filter((o) => o.text.trim()).length >= 2,
+  );
   const siteSlides = (input.siteMapUrls ?? []).map(normalizeCtaUrl).filter(Boolean);
 
   const media = input.media ?? [];
@@ -103,6 +116,11 @@ export function resolveBoothCta(input: {
     unitLayoutUrl = imageGalleryUrls[1];
   }
 
+  const floorPlanEntries = floorPlansFromConfig({
+    floorPlans: input.floorPlans,
+    floorPlanUrl: input.floorPlanUrl,
+  });
+
   const company = input.company;
   const email = (company?.email ?? '').trim();
   const phone = (company?.phone ?? '').trim();
@@ -119,8 +137,11 @@ export function resolveBoothCta(input: {
     walkOk: Boolean(walkthroughUrl),
     imagesOk: imageGalleryUrls.length > 0,
     unitOk: Boolean(unitLayoutUrl),
+    floorOk: floorPlanEntries.length > 0,
     siteOk: siteSlides.length > 0,
     priceOk: Boolean(priceListUrl),
+    faqUrl,
+    faqOk: Boolean(faqUrl) || hasCustomFaq,
     quoteOk: Boolean(email) || Boolean(phone) || Boolean(whatsapp) || Boolean(brochureUrl),
   };
 }
@@ -153,6 +174,7 @@ export function buildCtaOpenPayload(
     };
   }
   if (isPdfUrl(u) || isRasterImageUrl(u) || isSvgUrl(u)) {
+    if (isPdfUrl(u)) warmPdfCache(u);
     return {
       title,
       url: u,

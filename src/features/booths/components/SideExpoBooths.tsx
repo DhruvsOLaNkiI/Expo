@@ -27,6 +27,9 @@ export type LuxuryBoothProps = {
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
   siteMapUrls?: string[];
   media?: import('@/features/shared/data/boothLayouts').MediaItem[];
   company?: import('@/features/shared/data/boothLayouts').CompanyProfile;
@@ -103,6 +106,10 @@ export function SideExpoBooths({
           brochureUrl={b.brochureUrl}
           priceListUrl={b.priceListUrl}
           unitLayoutUrl={b.unitLayoutUrl}
+          unitLayouts={b.unitLayouts}
+          floorPlanUrl={b.floorPlanUrl}
+          floorPlans={b.floorPlans}
+          faqUrl={b.faqUrl}
           siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
           media={b.media}
           company={b.company}

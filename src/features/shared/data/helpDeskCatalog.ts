@@ -138,7 +138,7 @@ const DEVELOPER_META: Record<
     projects: [
       {
         id: 'lg-grove',
-        name: '',
+        name: 'Luxe Garden Residences',
         thumbnailGradient: 'linear-gradient(160deg,#1c1917,#ca8a04)',
         category: 'apartment',
         priceRange: '₹1.1 Cr – ₹2.4 Cr',

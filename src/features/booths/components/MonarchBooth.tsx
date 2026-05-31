@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
-import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply } from '@/features/shared/data/boothLayouts';
+import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
 import { BoothHostessGreeter } from './Booths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
@@ -22,6 +22,10 @@ export function MonarchBooth({
   brochureUrl = '',
   priceListUrl = '',
   unitLayoutUrl = '',
+  unitLayouts = [],
+  floorPlanUrl = '',
+  floorPlans = [],
+  faqUrl = '',
   siteMapUrls = [],
   media = [],
   company,
@@ -45,6 +49,10 @@ export function MonarchBooth({
   brochureUrl?: string;
   priceListUrl?: string;
   unitLayoutUrl?: string;
+  unitLayouts?: UnitLayoutItem[];
+  floorPlanUrl?: string;
+  floorPlans?: UnitLayoutItem[];
+  faqUrl?: string;
   siteMapUrls?: string[];
   media?: MediaItem[];
   company?: CompanyProfile;
@@ -252,6 +260,10 @@ export function MonarchBooth({
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
         unitLayoutUrl={unitLayoutUrl}
+        unitLayouts={unitLayouts}
+        floorPlanUrl={floorPlanUrl}
+        floorPlans={floorPlans}
+        faqUrl={faqUrl}
         siteMapUrls={siteMapUrls}
         videoUrl={effectiveVideoUrl}
         media={media}

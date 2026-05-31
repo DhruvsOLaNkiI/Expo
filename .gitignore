@@ -10,3 +10,7 @@ coverage/
 pageindex/results/
 pageindex/.venv/
 pageindex/uploads/
+.claude/
+dashboard-host/
+DBExpo/
+Guide_Completion/

@@ -45,6 +45,21 @@ export type CompanyProfile = {
   brandSecondary: string;
 };
 
+/** Named floor-plan slide (exhibitor uploads multiple unit types). */
+export type UnitLayoutItem = {
+  id: string;
+  name: string;
+  imageUrl: string;
+};
+
+/** Sales rep assigned to this booth for visitor chat. */
+export type AssignedSalesPerson = {
+  name: string;
+  email: string;
+  phone: string;
+  photoUrl?: string;
+};
+
 export type BoothLighting = {
   spotlightIntensity: number;
   spotlightColor: string;
@@ -65,6 +80,19 @@ export type HostessQuickReply = {
   action?: 'askAi' | 'teleport' | 'helpDesk';
   /** When {@link action} is `teleport`, id from {@link buildExpoTeleportDestinations} or registration lobby. */
   teleportId?: string;
+};
+
+/** Multiple-choice option for an exhibitor-defined FAQ question. */
+export type CustomFaqOption = {
+  id: string;
+  text: string;
+};
+
+/** Exhibitor-authored FAQ question with answer options (shown in dashboard + visitor flows). */
+export type CustomFaqQuestion = {
+  id: string;
+  question: string;
+  options: CustomFaqOption[];
 };
 
 export type BoothLayoutConfig = {
@@ -99,6 +127,18 @@ export type BoothLayoutConfig = {
   priceListUrl: string;
   /** Unit layout PDF or image (booth “Unit layout” button) */
   unitLayoutUrl: string;
+  /** Multiple named unit layouts (Name → image/PDF URL); first entry mirrors {@link unitLayoutUrl}. */
+  unitLayouts?: UnitLayoutItem[];
+  /** Floor plan PDF or image (booth “Floor plan” button) */
+  floorPlanUrl: string;
+  /** Multiple named floor plans; first entry mirrors {@link floorPlanUrl}. */
+  floorPlans?: UnitLayoutItem[];
+  /** FAQ document (PDF) for AI / visitor help */
+  faqUrl?: string;
+  /** Custom multiple-choice FAQ questions configured by the exhibitor */
+  customFaqQuestions?: CustomFaqQuestion[];
+  /** Assigned sales contact shown in exhibitor chat */
+  assignedSalesPerson?: AssignedSalesPerson;
   /** Custom signage board image (e.g. for EcoEden digital board) */
   signageImageUrl?: string;
   /** CMS: auto-run PageIndex when uploading brochure PDF */
@@ -129,6 +169,53 @@ export function siteMapUrlsFromConfig(b: Pick<BoothLayoutConfig, 'siteMapUrl' | 
 export function siteMapToStorageFields(urls: string[]): { siteMapUrl: string; siteMapGallery: string[] } {
   const clean = urls.map((u) => String(u).trim()).filter(Boolean);
   return { siteMapUrl: clean[0] ?? '', siteMapGallery: clean.slice(1) };
+}
+
+/** Ordered unit layout entries; falls back to legacy single {@link unitLayoutUrl}. */
+export function unitLayoutsFromConfig(
+  b: Pick<BoothLayoutConfig, 'unitLayouts' | 'unitLayoutUrl'>,
+): UnitLayoutItem[] {
+  const fromList = (b.unitLayouts ?? []).filter((u) => u.imageUrl?.trim());
+  if (fromList.length > 0) return fromList;
+  const legacy = (b.unitLayoutUrl ?? '').trim();
+  if (!legacy) return [];
+  return [{ id: 'legacy-unit-layout', name: 'Unit layout', imageUrl: legacy }];
+}
+
+/** Keep legacy booth button URL in sync with the first named layout. */
+export function unitLayoutsToStorageFields(
+  layouts: UnitLayoutItem[],
+): { unitLayouts: UnitLayoutItem[]; unitLayoutUrl: string } {
+  const clean = layouts
+    .map((u) => ({ ...u, name: u.name.trim(), imageUrl: u.imageUrl.trim() }))
+    .filter((u) => u.imageUrl);
+  return {
+    unitLayouts: clean,
+    unitLayoutUrl: clean[0]?.imageUrl ?? '',
+  };
+}
+
+/** Ordered floor plan entries; falls back to legacy single {@link floorPlanUrl}. */
+export function floorPlansFromConfig(
+  b: Pick<BoothLayoutConfig, 'floorPlans' | 'floorPlanUrl'>,
+): UnitLayoutItem[] {
+  const fromList = (b.floorPlans ?? []).filter((u) => u.imageUrl?.trim());
+  if (fromList.length > 0) return fromList;
+  const legacy = (b.floorPlanUrl ?? '').trim();
+  if (!legacy) return [];
+  return [{ id: 'legacy-floor-plan', name: 'Floor plan', imageUrl: legacy }];
+}
+
+export function floorPlansToStorageFields(
+  layouts: UnitLayoutItem[],
+): { floorPlans: UnitLayoutItem[]; floorPlanUrl: string } {
+  const clean = layouts
+    .map((u) => ({ ...u, name: u.name.trim(), imageUrl: u.imageUrl.trim() }))
+    .filter((u) => u.imageUrl);
+  return {
+    floorPlans: clean,
+    floorPlanUrl: clean[0]?.imageUrl ?? '',
+  };
 }
 
 export type HallLayoutConfig = {
@@ -590,6 +677,12 @@ function makeDefaultBooth(
     siteMapGallery: [],
     priceListUrl: '',
     unitLayoutUrl: '',
+    unitLayouts: [],
+    floorPlanUrl: '',
+    floorPlans: [],
+    faqUrl: '',
+    customFaqQuestions: [],
+    assignedSalesPerson: { name: '', email: '', phone: '', photoUrl: '' },
     stageScreenUrl: '',
     signageImageUrl: '',
     pageIndexBrochure: true,
@@ -712,9 +805,16 @@ export function applyBoothOverrides(
           media: o.media ?? b.media,
           placedImages: o.placedImages ?? b.placedImages,
           siteMapGallery: o.siteMapGallery ?? b.siteMapGallery,
+          unitLayouts: o.unitLayouts ?? b.unitLayouts,
+          floorPlans: o.floorPlans ?? b.floorPlans,
+          assignedSalesPerson: o.assignedSalesPerson
+            ? { ...(b.assignedSalesPerson ?? { name: '', email: '', phone: '' }), ...o.assignedSalesPerson }
+            : b.assignedSalesPerson,
           hostessQuickReplies: migrateLegacyHostessQuickReplies(
             o.hostessQuickReplies !== undefined ? o.hostessQuickReplies : b.hostessQuickReplies,
           ),
+          customFaqQuestions:
+            o.customFaqQuestions !== undefined ? o.customFaqQuestions : b.customFaqQuestions,
           company: o.company ? { ...b.company, ...o.company } : b.company,
           lighting: o.lighting ? { ...b.lighting, ...o.lighting } : b.lighting,
           displayLayout: mergeBoothDisplayLayout(b.displayLayout, o.displayLayout),

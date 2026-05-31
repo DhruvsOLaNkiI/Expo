@@ -137,7 +137,7 @@ export interface VisitorRegistration {
   updatedAt: Date;
 }
 
-async function connectToDatabase(): Promise<Db> {
+export async function connectToDatabase(): Promise<Db> {
   if (cachedDb && cachedClient) {
     return cachedDb;
   }
@@ -167,6 +167,12 @@ async function connectToDatabase(): Promise<Db> {
     const visitorsCollection = db.collection('visitors');
     await visitorsCollection.createIndex({ visitorId: 1 }, { unique: true });
     await visitorsCollection.createIndex({ createdAt: -1 });
+
+    const boothsCollection = db.collection('booths');
+    await boothsCollection.createIndex({ boothId: 1 }, { unique: true });
+
+    const sceneCollection = db.collection('sceneSettings');
+    await sceneCollection.createIndex({ configId: 1 }, { unique: true });
 
     console.log('Connected to MongoDB successfully');
     return db;
@@ -397,6 +403,204 @@ export async function getVisitorRegistrationStats(): Promise<VisitorRegistration
   ]);
 
   return { visitorsTotal, visitorsRegisteredToday, visitorsCheckedInToday };
+}
+
+// ─── Booth overrides (CMS config, R2 URLs, layouts — NO binary data) ───
+
+export interface BoothOverrideDocument {
+  _id?: string;
+  boothId: string;
+  /** Partial overrides — same shape as BoothLayoutPatch. Only R2 URLs, never base64. */
+  patch: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export async function getAllBoothOverrides(): Promise<Record<string, Record<string, unknown>>> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<BoothOverrideDocument>('booths');
+    const docs = await col.find({}).toArray();
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const d of docs) out[d.boothId] = d.patch;
+    return out;
+  } catch (error) {
+    console.error('Error fetching booth overrides:', error);
+    return {};
+  }
+}
+
+export async function getBoothOverride(boothId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<BoothOverrideDocument>('booths');
+    const doc = await col.findOne({ boothId });
+    return doc?.patch ?? null;
+  } catch (error) {
+    console.error(`Error fetching booth ${boothId}:`, error);
+    return null;
+  }
+}
+
+export async function patchBoothOverride(
+  boothId: string,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<BoothOverrideDocument>('booths');
+    const now = new Date();
+    const existing = await col.findOne({ boothId });
+    const merged = { ...(existing?.patch ?? {}), ...patch };
+    await col.updateOne(
+      { boothId },
+      { $set: { patch: merged, updatedAt: now }, $setOnInsert: { boothId, createdAt: now } },
+      { upsert: true },
+    );
+    return true;
+  } catch (error) {
+    console.error(`Error patching booth ${boothId}:`, error);
+    return false;
+  }
+}
+
+export async function deleteBoothOverride(boothId: string): Promise<boolean> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<BoothOverrideDocument>('booths');
+    await col.deleteOne({ boothId });
+    return true;
+  } catch (error) {
+    console.error(`Error deleting booth ${boothId}:`, error);
+    return false;
+  }
+}
+
+export async function saveAllBoothOverrides(
+  overrides: Record<string, Record<string, unknown>>,
+): Promise<boolean> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<BoothOverrideDocument>('booths');
+    const now = new Date();
+    const ops = Object.entries(overrides).map(([boothId, patch]) => ({
+      updateOne: {
+        filter: { boothId },
+        update: { $set: { patch, updatedAt: now }, $setOnInsert: { boothId, createdAt: now } },
+        upsert: true,
+      },
+    }));
+    if (ops.length > 0) await col.bulkWrite(ops);
+    return true;
+  } catch (error) {
+    console.error('Error saving all booth overrides:', error);
+    return false;
+  }
+}
+
+// ─── Scene settings (single document per expo) ───
+
+export interface SceneSettingsDocument {
+  _id?: string;
+  configId: string;
+  settings: Record<string, unknown>;
+  r2PublicBase?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export async function getSceneSettings(): Promise<{
+  settings: Record<string, unknown>;
+  r2PublicBase: string;
+}> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<SceneSettingsDocument>('sceneSettings');
+    const doc = await col.findOne({ configId: 'default' });
+    return {
+      settings: doc?.settings ?? {},
+      r2PublicBase: doc?.r2PublicBase ?? '',
+    };
+  } catch (error) {
+    console.error('Error fetching scene settings:', error);
+    return { settings: {}, r2PublicBase: '' };
+  }
+}
+
+export async function patchSceneSettings(
+  patch: Record<string, unknown>,
+  r2PublicBase?: string,
+): Promise<boolean> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<SceneSettingsDocument>('sceneSettings');
+    const now = new Date();
+    const existing = await col.findOne({ configId: 'default' });
+    const merged = { ...(existing?.settings ?? {}), ...patch };
+    const $set: Record<string, unknown> = { settings: merged, updatedAt: now };
+    if (r2PublicBase !== undefined) $set.r2PublicBase = r2PublicBase;
+    await col.updateOne(
+      { configId: 'default' },
+      { $set, $setOnInsert: { configId: 'default', createdAt: now } },
+      { upsert: true },
+    );
+    return true;
+  } catch (error) {
+    console.error('Error patching scene settings:', error);
+    return false;
+  }
+}
+
+export async function resetSceneSettings(): Promise<boolean> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<SceneSettingsDocument>('sceneSettings');
+    await col.deleteOne({ configId: 'default' });
+    return true;
+  } catch (error) {
+    console.error('Error resetting scene settings:', error);
+    return false;
+  }
+}
+
+/** Full expo config payload for GET /api/expo/config. */
+export async function getFullExpoConfig(): Promise<{
+  booths: Record<string, Record<string, unknown>>;
+  scene: Record<string, unknown>;
+  r2PublicBase: string;
+}> {
+  const [booths, { settings: scene, r2PublicBase }] = await Promise.all([
+    getAllBoothOverrides(),
+    getSceneSettings(),
+  ]);
+  return { booths, scene, r2PublicBase };
+}
+
+// ─── Buyer Questionnaire ──────────────────────────────────────────────────
+
+export interface QuestionnaireDocument {
+  _id?: string;
+  visitorId?: string;
+  visitorName?: string;
+  visitorEmail?: string;
+  answers: Record<number, string>;
+  totalScore: number;
+  category: 'hot' | 'warm' | 'cold';
+  categoryLabel: string;
+  submittedAt: string;
+  createdAt: Date;
+}
+
+export async function saveQuestionnaireResult(data: Omit<QuestionnaireDocument, '_id' | 'createdAt'>): Promise<boolean> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<QuestionnaireDocument>('buyerQuestionnaires');
+    await col.insertOne({ ...data, createdAt: new Date() });
+    return true;
+  } catch (err) {
+    console.error('Error saving questionnaire result:', err);
+    return false;
+  }
 }
 
 export async function closeDatabase(): Promise<void> {

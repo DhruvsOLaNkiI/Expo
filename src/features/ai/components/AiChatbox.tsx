@@ -1,6 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { fetchExpoLiveStats } from '@/api/expoStats';
-import { DEFAULT_SCENE_CONFIG } from '@/features/shared/data/boothLayouts';
+import {
+  applyBoothOverrides,
+  buildDefaultBoothLayoutList,
+  DEFAULT_SCENE_CONFIG,
+  type AssignedSalesPerson,
+} from '@/features/shared/data/boothLayouts';
 import {
   buildExpoStatsFactsBlock,
   computeCatalogStats,
@@ -14,6 +19,14 @@ import {
   isClientOpenRouterConfigured,
 } from '@/api/openRouterClient';
 import { useStore } from '@/store';
+import { resolveCurrentBoothId } from '@/dashboard/boothVisitTracking';
+import {
+  appendSalesChatMessageAsync,
+  hasVisitorMessagesInThread,
+  loadSalesChatMessagesAsync,
+  resolveSalesChatThreadId,
+} from '@/dashboard/salesChatLocal';
+import { getAnalyticsSessionId } from '@/dashboard/api/client';
 
 type Message = {
   id: string;
@@ -21,6 +34,15 @@ type Message = {
   content: string;
   timestamp: number;
 };
+
+type SalesMessage = {
+  id: string;
+  from: 'visitor' | 'sales';
+  content: string;
+  timestamp: number;
+};
+
+type ChatMode = 'ai' | 'pdf' | 'sales';
 
 function formatBoothName(boothId: string): string {
   return boothId
@@ -33,16 +55,39 @@ export function AiChatbox() {
   const aiChatOpen = useStore((s) => s.aiChatOpen);
   const setAiChatOpen = useStore((s) => s.setAiChatOpen);
   const aiChatContext = useStore((s) => s.aiChatContext);
+  const aiChatBoothId = useStore((s) => s.aiChatBoothId);
   const activeBooth = useStore((s) => s.activeBooth);
   const boothOverrides = useStore((s) => s.boothOverrides);
+  const boothHudReports = useStore((s) => s._boothHudReports);
   const vertexEliteHudAlpha = useStore((s) => s.vertexEliteHudAlpha);
   const vertexEliteHudContext = useStore((s) => s.vertexEliteHudContext);
   const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const syncBoothOverridesFromPersistence = useStore((s) => s.syncBoothOverridesFromPersistence);
+  const initBoothCms = useStore((s) => s.initBoothCms);
+  const visitorId = useStore((s) => s.visitorProfile?.id);
+  const visitorName = useStore((s) => s.visitorProfile?.displayName);
 
-  /** Vertex Elite uses screen HUD (not `activeBooth`); treat as in-booth when HUD is visible. */
-  const chatBoothId =
-    activeBooth ??
-    (vertexEliteHudAlpha >= 0.12 && vertexEliteHudContext?.boothId ? vertexEliteHudContext.boothId : null);
+  const chatBoothId = useMemo(() => {
+    if (aiChatBoothId) return aiChatBoothId;
+    if (activeBooth) return activeBooth;
+    const fromProximity = resolveCurrentBoothId({
+      activeBooth,
+      _boothHudReports: boothHudReports,
+      vertexEliteHudContext,
+      vertexEliteHudAlpha,
+    } as ReturnType<typeof useStore.getState>);
+    if (fromProximity) return fromProximity;
+    if (vertexEliteHudContext?.boothId && vertexEliteHudAlpha >= 0.04) {
+      return vertexEliteHudContext.boothId;
+    }
+    return null;
+  }, [
+    aiChatBoothId,
+    activeBooth,
+    boothHudReports,
+    vertexEliteHudContext,
+    vertexEliteHudAlpha,
+  ]);
   
   const deckContextRaw =
     (import.meta.env.VITE_AI_DECK_CONTEXT || '').trim() ||
@@ -51,16 +96,66 @@ export function AiChatbox() {
     deckContextRaw.length > 15000 ? `${deckContextRaw.slice(0, 15000)}\n\n[Context truncated at 15000 characters]` : deckContextRaw;
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [salesMessages, setSalesMessages] = useState<SalesMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
   const [documentType, setDocumentType] = useState<'brochure' | 'priceList' | 'siteLayout' | 'unitLayout'>('brochure');
-  /** Booth PDF tree vs general OpenRouter chat (no indexing required). */
-  const [usePageIndex, setUsePageIndex] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatMode>('ai');
   const [expoStats, setExpoStats] = useState<ExpoLiveStats | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(false);
+
+  const salesPerson = useMemo((): AssignedSalesPerson | null => {
+    const merged = applyBoothOverrides(buildDefaultBoothLayoutList(), boothOverrides);
+    const pick = (boothId: string): AssignedSalesPerson | null => {
+      const booth = merged.find((b) => b.id === boothId);
+      const name = booth?.assignedSalesPerson?.name?.trim();
+      if (!name) return null;
+      return {
+        name,
+        email: booth?.assignedSalesPerson?.email?.trim() ?? '',
+        phone: booth?.assignedSalesPerson?.phone?.trim() ?? '',
+        photoUrl: booth?.assignedSalesPerson?.photoUrl?.trim() || undefined,
+      };
+    };
+
+    const lookupId = chatBoothId ?? aiChatBoothId;
+    if (lookupId) {
+      const hit = pick(lookupId);
+      if (hit) return hit;
+    }
+
+    const assigned = merged.filter((b) => b.assignedSalesPerson?.name?.trim());
+    if (assigned.length === 1) {
+      return pick(assigned[0]!.id);
+    }
+    return null;
+  }, [chatBoothId, aiChatBoothId, boothOverrides]);
+
+  const salesInitials = useMemo(() => {
+    if (!salesPerson?.name) return '?';
+    return salesPerson.name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  }, [salesPerson?.name]);
 
   const isExpoConcierge = aiChatContext === 'expo-concierge' && !chatBoothId;
+  const usePageIndex = chatMode === 'pdf';
+  const isSalesMode = chatMode === 'sales';
+
+  const salesThreadId = useMemo(
+    () =>
+      resolveSalesChatThreadId({
+        visitorId,
+        sessionId: getAnalyticsSessionId(),
+        visitorName,
+      }),
+    [visitorId, visitorName],
+  );
 
   const loadExpoStats = useCallback(async () => {
     const stats = await fetchExpoLiveStats();
@@ -69,10 +164,54 @@ export function AiChatbox() {
   }, []);
 
   useEffect(() => {
+    if (!aiChatOpen) return;
+    void initBoothCms();
+    void syncBoothOverridesFromPersistence();
+  }, [aiChatOpen, initBoothCms, syncBoothOverridesFromPersistence]);
+
+  useEffect(() => {
     if (!aiChatOpen || !isExpoConcierge) return;
     void loadExpoStats();
-    setUsePageIndex(false);
+    setChatMode('ai');
   }, [aiChatOpen, isExpoConcierge, loadExpoStats]);
+
+  useEffect(() => {
+    if (aiChatOpen && !wasOpenRef.current && salesPerson?.name) {
+      setChatMode('sales');
+    }
+    wasOpenRef.current = aiChatOpen;
+  }, [aiChatOpen, salesPerson?.name]);
+
+  useEffect(() => {
+    const boothId = chatBoothId ?? aiChatBoothId;
+    if (!aiChatOpen || !isSalesMode || !boothId) return;
+
+    let cancelled = false;
+    const sync = () => {
+      void loadSalesChatMessagesAsync(boothId, salesThreadId).then((rows) => {
+        if (cancelled) return;
+        setSalesMessages(
+          rows.map((m) => ({
+            id: m.id,
+            from: m.from,
+            content: m.text,
+            timestamp: new Date(m.at).getTime(),
+          })),
+        );
+      });
+    };
+
+    sync();
+    window.addEventListener('vr-expo-sales-chat-updated', sync);
+    window.addEventListener('storage', sync);
+    const interval = window.setInterval(sync, 5000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('vr-expo-sales-chat-updated', sync);
+      window.removeEventListener('storage', sync);
+      window.clearInterval(interval);
+    };
+  }, [aiChatOpen, isSalesMode, chatBoothId, aiChatBoothId, salesThreadId]);
 
   const aiModelLabel =
     (import.meta.env.VITE_OPENROUTER_MODEL || import.meta.env.OPENROUTER_MODEL || 'openrouter/free').trim();
@@ -83,10 +222,68 @@ export function AiChatbox() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, salesMessages, chatMode]);
+
+  const sendSalesMessage = () => {
+    const text = input.trim();
+    if (!text || loading || !salesPerson?.name) return;
+
+    const boothId = chatBoothId ?? aiChatBoothId;
+    if (!boothId) {
+      setDebugInfo('Walk into your booth to send a sales message');
+      return;
+    }
+
+    const now = Date.now();
+    const rep = salesPerson.name;
+    const isFirstMessage = !hasVisitorMessagesInThread(boothId, salesThreadId);
+    const visitorMsg: SalesMessage = {
+      id: `${now}-v`,
+      from: 'visitor',
+      content: text,
+      timestamp: now,
+    };
+
+    void appendSalesChatMessageAsync({
+      boothId,
+      threadId: salesThreadId,
+      from: 'visitor',
+      text,
+      visitorId,
+      visitorName,
+    });
+
+    const nextMessages: SalesMessage[] = [visitorMsg];
+
+    if (isFirstMessage) {
+      const salesMsg: SalesMessage = {
+        id: `${now}-s`,
+        from: 'sales',
+        content: `Hi! I'm ${rep}. Thanks for reaching out — I'll get back to you shortly.${salesPerson.phone ? ` You can also call me at ${salesPerson.phone}.` : ''}`,
+        timestamp: now + 1,
+      };
+      void appendSalesChatMessageAsync({
+        boothId,
+        threadId: salesThreadId,
+        from: 'sales',
+        text: salesMsg.content,
+        autoReply: true,
+      });
+      nextMessages.push(salesMsg);
+    }
+
+    setSalesMessages((prev) => [...prev, ...nextMessages]);
+    setInput('');
+    setDebugInfo(`✅ Message sent to ${rep}`);
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
+
+    if (isSalesMode) {
+      sendSalesMessage();
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -352,14 +549,18 @@ export function AiChatbox() {
           </div>
           <div>
             <h3 className="font-bold text-white text-sm">
-              {chatBoothId
-                ? `AI · ${formatBoothName(chatBoothId)}`
-                : isExpoConcierge
-                  ? 'AI · Expo Help Desk'
-                  : 'Ask AI Assistant'}
+              {isSalesMode && salesPerson?.name
+                ? `Chat · ${salesPerson.name}`
+                : chatBoothId
+                  ? `AI · ${formatBoothName(chatBoothId)}`
+                  : isExpoConcierge
+                    ? 'AI · Expo Help Desk'
+                    : 'Ask AI Assistant'}
             </h3>
             <p className="text-[10px] text-white/40">
-              {usePageIndex ? (
+              {isSalesMode ? (
+                <>👤 Direct chat with sales rep</>
+              ) : usePageIndex ? (
                 <>📚 Booth documents (PageIndex)</>
               ) : (
                 <>💬 Direct chat · {aiModelLabel}</>
@@ -375,33 +576,71 @@ export function AiChatbox() {
         </button>
       </div>
 
-      {/* Chat mode: direct AI vs booth PDF (PageIndex) */}
+      {/* Chat mode: direct AI vs booth PDF vs sales rep */}
       <div className="px-4 py-2.5 border-b border-white/10 bg-white/[0.03] space-y-2">
-        <div className="flex rounded-lg border border-white/10 p-0.5 text-[10px] font-semibold uppercase tracking-wide">
+        <div className="flex rounded-lg border border-white/10 p-0.5 text-[9px] font-semibold uppercase tracking-wide">
           <button
             type="button"
-            onClick={() => setUsePageIndex(false)}
-            className={`flex-1 rounded-md px-2 py-1.5 transition-colors ${
-              !usePageIndex ? 'bg-[#d4af37] text-black' : 'text-white/45 hover:text-white/70'
+            onClick={() => setChatMode('ai')}
+            className={`flex-1 rounded-md px-1.5 py-1.5 transition-colors ${
+              chatMode === 'ai' ? 'bg-[#d4af37] text-black' : 'text-white/45 hover:text-white/70'
             }`}
           >
             💬 Direct AI
           </button>
           <button
             type="button"
-            onClick={() => setUsePageIndex(true)}
+            onClick={() => setChatMode('pdf')}
             disabled={!chatBoothId}
             title={!chatBoothId ? 'Enter a booth to use document Q&A' : undefined}
-            className={`flex-1 rounded-md px-2 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              usePageIndex ? 'bg-[#d4af37] text-black' : 'text-white/45 hover:text-white/70'
+            className={`flex-1 rounded-md px-1.5 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              chatMode === 'pdf' ? 'bg-[#d4af37] text-black' : 'text-white/45 hover:text-white/70'
             }`}
           >
             📚 Booth PDF
           </button>
+          <button
+            type="button"
+            onClick={() => setChatMode('sales')}
+            disabled={!salesPerson?.name}
+            title={
+              !salesPerson?.name
+                ? 'Assign a sales person in Exhibitor Dashboard → Sales Chat, then Save'
+                : `Chat with ${salesPerson.name}`
+            }
+            className={`flex-1 rounded-md px-1.5 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              chatMode === 'sales' ? 'bg-[#d4af37] text-black' : 'text-white/45 hover:text-white/70'
+            }`}
+          >
+            👤 Sales Rep
+          </button>
         </div>
-        {!usePageIndex && (
+        {isSalesMode && salesPerson && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#d4af37] to-[#b08d29] text-[11px] font-bold text-black">
+              {salesPerson.photoUrl ? (
+                <img src={salesPerson.photoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                salesInitials
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-semibold text-white">{salesPerson.name}</p>
+              <p className="truncate text-[9px] text-white/40">
+                {[salesPerson.email, salesPerson.phone].filter(Boolean).join(' · ') ||
+                  'Sales representative'}
+              </p>
+            </div>
+          </div>
+        )}
+        {chatMode === 'ai' && (
           <p className="text-[9px] leading-relaxed text-white/35">
             General AI via OpenRouter — no PDF indexing needed. Answers are not limited to uploaded booth files.
+          </p>
+        )}
+        {isSalesMode && !salesPerson?.name && (
+          <p className="text-[9px] text-amber-200/80">
+            No sales person assigned for this booth yet. Exhibitor can set one under Sales Chat in the dashboard.
           </p>
         )}
         {usePageIndex && chatBoothId && (
@@ -426,6 +665,79 @@ export function AiChatbox() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {isSalesMode ? (
+          <>
+            {salesMessages.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-3">👤</div>
+                <p className="text-white/40 text-sm">
+                  {salesPerson?.name
+                    ? `Send a message directly to ${salesPerson.name}. They'll respond as soon as possible.`
+                    : 'Assign a sales person in the exhibitor dashboard to enable this chat.'}
+                </p>
+                {salesPerson?.name && (
+                  <div className="mt-4 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setInput('Hi, I would like more information about your project.')}
+                      className="block w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white/60 transition-colors"
+                    >
+                      Hi, I would like more information about your project.
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInput('Can we schedule a call to discuss pricing?')}
+                      className="block w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white/60 transition-colors"
+                    >
+                      Can we schedule a call to discuss pricing?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInput('What unit types are available right now?')}
+                      className="block w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white/60 transition-colors"
+                    >
+                      What unit types are available right now?
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {salesMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.from === 'visitor' ? 'justify-end' : 'justify-start gap-2'}`}
+              >
+                {msg.from === 'sales' && (
+                  <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#d4af37] to-[#b08d29] text-[9px] font-bold text-black">
+                    {salesPerson?.photoUrl ? (
+                      <img src={salesPerson.photoUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      salesInitials
+                    )}
+                  </div>
+                )}
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                    msg.from === 'visitor'
+                      ? 'bg-[#d4af37] text-black'
+                      : 'bg-white/10 text-white'
+                  }`}
+                >
+                  {msg.from === 'sales' && (
+                    <span className="mb-1 block text-[9px] font-semibold text-[#d4af37]">
+                      {salesPerson?.name ?? 'Sales'}
+                    </span>
+                  )}
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <span className="text-[9px] opacity-50 mt-1 block">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
         {!chatBoothId && usePageIndex && (
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-center">
             <p className="text-xs text-amber-100/90 leading-relaxed">
@@ -525,6 +837,8 @@ export function AiChatbox() {
         )}
 
         <div ref={messagesEndRef} />
+          </>
+        )}
       </div>
 
       {/* Input */}
@@ -540,22 +854,30 @@ export function AiChatbox() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your question..."
+            placeholder={
+              isSalesMode
+                ? salesPerson?.name
+                  ? `Message ${salesPerson.name}…`
+                  : 'Assign a sales person first'
+                : 'Type your question...'
+            }
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#d4af37]/50 transition-colors"
-            disabled={loading}
+            disabled={loading || (isSalesMode && !salesPerson?.name)}
           />
           <button
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || (isSalesMode && !salesPerson?.name)}
             className="bg-[#d4af37] hover:bg-[#b08d29] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold px-5 py-2.5 rounded-xl transition-colors text-sm"
           >
             Send
           </button>
         </div>
         <p className="text-[9px] text-white/25 mt-2 text-center">
-          {usePageIndex
-            ? 'Booth PDF mode · answers from indexed documents only'
-            : 'Direct AI mode · OpenRouter (no indexing required)'}
+          {isSalesMode
+            ? 'Direct sales chat · messages go to your assigned rep'
+            : usePageIndex
+              ? 'Booth PDF mode · answers from indexed documents only'
+              : 'Direct AI mode · OpenRouter (no indexing required)'}
         </p>
       </div>
     </div>

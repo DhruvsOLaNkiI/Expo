@@ -1,5 +1,5 @@
 {
-  "_readme": "publicBase is your R2 dev URL from Cloudflare Settings. Replace REPLACE-WITH-YOUR-PDF-FILENAME.pdf with the exact filename shown under Objects → booths → builder-4 → brochure. Test: open publicBase + '/' + brochureUrl in a browser before redeploying.",
+  "_readme": "CDN: publicBase is already served on Cloudflare's global CDN (pub-….r2.dev). For production, connect a custom domain to the bucket (e.g. assets.yourdomain.com) in R2 → Settings → Public URL → Custom Domain, then set publicBase and VITE_R2_PUBLIC_BASE_URL to that URL. New uploads get Cache-Control headers automatically. Re-upload old PDFs once so they cache at the edge. Test: open publicBase + '/' + brochureUrl in a browser before redeploying.",
   "publicBase": "https://pub-f5f7c55d276a45eabbf52d335d3a1607.r2.dev",
   "documents": {
     "builder-4": {

@@ -10,6 +10,11 @@ export const SHARED_BOOTH_DOC_KEYS = [
   'signageImageUrl',
   'siteMapUrl',
   'siteMapGallery',
+  'headerLogoUrl',
+  'faqUrl',
+  'unitLayouts',
+  'floorPlanUrl',
+  'floorPlans',
 ] as const;
 
 export type SharedBoothDocKey = (typeof SHARED_BOOTH_DOC_KEYS)[number];
@@ -26,6 +31,11 @@ export function pickSharedBoothDocs(patch?: BoothLayoutPatch): Partial<BoothLayo
     if (key === 'siteMapGallery') {
       const g = patch.siteMapGallery;
       if (Array.isArray(g) && g.length > 0) out.siteMapGallery = g;
+      continue;
+    }
+    if (key === 'unitLayouts' || key === 'floorPlans') {
+      const g = patch[key];
+      if (Array.isArray(g) && g.length > 0) out[key] = g;
       continue;
     }
     const v = patch[key];
@@ -57,6 +67,18 @@ export function mergeSharedBoothDocs(
       }
       continue;
     }
+    if (key === 'unitLayouts' || key === 'floorPlans') {
+      const fg = fromFile[key];
+      if (Array.isArray(fg) && fg.length > 0) {
+        out[key] = fg;
+        continue;
+      }
+      const bg = fromBrowser[key];
+      if (Array.isArray(bg) && bg.some((u) => u.imageUrl?.startsWith('data:'))) {
+        delete out[key];
+      }
+      continue;
+    }
     const fv = fromFile[key];
     if (typeof fv === 'string' && fv.trim()) {
       out[key] = fv;
@@ -70,6 +92,7 @@ export function mergeSharedBoothDocs(
   return out;
 }
 
+/** Persist shared booth document URLs to MongoDB via /api/booth-cms/patch. */
 export async function patchBoothCmsOnServer(
   boothId: string,
   patch: BoothLayoutPatch,
@@ -84,16 +107,7 @@ export async function patchBoothCmsOnServer(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ boothId, patch: shared }),
     });
-    const text = await res.text();
-    let data: { ok?: boolean; error?: string };
-    try {
-      data = JSON.parse(text) as typeof data;
-    } catch {
-      return {
-        ok: false,
-        error: 'Server API unavailable — run npm run start:prod on Coolify (not static hosting)',
-      };
-    }
+    const data = await res.json().catch(() => ({ ok: false, error: 'Server API unavailable' }));
     if (!res.ok || !data.ok) {
       return { ok: false, error: data.error || `HTTP ${res.status}` };
     }

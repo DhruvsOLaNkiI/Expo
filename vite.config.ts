@@ -6,6 +6,7 @@ import { boothCmsApiPlugin } from './vite-plugin-booth-cms-api';
 import { pageindexApiPlugin } from './vite-plugin-pageindex-api';
 import { r2ApiPlugin } from './vite-plugin-r2-api';
 import { visitorsApiPlugin } from './vite-plugin-visitors-api';
+import { analyticsApiPlugin } from './src/dashboard/vite-plugin';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
@@ -15,6 +16,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       boothCmsApiPlugin(__dirname),
       visitorsApiPlugin(__dirname),
+      analyticsApiPlugin(__dirname),
       r2ApiPlugin(__dirname),
       pageindexApiPlugin(__dirname),
     ],
@@ -22,6 +24,7 @@ export default defineConfig(({ mode }) => {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: {
         '@': path.resolve(__dirname, 'src'),
         '@app': path.resolve(__dirname, 'src/app'),
@@ -36,6 +39,7 @@ export default defineConfig(({ mode }) => {
         '@components': path.resolve(__dirname, 'src/components'),
         '@pages': path.resolve(__dirname, 'src/pages'),
         '@layouts': path.resolve(__dirname, 'src/layouts'),
+        '@dashboard': path.resolve(__dirname, 'src/dashboard'),
         '@server': path.resolve(__dirname, 'server'),
       },
     },

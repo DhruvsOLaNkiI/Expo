@@ -20,6 +20,7 @@ export type StandeePlacement = {
   rotation: [number, number, number];
 };
 
+
 export function hallAisleStandeeObjectName(id: string): string {
   return `hall-standee-${id}`;
 }

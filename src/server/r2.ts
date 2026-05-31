@@ -59,6 +59,19 @@ export function sanitizeObjectKeyPart(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 120) || 'file';
 }
 
+/** CDN-friendly cache headers — R2 public URLs are served via Cloudflare's edge network. */
+export function cacheControlForR2Object(contentType: string, objectKey: string): string {
+  const type = contentType.toLowerCase();
+  const key = objectKey.toLowerCase();
+  if (type === 'application/pdf' || key.endsWith('.pdf')) {
+    return 'public, max-age=604800, stale-while-revalidate=86400';
+  }
+  if (type.startsWith('image/') || type.startsWith('video/') || /\.(png|jpe?g|webp|gif|avif|mp4|webm)$/i.test(key)) {
+    return 'public, max-age=31536000, immutable';
+  }
+  return 'public, max-age=86400';
+}
+
 export function buildObjectKey(boothId: string, folder: string, filename: string): string {
   const bucket = process.env.R2_BUCKET?.trim() ?? '';
   const boothRaw = normalizeR2ObjectKey(boothId || 'global', bucket) || 'global';
@@ -86,12 +99,14 @@ export async function uploadBufferToR2(
     throw new Error(`Invalid R2 object key (must start with booths/): ${objectKey}`);
   }
   const client = getClient(cfg);
+  const type = contentType || 'application/octet-stream';
   await client.send(
     new PutObjectCommand({
       Bucket: cfg.bucket,
       Key: objectKey,
       Body: body,
-      ContentType: contentType || 'application/octet-stream',
+      ContentType: type,
+      CacheControl: cacheControlForR2Object(type, objectKey),
     }),
   );
   return `${cfg.publicBase}/${objectKey}`;
