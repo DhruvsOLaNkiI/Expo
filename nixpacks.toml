@@ -1,4 +1,7 @@
 # Coolify / Nixpacks: run Node after build so /api/* (R2 upload, chat, visitors) works.
+[variables]
+NIXPACKS_NODE_VERSION = "22"
+
 [phases.build]
 cmds = ["npm run build"]
 

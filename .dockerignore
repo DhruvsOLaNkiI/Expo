@@ -1,0 +1,26 @@
+# Docker build context exclusions (repo root — same folder as package.json)
+# Coolify/Nixpacks reads this before sending files to the build container.
+
+node_modules
+dist
+build
+coverage
+.git
+.gitignore
+
+# Large / dev-only folders (not needed to run vite build)
+pageindex
+DBExpo
+dashboard-host
+Guide_Completion
+.claude
+school-chair
+
+# Secrets & local env (set these in Coolify instead)
+.env
+.env.*
+!.env.example
+
+# OS & logs
+.DS_Store
+*.log
