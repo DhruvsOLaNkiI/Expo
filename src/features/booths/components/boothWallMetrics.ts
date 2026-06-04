@@ -31,6 +31,20 @@ export function boothSideWallWingArgs(): [number, number, number] {
   return [BOOTH_WALL.sideThickness, BOOTH_WALL.sideHeight, BOOTH_WALL.wingDepth];
 }
 
+/** One continuous side panel (main + entrance wing) — avoids a visible seam at z=0. */
+export function boothSideWallContinuousArgs(): {
+  args: [number, number, number];
+  centerZ: number;
+} {
+  const zBack = BOOTH_WALL.mainCenterZ - BOOTH_WALL.mainDepth / 2;
+  const zFront = BOOTH_WALL.wingCenterZ + BOOTH_WALL.wingDepth / 2;
+  const depth = zFront - zBack;
+  return {
+    args: [BOOTH_WALL.sideThickness, BOOTH_WALL.sideHeight, depth],
+    centerZ: (zBack + zFront) / 2,
+  };
+}
+
 export type BoothPlacementSlot =
   | 'exteriorLeft'
   | 'exteriorRight'

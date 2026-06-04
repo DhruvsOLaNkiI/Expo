@@ -12,7 +12,9 @@ import type {
   PlacedImage,
   HostessQuickReply,
 } from '@/features/shared/data/boothLayouts';
-import { siteMapUrlsFromConfig } from '@/features/shared/data/boothLayouts';
+import { MANAGED_HEADER_BOOTH_IDS, siteMapUrlsFromConfig } from '@/features/shared/data/boothLayouts';
+import { BoothManagedHeader } from '@/features/booths/components/BoothManagedHeader';
+import { CROWN_ESTATES_THEME } from '@/features/booths/components/CrownEstatesBooth';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothWallLogos } from '@/features/booths/components/BoothWallLogos';
 import { BoothPlacementImages } from '@/features/booths/components/BoothPlacementImages';
@@ -159,9 +161,10 @@ function BoothScene({
   onPlacementSlotClick,
 }: PreviewProps) {
   const isVertexElite = boothId === 'vertex-elite';
+  const usesManagedHeader = MANAGED_HEADER_BOOTH_IDS.has(boothId);
   const safeLogoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
   const siteMapUrls = siteMapUrlsFromConfig({ siteMapUrl, siteMapGallery });
-  const hasLogo = Boolean(safeLogoUrl) && !isVertexElite;
+  const hasLogo = Boolean(safeLogoUrl) && !isVertexElite && !usesManagedHeader;
   const placing = Boolean(placingImageUrl);
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, true);
 
@@ -342,22 +345,45 @@ function BoothScene({
       </mesh>
 
       {/* Header fascia */}
-      <>
-        <ClickableSurface active={placing} onHit={handleHit} position={[0, 6.5, -4]} castShadow>
-          <boxGeometry args={[12.5, 1.5, 0.6]} />
-          <meshPhysicalMaterial color="#fcfcfc" roughness={0.25} metalness={0} clearcoat={0.4} clearcoatRoughness={0.25} />
-        </ClickableSurface>
-        {hasLogo ? (
-          <Suspense fallback={null}>
-            <PreviewHeaderLogo url={safeLogoUrl} accent={accent} tagline={name || 'Booth'} />
-          </Suspense>
-        ) : (
-          <Text position={[0, 6.5, -3.58]} fontSize={0.6} color={accent} anchorX="center" anchorY="middle" font={FONT}>
-            {name || 'Booth'}
-            <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={lighting.emissiveGlow} toneMapped={false} />
-          </Text>
-        )}
-      </>
+      {usesManagedHeader ? (
+        <Suspense fallback={null}>
+          <BoothManagedHeader
+            boothId={boothId}
+            accent={accent}
+            headerLogoUrl={safeLogoUrl || undefined}
+            headerBranding={
+              safeLogoUrl
+                ? {
+                    ...headerBranding,
+                    centerHeaderLogo: headerBranding?.centerHeaderLogo ?? true,
+                    hideCenterText: headerBranding?.hideCenterText ?? true,
+                    hideRera: headerBranding?.hideRera ?? true,
+                  }
+                : headerBranding
+            }
+            companyTagline={company?.tagline}
+            fasciaColor={CROWN_ESTATES_THEME.gradientMid}
+            position={[0, 6.5, -3.64]}
+          />
+        </Suspense>
+      ) : (
+        <>
+          <ClickableSurface active={placing} onHit={handleHit} position={[0, 6.5, -4]} castShadow>
+            <boxGeometry args={[12.5, 1.5, 0.6]} />
+            <meshPhysicalMaterial color="#fcfcfc" roughness={0.25} metalness={0} clearcoat={0.4} clearcoatRoughness={0.25} />
+          </ClickableSurface>
+          {hasLogo ? (
+            <Suspense fallback={null}>
+              <PreviewHeaderLogo url={safeLogoUrl} accent={accent} tagline={name || 'Booth'} />
+            </Suspense>
+          ) : (
+            <Text position={[0, 6.5, -3.58]} fontSize={0.6} color={accent} anchorX="center" anchorY="middle" font={FONT}>
+              {name || 'Booth'}
+              <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={lighting.emissiveGlow} toneMapped={false} />
+            </Text>
+          )}
+        </>
+      )}
 
       {/* Desk */}
       <group position={[0, 0.5, 0]}>

@@ -14,6 +14,7 @@ import { getBootstrapSceneForDevice } from '@/utils/devicePerformance';
 import { setR2PublicBase, getR2PublicBase } from '@/config/r2Public';
 import { commitHallLayoutTransform } from '@/store/persist/hallLayout';
 import {
+  mergeBoothLayoutPatch,
   persistBoothOverridesWithFallback,
   readPersistedBoothOverrides,
 } from '@/store/persist/boothCms';
@@ -509,7 +510,7 @@ export const useStore = create<AppState>((set, get) => ({
       const current = get().boothOverrides;
       const seeded: Record<string, BoothLayoutPatch> = { ...current };
       for (const id of new Set([...Object.keys(current), ...Object.keys(localBooths)])) {
-        seeded[id] = { ...(current[id] || {}), ...(localBooths[id] || {}) };
+        seeded[id] = mergeBoothLayoutPatch(current[id], localBooths[id]);
       }
       set({ boothOverrides: seeded });
     }
@@ -550,7 +551,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Server data is the base; local overrides (latest user edits) always win per field.
     for (const id of new Set([...Object.keys(booths), ...Object.keys(localBooths)])) {
-      booths[id] = { ...(booths[id] || {}), ...(localBooths[id] || {}) };
+      booths[id] = mergeBoothLayoutPatch(booths[id], localBooths[id]);
     }
 
     // Device-specific scene baseline, then layer API scene on top
@@ -586,7 +587,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (ids.size === 0) return;
     const merged: Record<string, BoothLayoutPatch> = { ...current };
     for (const id of ids) {
-      merged[id] = { ...(current[id] || {}), ...(local[id] || {}) };
+      merged[id] = mergeBoothLayoutPatch(current[id], local[id]);
     }
     set({ boothOverrides: merged });
   },
@@ -607,6 +608,18 @@ export const useStore = create<AppState>((set, get) => ({
       if (value === null) {
         delete (nextEntry as Record<string, unknown>)[key];
         definedPatch[key as keyof BoothLayoutPatch] = null as never;
+      } else if (key === 'headerBranding' && value && typeof value === 'object') {
+        const mergedHb = { ...(prev.headerBranding ?? {}), ...(value as BoothLayoutPatch['headerBranding']) };
+        nextEntry.headerBranding = mergedHb;
+        definedPatch.headerBranding = mergedHb;
+      } else if (key === 'company' && value && typeof value === 'object') {
+        const mergedCo = { ...(prev.company ?? {}), ...(value as BoothLayoutPatch['company']) };
+        nextEntry.company = mergedCo;
+        definedPatch.company = mergedCo;
+      } else if (key === 'lighting' && value && typeof value === 'object') {
+        const mergedLi = { ...(prev.lighting ?? {}), ...(value as BoothLayoutPatch['lighting']) };
+        nextEntry.lighting = mergedLi;
+        definedPatch.lighting = mergedLi;
       } else {
         (nextEntry as Record<string, unknown>)[key] = value;
         (definedPatch as Record<string, unknown>)[key] = value;

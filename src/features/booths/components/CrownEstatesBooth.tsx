@@ -1,36 +1,32 @@
 import { Suspense, useMemo } from 'react';
 import { Text } from '@react-three/drei';
-import * as THREE from 'three';
-import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
+import type {
+  BoothHeaderBranding,
+  CompanyProfile,
+  MediaItem,
+  PlacedImage,
+  BoothLighting,
+  HostessQuickReply,
+  UnitLayoutItem,
+} from '@/features/shared/data/boothLayouts';
+import { resolveFasciaLayout } from '@/features/shared/data/boothLayouts';
+import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
-import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
+import { BoothHostessGreeter, BoothStandee } from './Booths';
+import { BoothManagedHeader } from './BoothManagedHeader';
+import { BoothPlacementImages } from './BoothPlacementImages';
+import { BOOTH_WALL, boothSideWallContinuousArgs, type BoothWallPlacementAdjustments } from './boothWallMetrics';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 
-function useBoothGradient() {
-  return useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // Soft blue-purple gradient across diagonal
-      const grd = ctx.createLinearGradient(0, 0, 1024, 1024);
-      grd.addColorStop(0, '#5a8bed'); // Electric blue
-      grd.addColorStop(0.35, '#a690f0'); // Lavender
-      grd.addColorStop(0.65, '#e0b4ee'); // Light violet / pinkish glow
-      grd.addColorStop(1, '#5a8bed'); // Soft blue
-      
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, 1024, 1024);
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }, []);
-}
+/** Shared Crown Estates blue–lavender palette (walls, header, desk). */
+export const CROWN_ESTATES_THEME = {
+  gradientMid: '#a690f0',
+  floor: '#f0ecfa',
+  glow: '#b592f6',
+} as const;
 
 export function CrownEstatesBooth({
   position,
@@ -38,9 +34,22 @@ export function CrownEstatesBooth({
   boothScale,
   id,
   name,
+  color,
+  accent,
+  counterColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
+  headerBranding,
+  headerFasciaColor,
+  wallLogoLeftUrl,
+  wallLogoRightUrl,
+  sideWallLeftImageUrl,
+  sideWallRightImageUrl,
+  exteriorWallLeftImageUrl,
+  exteriorWallRightImageUrl,
+  counterFrontImageUrl,
+  wallPlacementAdjustments,
   placedImages,
   brochureUrl = '',
   priceListUrl = '',
@@ -67,6 +76,16 @@ export function CrownEstatesBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  headerBranding?: BoothHeaderBranding;
+  headerFasciaColor?: string;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: BoothWallPlacementAdjustments;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -86,16 +105,35 @@ export function CrownEstatesBooth({
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   
-  const gradTex = useBoothGradient();
-  
-  // Premium Crown Estates color palette
-  const champagneGold = '#dcb670';
-  const glowColor = '#b592f6';
-  
-  // Materials
-  const gradMat = <meshPhysicalMaterial map={gradTex} roughness={0.15} metalness={0.1} clearcoat={0.3} clearcoatRoughness={0.2} />;
+  const safeHeaderLogo = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
+  const effectiveHeaderBranding = useMemo((): BoothHeaderBranding => {
+    const hb = headerBranding ?? {};
+    if (!safeHeaderLogo) return hb;
+    return {
+      ...hb,
+      centerHeaderLogo: hb.centerHeaderLogo ?? true,
+      hideCenterText: hb.hideCenterText ?? true,
+      hideRera: hb.hideRera ?? true,
+    };
+  }, [headerBranding, safeHeaderLogo]);
+  const { hideCenterText } = resolveFasciaLayout(effectiveHeaderBranding);
+
+  const champagneGold = accent?.trim() || '#dcb670';
+  const glowColor = CROWN_ESTATES_THEME.glow;
+
+  /** Solid wall color — one piece per side (no panel seam at the entrance wing). */
+  const wallMat = (
+    <meshStandardMaterial
+      color={CROWN_ESTATES_THEME.gradientMid}
+      roughness={0.18}
+      metalness={0.1}
+    />
+  );
   const goldMat = <meshStandardMaterial color={champagneGold} roughness={0.2} metalness={0.85} />;
-  const floorMat = <meshStandardMaterial color="#fcfcfc" roughness={0.4} metalness={0.05} />;
+  const { args: sideWallArgs, centerZ: sideWallCenterZ } = boothSideWallContinuousArgs();
+  const floorMat = (
+    <meshStandardMaterial color={CROWN_ESTATES_THEME.floor} roughness={0.4} metalness={0.05} />
+  );
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -111,91 +149,58 @@ export function CrownEstatesBooth({
         <meshStandardMaterial color={champagneGold} emissive={champagneGold} emissiveIntensity={1.5} />
       </mesh>
 
-      {/* Back Wall Edge Glow */}
-      <mesh position={[0, 3, -4.2]}>
-        <boxGeometry args={[12.4, 6.2, 0.1]} />
-        <meshStandardMaterial color={glowColor} emissive={glowColor} emissiveIntensity={0.8} />
+      {/* Back wall — slight overlap into sides to hide corner gaps */}
+      <mesh position={[0, BOOTH_WALL.wallCenterY, -3.98]} receiveShadow castShadow>
+        <boxGeometry args={[12.35, BOOTH_WALL.sideHeight, 0.54]} />
+        {wallMat}
       </mesh>
 
-      {/* Back Wall (Gradient) */}
-      <mesh position={[0, 3, -4]} receiveShadow castShadow>
-        <boxGeometry args={[12, 6, 0.5]} />
-        {gradMat}
-      </mesh>
-
-      {/* Back Wall Top Trim (Gold) */}
+      {/* Back wall top trim */}
       <mesh position={[0, 6.05, -3.75]} castShadow>
-        <boxGeometry args={[12, 0.1, 0.1]} />
+        <boxGeometry args={[12.35, 0.1, 0.1]} />
         {goldMat}
       </mesh>
 
-      {/* Side Walls (Gradient) */}
-      <mesh position={[-5.85, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.3, 6, 4]} />
-        {gradMat}
+      {/* Continuous side walls (single panel per side — no seam at entrance wing) */}
+      <mesh
+        position={[-BOOTH_WALL.sideCenterX, BOOTH_WALL.wallCenterY, sideWallCenterZ]}
+        receiveShadow
+        castShadow
+      >
+        <boxGeometry args={sideWallArgs} />
+        {wallMat}
       </mesh>
-      <mesh position={[5.85, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.3, 6, 4]} />
-        {gradMat}
-      </mesh>
-
-      {/* Side Wall Vertical Edge Trims (Gold) */}
-      <mesh position={[-5.68, 3, 0.01]}>
-        <boxGeometry args={[0.04, 6, 0.04]} />
-        {goldMat}
-      </mesh>
-      <mesh position={[5.68, 3, 0.01]}>
-        <boxGeometry args={[0.04, 6, 0.04]} />
-        {goldMat}
-      </mesh>
-      
-      {/* Side Wall Inner Vertical Trims (Gold) */}
-      <mesh position={[-5.68, 3, -3.75]}>
-        <boxGeometry args={[0.04, 6, 0.04]} />
-        {goldMat}
-      </mesh>
-      <mesh position={[5.68, 3, -3.75]}>
-        <boxGeometry args={[0.04, 6, 0.04]} />
-        {goldMat}
+      <mesh
+        position={[BOOTH_WALL.sideCenterX, BOOTH_WALL.wallCenterY, sideWallCenterZ]}
+        receiveShadow
+        castShadow
+      >
+        <boxGeometry args={sideWallArgs} />
+        {wallMat}
       </mesh>
 
-      {/* Header Canopy (Gradient) */}
-      <mesh position={[0, 6.5, -4]} castShadow>
-        <boxGeometry args={[12.5, 1.5, 0.8]} />
-        {gradMat}
-      </mesh>
-      
-      {/* Header Canopy Bottom Trim (Gold) */}
+      <BoothManagedHeader
+        boothId={id}
+        accent={champagneGold}
+        headerLogoUrl={safeHeaderLogo || undefined}
+        headerBranding={effectiveHeaderBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={headerFasciaColor?.trim() || CROWN_ESTATES_THEME.gradientMid}
+        subtitleColor="#f5f0ff"
+        position={[0, 6.5, -3.64]}
+      />
+
       <mesh position={[0, 5.75, -3.6]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />
         {goldMat}
       </mesh>
-
-      {/* Branding */}
-      {headerLogoUrl ? (
-        <Suspense fallback={null}>
-          <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={champagneGold} />
-        </Suspense>
-      ) : (
-        <Text
-          position={[0, 6.5, -3.55]}
-          fontSize={0.8}
-          color={champagneGold}
-          anchorX="center"
-          anchorY="middle"
-          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-        >
-          {name}
-          <meshStandardMaterial attach="material" color={champagneGold} metalness={0.8} roughness={0.1} emissive={champagneGold} emissiveIntensity={0.15} />
-        </Text>
-      )}
 
       {/* Interactive Concierge Desk */}
       <group position={[0, 0.5, 0]}>
         {/* Main Base (Gradient) */}
         <mesh position={[0, 0, 0]} castShadow receiveShadow>
           <boxGeometry args={[4, 1, 1]} />
-          {gradMat}
+          {wallMat}
         </mesh>
         {/* Gold Top Slab */}
         <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
@@ -203,17 +208,18 @@ export function CrownEstatesBooth({
           {goldMat}
         </mesh>
         
-        {/* Desk Front Logo text */}
-        <Text
-          position={[0, 0, 0.51]}
-          fontSize={0.25}
-          color={champagneGold}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {name}
-          <meshStandardMaterial attach="material" color={champagneGold} metalness={0.9} roughness={0.1} />
-        </Text>
+        {!hideCenterText ? (
+          <Text
+            position={[0, 0, 0.51]}
+            fontSize={0.25}
+            color={champagneGold}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {name}
+            <meshStandardMaterial attach="material" color={champagneGold} metalness={0.9} roughness={0.1} />
+          </Text>
+        ) : null}
 
         {/* Counter LED TV */}
         <BoothDisplayEditable
@@ -262,6 +268,17 @@ export function CrownEstatesBooth({
         </mesh>
       </BoothDisplayEditable>
 
+      <Suspense fallback={null}>
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+        />
+      </Suspense>
+
       {/* Cinematic Spotlight */}
       <spotLight
         position={[0, 7.5, -1.2]}
@@ -296,7 +313,7 @@ export function CrownEstatesBooth({
       />
 
       {placedImages.map((img) => (
-        <group key={img.id} position={img.position} rotation={img.rotation} scale={img.scale}>
+        <group key={img.id} position={img.position} rotation={img.rotation}>
           <mesh castShadow receiveShadow>
             <boxGeometry args={[1.2, 0.8, 0.04]} />
             {goldMat}

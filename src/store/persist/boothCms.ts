@@ -1,4 +1,5 @@
 import type { BoothLayoutPatch } from '@/features/shared/data/boothLayouts';
+import { mergeBoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
 
 const BOOTH_CMS_LS_KEY = 'virtual-expo-booth-cms-overrides';
 
@@ -116,12 +117,13 @@ const BOOTH_THEME_KEYS = [
   'counterTopColor',
 ] as const;
 
-function mergeBoothPatches(
-  fromIdb: BoothLayoutPatch | undefined,
-  fromLs: BoothLayoutPatch | undefined,
+/** Merge two booth patches; `overlay` wins scalars. Nested objects are deep-merged. */
+export function mergeBoothLayoutPatch(
+  base: BoothLayoutPatch | undefined,
+  overlay: BoothLayoutPatch | undefined,
 ): BoothLayoutPatch {
-  const idb = fromIdb || {};
-  const ls = fromLs || {};
+  const idb = base || {};
+  const ls = overlay || {};
   const out: BoothLayoutPatch = { ...idb, ...ls };
   for (const key of BOOTH_THEME_KEYS) {
     const lsVal = ls[key];
@@ -131,7 +133,32 @@ function mergeBoothPatches(
       (out as Record<string, unknown>)[key] = idbVal;
     }
   }
+  if (idb.headerBranding || ls.headerBranding) {
+    out.headerBranding = { ...(idb.headerBranding ?? {}), ...(ls.headerBranding ?? {}) };
+  }
+  if (idb.company || ls.company) {
+    out.company = { ...(idb.company ?? {}), ...(ls.company ?? {}) };
+  }
+  if (idb.lighting || ls.lighting) {
+    out.lighting = { ...(idb.lighting ?? {}), ...(ls.lighting ?? {}) };
+  }
+  if (idb.assignedSalesPerson || ls.assignedSalesPerson) {
+    out.assignedSalesPerson = {
+      ...(idb.assignedSalesPerson ?? { name: '', email: '', phone: '' }),
+      ...(ls.assignedSalesPerson ?? {}),
+    };
+  }
+  if (idb.displayLayout || ls.displayLayout) {
+    out.displayLayout = mergeBoothDisplayLayout(idb.displayLayout, ls.displayLayout);
+  }
   return out;
+}
+
+function mergeBoothPatches(
+  fromIdb: BoothLayoutPatch | undefined,
+  fromLs: BoothLayoutPatch | undefined,
+): BoothLayoutPatch {
+  return mergeBoothLayoutPatch(fromIdb, fromLs);
 }
 
 /** Try localStorage; on quota error persist full JSON to IndexedDB instead. */

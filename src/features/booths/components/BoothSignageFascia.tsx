@@ -153,7 +153,7 @@ export function BoothSignageFascia({
   const subSize = titleSize * 0.42;
   const logoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
   const logoScale = resolveHeaderLogoScale(headerBranding);
-  const { centerLogo, hideCenterText } = resolveFasciaLayout(headerBranding);
+  const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(headerBranding);
 
   return (
     <group position={position}>
@@ -251,31 +251,35 @@ export function BoothSignageFascia({
         </>
       ) : null}
 
-      <group position={[width * 0.34, 0, zFace]}>
-        <Text
-          position={[0, 0.1, 0]}
-          fontSize={0.16}
-          color={accent}
-          anchorX="center"
-          anchorY="middle"
-          font={FONT}
-        >
-          RERA
-          <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.25} />
-        </Text>
-        <Text
-          position={[0, -0.12, 0]}
-          fontSize={0.11}
-          color={subtitleColor}
-          anchorX="center"
-          anchorY="middle"
-          maxWidth={2.2}
-          textAlign="center"
-          font={FONT}
-        >
-          {branding.reraNumber || '—'}
-        </Text>
-      </group>
+      {showRera ? (
+        <group position={[width * 0.34, 0, zFace]}>
+          <Text
+            position={[0, 0.1, 0]}
+            fontSize={0.16}
+            color={accent}
+            anchorX="center"
+            anchorY="middle"
+            font={FONT}
+          >
+            RERA
+            <meshStandardMaterial attach="material" color={accent} emissive={accent} emissiveIntensity={0.25} />
+          </Text>
+          {branding.reraNumber ? (
+            <Text
+              position={[0, -0.12, 0]}
+              fontSize={0.11}
+              color={subtitleColor}
+              anchorX="center"
+              anchorY="middle"
+              maxWidth={2.2}
+              textAlign="center"
+              font={FONT}
+            >
+              {branding.reraNumber}
+            </Text>
+          ) : null}
+        </group>
+      ) : null}
     </group>
   );
 }

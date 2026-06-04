@@ -1,12 +1,50 @@
 import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
-import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
+import type {
+  BoothHeaderBranding,
+  CompanyProfile,
+  MediaItem,
+  PlacedImage,
+  BoothLighting,
+  HostessQuickReply,
+  UnitLayoutItem,
+} from '@/features/shared/data/boothLayouts';
+import {
+  resolveBoothHeaderBranding,
+  resolveFasciaLayout,
+} from '@/features/shared/data/boothLayouts';
+import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
+import { BoothSignageFascia } from './BoothSignageFascia';
+import { BoothPlacementImages } from './BoothPlacementImages';
+import { BoothWallLogos } from './BoothWallLogos';
+import { BoothSideWallAssembly } from './BoothSideWallAssembly';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
-import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
+import {
+  isScreenImageUrl,
+  LedScreenSurface,
+  LedScreenSuspenseFallback,
+  resolveBoothLedScreenUrl,
+} from '@/features/media/components/LedVideoPlane';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
+import type { BoothWallPlacementAdjustments } from './boothWallMetrics';
+
+/** Default Monarch palette when exhibitor has not overridden colors. */
+const MONARCH_DEFAULT = {
+  wall: '#3c1015',
+  wallDark: '#230a0d',
+  trim: '#e0ceaa',
+  floor: '#f6f3eb',
+  headerText: '#f5e6c8',
+} as const;
+
+function pickWallColor(color: string | undefined): string {
+  const c = color?.trim();
+  if (!c || c === '#fcf9f2' || c === '#fcfaf5') return MONARCH_DEFAULT.wall;
+  return c;
+}
 
 export function MonarchBooth({
   position,
@@ -14,9 +52,21 @@ export function MonarchBooth({
   boothScale,
   id,
   name,
+  color,
+  accent,
+  counterColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
+  headerBranding,
+  wallLogoLeftUrl,
+  wallLogoRightUrl,
+  sideWallLeftImageUrl,
+  sideWallRightImageUrl,
+  exteriorWallLeftImageUrl,
+  exteriorWallRightImageUrl,
+  counterFrontImageUrl,
+  wallPlacementAdjustments,
   lighting,
   placedImages,
   brochureUrl = '',
@@ -44,6 +94,15 @@ export function MonarchBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  headerBranding?: BoothHeaderBranding;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: BoothWallPlacementAdjustments;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -62,136 +121,110 @@ export function MonarchBooth({
 }) {
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
-  
-  // Premium Monarch color palette
-  const maroon = '#3c1015'; // Deep rich maroon
-  const darkMaroon = '#230a0d';
-  const champagneGold = '#e0ceaa'; // Matte champagne gold
-  const lightBeige = '#f6f3eb'; // Clean light beige for floor/canopy
+
+  const wallColor = pickWallColor(color);
+  const wallDark = color?.trim() && color.trim() !== '#fcf9f2' && color.trim() !== '#fcfaf5'
+    ? wallColor
+    : MONARCH_DEFAULT.wallDark;
+  const trim = accent?.trim() || MONARCH_DEFAULT.trim;
+  const floorPad = wallColor === MONARCH_DEFAULT.wall ? MONARCH_DEFAULT.floor : wallColor;
+  const deskBody = counterColor?.trim() || wallColor;
+  const fasciaColor = wallDark;
+  const { hideCenterText } = resolveFasciaLayout(headerBranding);
+  const headerTitle = resolveBoothHeaderBranding({
+    name,
+    headerBranding,
+    companyTagline: company?.tagline,
+  }).projectName;
+  const safeHeaderLogo = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
-      {/* Floor Pad with Recessed LED Strip */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
         <boxGeometry args={[12.2, 0.1, 5.5]} />
-        <meshStandardMaterial color={lightBeige} roughness={0.4} metalness={0.1} />
+        <meshStandardMaterial color={floorPad} roughness={0.4} metalness={0.1} />
       </mesh>
-      {/* Edge LED Strip */}
       <mesh position={[0, 0.06, 1.25]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[12.2, 0.05]} />
-        <meshStandardMaterial color={champagneGold} emissive={champagneGold} emissiveIntensity={2} />
+        <meshStandardMaterial
+          color={lighting.ledStripColor || trim}
+          emissive={lighting.ledStripColor || trim}
+          emissiveIntensity={lighting.ledStripIntensity ?? 2}
+        />
       </mesh>
 
-      {/* Back Wall (Maroon Textured) */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        <meshStandardMaterial color={darkMaroon} roughness={0.7} metalness={0.2} />
+        <meshStandardMaterial color={wallDark} roughness={0.7} metalness={0.2} />
       </mesh>
 
-      {/* Accent Wall Pillars (Champagne Gold) */}
       <mesh position={[-5.8, 3, -3.8]}>
         <boxGeometry args={[0.3, 6.2, 0.6]} />
-        <meshStandardMaterial color={champagneGold} metalness={0.7} roughness={0.3} />
+        <meshStandardMaterial color={trim} metalness={0.7} roughness={0.3} emissive={trim} emissiveIntensity={0.08} />
       </mesh>
       <mesh position={[5.8, 3, -3.8]}>
         <boxGeometry args={[0.3, 6.2, 0.6]} />
-        <meshStandardMaterial color={champagneGold} metalness={0.7} roughness={0.3} />
+        <meshStandardMaterial color={trim} metalness={0.7} roughness={0.3} emissive={trim} emissiveIntensity={0.08} />
       </mesh>
-      
-      {/* Back Wall Top Trim (Champagne Gold) */}
+
       <mesh position={[0, 6.05, -3.8]}>
         <boxGeometry args={[12, 0.1, 0.6]} />
-        <meshStandardMaterial color={champagneGold} metalness={0.7} roughness={0.3} />
+        <meshStandardMaterial color={trim} metalness={0.7} roughness={0.3} />
       </mesh>
 
-      {/* Side Walls (Deep Maroon) */}
-      <mesh position={[-5.85, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.3, 6, 4]} />
-        <meshStandardMaterial color={maroon} roughness={0.6} metalness={0.1} />
-      </mesh>
-      <mesh position={[5.85, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.3, 6, 4]} />
-        <meshStandardMaterial color={maroon} roughness={0.6} metalness={0.1} />
-      </mesh>
+      <BoothSideWallAssembly color={wallColor} />
 
-      {/* Side Wall Vertical Edge Trims (Champagne Gold) */}
       <mesh position={[-5.65, 3, 0]}>
         <boxGeometry args={[0.1, 6, 0.1]} />
-        <meshStandardMaterial color={champagneGold} metalness={0.8} roughness={0.2} />
+        <meshStandardMaterial color={trim} metalness={0.8} roughness={0.2} />
       </mesh>
       <mesh position={[5.65, 3, 0]}>
         <boxGeometry args={[0.1, 6, 0.1]} />
-        <meshStandardMaterial color={champagneGold} metalness={0.8} roughness={0.2} />
+        <meshStandardMaterial color={trim} metalness={0.8} roughness={0.2} />
       </mesh>
 
-      {/* Header sign board — dark maroon so gold lettering reads clearly */}
-      <mesh position={[0, 6.5, -4]} castShadow>
-        <boxGeometry args={[12.5, 1.5, 0.8]} />
-        <meshStandardMaterial color={darkMaroon} roughness={0.55} metalness={0.12} />
-      </mesh>
-      {/* Champagne gold frame on sign face */}
-      <mesh position={[0, 6.5, -3.58]}>
-        <boxGeometry args={[12.5, 1.42, 0.04]} />
-        <meshStandardMaterial color={champagneGold} metalness={0.75} roughness={0.28} />
-      </mesh>
-      <mesh position={[0, 6.5, -3.56]}>
-        <boxGeometry args={[12.1, 1.22, 0.02]} />
-        <meshStandardMaterial color={maroon} roughness={0.6} metalness={0.1} />
-      </mesh>
+      <BoothSignageFascia
+        boothName={name}
+        accent={trim}
+        headerLogoUrl={safeHeaderLogo || undefined}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={fasciaColor}
+        subtitleColor="#d4c4a8"
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
 
-      {/* Front edge lighting for Header Canopy */}
       <mesh position={[0, 5.8, -3.58]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />
-        <meshStandardMaterial color={champagneGold} emissive={champagneGold} emissiveIntensity={1.5} />
+        <meshStandardMaterial color={trim} emissive={trim} emissiveIntensity={1.5} />
       </mesh>
 
-      {/* Branding */}
-      <Text
-        position={[0, 6.5, -3.52]}
-        fontSize={0.72}
-        color="#f5e6c8"
-        anchorX="center"
-        anchorY="middle"
-        letterSpacing={0.04}
-        font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-      >
-        {name}
-        <meshStandardMaterial
-          attach="material"
-          color="#f5e6c8"
-          emissive="#e0ceaa"
-          emissiveIntensity={0.85}
-          metalness={0.35}
-          roughness={0.4}
-        />
-      </Text>
-
-      {/* Interactive Concierge Desk (Maroon & Gold) */}
       <group position={[0, 0.5, 0]}>
-        {/* Main Base */}
         <mesh position={[0, 0, 0]} castShadow receiveShadow>
           <boxGeometry args={[4, 1, 1]} />
-          <meshStandardMaterial color={maroon} metalness={0.2} roughness={0.5} />
+          <meshStandardMaterial color={deskBody} metalness={0.2} roughness={0.5} />
         </mesh>
-        {/* Gold Top Slab */}
         <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
           <boxGeometry args={[4.2, 0.1, 1.2]} />
-          <meshStandardMaterial color={champagneGold} metalness={0.6} roughness={0.2} />
+          <meshStandardMaterial color={trim} metalness={0.6} roughness={0.2} />
         </mesh>
-        
-        {/* Desk Front Gold Logo text */}
-        <Text
-          position={[0, 0, 0.51]}
-          fontSize={0.25}
-          color={champagneGold}
-          anchorX="center"
-          anchorY="middle"
-        >
-          THE MONARCH
-          <meshStandardMaterial attach="material" color={champagneGold} metalness={0.8} roughness={0.2} />
-        </Text>
 
-        {/* Counter LED TV */}
+        {!hideCenterText ? (
+          <Text
+            position={[0, 0, 0.51]}
+            fontSize={0.25}
+            color={trim}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {headerTitle}
+            <meshStandardMaterial attach="material" color={trim} metalness={0.8} roughness={0.2} />
+          </Text>
+        ) : null}
+
         <BoothDisplayEditable
           boothId={id}
           slot="counter"
@@ -216,7 +249,6 @@ export function MonarchBooth({
         </Suspense>
       </group>
 
-      {/* Main Display Screen (Large TV) */}
       <BoothDisplayEditable
         boothId={id}
         slot="main"
@@ -238,27 +270,39 @@ export function MonarchBooth({
         </mesh>
       </BoothDisplayEditable>
 
-      {/* Cinematic Lighting */}
+      <Suspense fallback={null}>
+        <BoothWallLogos
+          wallLogoLeftUrl={wallLogoLeftUrl}
+          wallLogoRightUrl={wallLogoRightUrl}
+        />
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+        />
+      </Suspense>
+
       <spotLight
         position={[0, 7.5, -1.2]}
         angle={0.5}
         penumbra={0.8}
-        intensity={65}
-        color="#fff4e6"
+        intensity={lighting.spotlightIntensity ?? 65}
+        color={lighting.spotlightColor ?? '#fff4e6'}
         distance={20}
         decay={2}
-        target-position={[0, 3, -3.8]}
         castShadow
       />
-      {/* Wall wash lights for maroon texture */}
       <pointLight position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
       <pointLight position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
 
-      <BoothStandee name={name} accent={champagneGold} boothId={id} displayLayout={displayLayout} />
+      <BoothStandee name={name} accent={trim} boothId={id} displayLayout={displayLayout} />
 
       <VertexEliteProximityPanels
         boothId={id}
-        glow={champagneGold}
+        glow={trim}
         brochureUrl={brochureUrl}
         priceListUrl={priceListUrl}
         unitLayoutUrl={unitLayoutUrl}
@@ -275,7 +319,7 @@ export function MonarchBooth({
       />
 
       {placedImages.map((img) => (
-        <group key={img.id} position={img.position} rotation={img.rotation} scale={img.scale}>
+        <group key={img.id} position={img.position} rotation={img.rotation}>
           <mesh castShadow receiveShadow>
             <boxGeometry args={[1.2, 0.8, 0.04]} />
             <meshStandardMaterial color="#f7f2e8" roughness={0.4} metalness={0.1} />

@@ -494,6 +494,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
         />
 
         <BoothLayoutSetupSection
+          boothId={boothId}
           boothName={booth.name}
           companyTagline={company.tagline}
           headerFasciaColor={boothId === 'builder-8' ? headerFasciaColor : color}
@@ -513,7 +514,8 @@ export function ExhibitorSetupPage({ onNav }: Props) {
               const next = { ...prev, ...patch };
               if (
                 'centerHeaderLogo' in patch ||
-                'hideCenterText' in patch
+                'hideCenterText' in patch ||
+                'hideRera' in patch
               ) {
                 void persist({ headerBranding: next }, 'Header fascia layout').then((r) => {
                   if (r.ok) setStatusMsg(r.message);

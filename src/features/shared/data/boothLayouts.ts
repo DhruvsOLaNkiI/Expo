@@ -109,17 +109,22 @@ export type BoothHeaderBranding = {
   hideCenterText?: boolean;
   /** Move header logo from the left slot to the center (implies hideCenterText). */
   centerHeaderLogo?: boolean;
+  /** Hide the RERA block on the right of the header beam. */
+  hideRera?: boolean;
 };
 
 export function resolveFasciaLayout(headerBranding?: BoothHeaderBranding): {
   centerLogo: boolean;
   hideCenterText: boolean;
+  showRera: boolean;
 } {
   const centerLogo = headerBranding?.centerHeaderLogo === true;
-  return {
-    centerLogo,
-    hideCenterText: centerLogo || headerBranding?.hideCenterText === true,
-  };
+  const hideCenterText = centerLogo || headerBranding?.hideCenterText === true;
+  const hasRera = Boolean(headerBranding?.reraNumber?.trim());
+  const showRera =
+    headerBranding?.hideRera !== true &&
+    (!centerLogo || hasRera);
+  return { centerLogo, hideCenterText, showRera };
 }
 
 const HEADER_LOGO_SCALE_MIN = 0.5;
@@ -148,6 +153,38 @@ export function resolveBoothHeaderBranding(params: {
     reraNumber: params.headerBranding?.reraNumber?.trim() || '',
   };
 }
+
+/** CMS managed header (B-04 / Crown Estates) — never falls back to booth name when center text is hidden. */
+export function resolveManagedHeaderCopy(params: {
+  headerBranding?: BoothHeaderBranding;
+  companyTagline?: string;
+}): {
+  showTitle: boolean;
+  showSubtitle: boolean;
+  title: string;
+  subtitle: string;
+  reraNumber: string;
+} {
+  const { hideCenterText, showRera } = resolveFasciaLayout(params.headerBranding);
+  const reraNumber = params.headerBranding?.reraNumber?.trim() || '';
+  if (hideCenterText) {
+    return { showTitle: false, showSubtitle: false, title: '', subtitle: '', reraNumber };
+  }
+  const title = params.headerBranding?.projectName?.trim() || '';
+  const subtitle =
+    params.headerBranding?.projectSubtitle?.trim() || params.companyTagline?.trim() || '';
+  return {
+    showTitle: Boolean(title),
+    showSubtitle: Boolean(subtitle),
+    title,
+    subtitle,
+    reraNumber: showRera ? reraNumber : '',
+  };
+}
+
+/** Booth IDs that use {@link BoothManagedHeader} instead of legacy fascia text defaults. */
+/** B-04 Crown Estates only — dedicated CMS header (see BoothManagedHeader). */
+export const MANAGED_HEADER_BOOTH_IDS = new Set(['builder-4']);
 
 export type BoothLayoutConfig = {
   id: string;

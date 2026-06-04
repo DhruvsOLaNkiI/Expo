@@ -106,7 +106,15 @@
 .exb-booth-layout-section { margin-bottom: 4px; }
 .exb-fascia-preview { margin: 14px 0 18px; padding: 12px; border-radius: 14px; background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(3,7,18,0.95)); border: 1px solid rgba(212,175,55,0.25); }
 .exb-fascia-preview-bar { display: grid; grid-template-columns: 1fr 1.4fr 1fr; align-items: center; gap: 12px; min-height: 72px; padding: 10px 14px; border-radius: 10px; background: linear-gradient(180deg, #e8e6e0, #d8d4cc); border: 2px solid #d4af37; box-shadow: inset 0 1px 0 rgba(255,255,255,0.5); }
-.exb-fascia-preview-bar-logo-center { grid-template-columns: 1fr auto; }
+.exb-fascia-preview-bar-logo-center {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+.exb-fascia-preview-bar-logo-center .exb-fascia-slot-center-logo {
+  grid-column: 1;
+  width: 100%;
+  max-width: 280px;
+}
 .exb-fascia-slot-center-logo { justify-self: center; }
 .exb-fascia-slot-center-logo img { max-height: 52px; max-width: 160px; object-fit: contain; }
 .exb-booth-layout-checkbox { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; grid-column: 1 / -1; }

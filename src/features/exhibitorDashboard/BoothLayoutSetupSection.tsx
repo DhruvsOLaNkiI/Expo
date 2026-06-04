@@ -1,9 +1,11 @@
 import { Upload } from 'lucide-react';
 import type { BoothHeaderBranding } from '@/features/shared/data/boothLayouts';
 import {
+  MANAGED_HEADER_BOOTH_IDS,
   resolveBoothHeaderBranding,
   resolveFasciaLayout,
   resolveHeaderLogoScale,
+  resolveManagedHeaderCopy,
 } from '@/features/shared/data/boothLayouts';
 
 type WallLogoFieldProps = {
@@ -51,6 +53,7 @@ function WallLogoField({ label, url, onUrl, onUpload }: WallLogoFieldProps) {
 }
 
 type Props = {
+  boothId?: string;
   boothName: string;
   companyTagline: string;
   /** Matches 3D header fascia (side wall color for most booths). */
@@ -70,6 +73,7 @@ type Props = {
 };
 
 export function BoothLayoutSetupSection({
+  boothId,
   boothName,
   companyTagline,
   headerFasciaColor = '#fcfaf5',
@@ -86,14 +90,18 @@ export function BoothLayoutSetupSection({
   onUploadWallLogoLeft,
   onUploadWallLogoRight,
 }: Props) {
+  const usesManagedHeader = boothId ? MANAGED_HEADER_BOOTH_IDS.has(boothId) : false;
   const resolved = resolveBoothHeaderBranding({
     name: boothName,
     headerBranding,
     companyTagline,
   });
+  const managedCopy = resolveManagedHeaderCopy({ headerBranding, companyTagline });
   const logoScale = resolveHeaderLogoScale(headerBranding);
   const previewLogoMaxH = Math.round(44 * logoScale);
-  const { centerLogo, hideCenterText } = resolveFasciaLayout(headerBranding);
+  const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(headerBranding);
+  const previewTitle = usesManagedHeader ? managedCopy.title : resolved.projectName;
+  const previewSubtitle = usesManagedHeader ? managedCopy.subtitle : resolved.projectSubtitle;
 
   return (
     <section className="exb-card exb-page-section exb-page-wide exb-booth-layout-section">
@@ -101,6 +109,13 @@ export function BoothLayoutSetupSection({
       <p className="exb-muted">
         Header fascia and back-wall logos appear in fixed slots on the 3D booth — same positions for
         every exhibitor. R2 is paused; logos are saved locally in booth config and auto-resized.
+        {usesManagedHeader ? (
+          <>
+            {' '}
+            <strong>B-04 Crown Estates</strong> uses a dedicated managed header in the 3D expo — enable{' '}
+            <em>Center header logo only</em> to hide title text and center your logo.
+          </>
+        ) : null}
       </p>
 
       <div className="exb-fascia-preview" aria-hidden>
@@ -131,19 +146,21 @@ export function BoothLayoutSetupSection({
                 style={{ maxHeight: previewLogoMaxH + 8, maxWidth: Math.round(140 * logoScale) }}
               />
             ) : null}
-            {!hideCenterText ? (
+            {!hideCenterText && (previewTitle || previewSubtitle) ? (
               <>
-                <strong>{resolved.projectName}</strong>
-                <em>{resolved.projectSubtitle}</em>
+                {previewTitle ? <strong>{previewTitle}</strong> : null}
+                {previewSubtitle ? <em>{previewSubtitle}</em> : null}
               </>
-            ) : !centerLogo ? (
+            ) : hideCenterText || centerLogo ? (
               <span className="exb-muted">Center text hidden</span>
             ) : null}
           </div>
-          <div className="exb-fascia-slot exb-fascia-slot-rera">
-            <span className="exb-fascia-rera-label">RERA</span>
-            <span>{resolved.reraNumber || 'Registration no.'}</span>
-          </div>
+          {showRera ? (
+            <div className="exb-fascia-slot exb-fascia-slot-rera">
+              <span className="exb-fascia-rera-label">RERA</span>
+              <span>{resolved.reraNumber || 'Registration no.'}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -235,12 +252,13 @@ export function BoothLayoutSetupSection({
               onBrandingChange({
                 centerHeaderLogo: e.target.checked,
                 hideCenterText: e.target.checked ? true : headerBranding.hideCenterText,
+                hideRera: e.target.checked ? true : headerBranding.hideRera,
               })
             }
           />
           <span>
-            <strong>Center header logo only</strong> — hide &quot;LUXE TOWERS&quot; / subtitle in the
-            middle and show your uploaded header logo in the center of the beam.
+            <strong>Center header logo only</strong> — hide project name / subtitle in the middle,
+            move your header logo to the center, and hide the RERA block on the right.
           </span>
         </label>
 
