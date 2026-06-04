@@ -10,15 +10,19 @@ import {
   EXPO_AISLE_WEST_X,
   EXPO_AISLE_EAST_X,
   defaultEntranceLobbyZ,
+  type HallLayoutConfig,
   type BoothLayoutConfig,
   type BoothLayoutPatch,
 } from '@/features/shared/data/boothLayouts';
+import { DEFAULT_MAIN_EXPO_SPAWN } from '@/features/shared/data/registrationHall';
 
 export type CmsHallMapTabProps = {
   booths: BoothLayoutConfig[];
   selectedId: string;
   onSelectBooth: (id: string) => void;
   onPatchBooth: (id: string, patch: BoothLayoutPatch) => Promise<boolean>;
+  hallLayout?: Partial<Pick<HallLayoutConfig, 'mainExpoSpawn' | 'mainExpoSpawnYaw'>>;
+  onPatchHallLayout: (patch: Partial<Pick<HallLayoutConfig, 'mainExpoSpawn' | 'mainExpoSpawnYaw'>>) => void;
 };
 
 const PAD = 4;
@@ -45,20 +49,6 @@ function svgToWorld(sx: number, sy: number): { x: number; z: number } {
   return { x: sx, z: -sy };
 }
 
-function radToDeg(r: number): number {
-  return (r * 180) / Math.PI;
-}
-
-function degToRad(d: number): number {
-  return (d * Math.PI) / 180;
-}
-
-const ROTATION_SNAP_DEG = 15;
-
-function snapAngle(deg: number): number {
-  return Math.round(deg / ROTATION_SNAP_DEG) * ROTATION_SNAP_DEG;
-}
-
 type DragState = {
   boothId: string;
   offsetX: number;
@@ -67,10 +57,11 @@ type DragState = {
   startWorldZ: number;
 };
 
-type RotateState = {
-  boothId: string;
-  startAngleDeg: number;
-  startPointerAngle: number;
+type EntryDragState = {
+  offsetX: number;
+  offsetY: number;
+  startWorldX: number;
+  startWorldZ: number;
 };
 
 function GridLines({ step }: { step: number }) {
@@ -102,136 +93,114 @@ function GridLines({ step }: { step: number }) {
   return <>{lines}</>;
 }
 
-const HANDLE_R = 0.55;
-
+/**
+ * Booths always render as wide horizontal blocks (no SVG rotation).
+ * A small arrow on the aisle-facing side indicates direction.
+ * Rotation editing is handled in the Layout tab sidebar.
+ */
 function BoothRect({
   booth,
   isSelected,
   isDragging,
-  isRotating,
   dragPos,
-  rotatingDeg,
   onPointerDown,
-  onRotateHandleDown,
 }: {
   booth: BoothLayoutConfig;
   isSelected: boolean;
   isDragging: boolean;
-  isRotating: boolean;
   dragPos: { x: number; y: number } | null;
-  rotatingDeg: number | null;
   onPointerDown: (e: RPointerEvent<SVGGElement>, id: string) => void;
-  onRotateHandleDown: (e: RPointerEvent<SVGCircleElement>, id: string) => void;
 }) {
   const pos = isDragging && dragPos
     ? dragPos
     : worldToSvg(booth.position[0], booth.position[2]);
-  const yawDeg = isRotating && rotatingDeg !== null
-    ? rotatingDeg
-    : radToDeg(booth.rotation[1]);
 
   const bw = BASE_BOOTH_W * booth.scale[0];
   const bd = BASE_BOOTH_D * booth.scale[2];
-  const handleArm = bd / 2 + 1.2;
 
   const fill = booth.color || '#1a1a2e';
   const stroke = isSelected ? '#d4af37' : (booth.accent || '#555');
   const strokeW = isSelected ? 0.25 : 0.12;
   const opacity = isDragging ? 0.85 : 1;
 
-  const shortName = booth.name.length > 14 ? booth.name.slice(0, 13) + '…' : booth.name;
+  const shortName = booth.name.length > 14 ? booth.name.slice(0, 13) + '\u2026' : booth.name;
+
+  // True booth-facing indicator from world yaw -> map vector.
+  // Booth local +Z is "front". In map space, (x, z) projects to (x, -z).
+  // So forward map vector is: [sin(yaw), -cos(yaw)].
+  const yaw = booth.rotation[1];
+  const fx = Math.sin(yaw);
+  const fy = -Math.cos(yaw);
+  const absFx = Math.abs(fx);
+  const absFy = Math.abs(fy);
+  let arrowPts = '';
+  if (absFx >= absFy) {
+    const arrowX = fx >= 0 ? bw / 2 + 0.42 : -bw / 2 - 0.42;
+    arrowPts = fx >= 0
+      ? `${arrowX - 0.25},-0.5 ${arrowX + 0.3},0 ${arrowX - 0.25},0.5`
+      : `${arrowX + 0.25},-0.5 ${arrowX - 0.3},0 ${arrowX + 0.25},0.5`;
+  } else {
+    const arrowY = fy >= 0 ? bd / 2 + 0.42 : -bd / 2 - 0.42;
+    arrowPts = fy >= 0
+      ? `-0.5,${arrowY - 0.25} 0.5,${arrowY - 0.25} 0,${arrowY + 0.3}`
+      : `-0.5,${arrowY + 0.25} 0.5,${arrowY + 0.25} 0,${arrowY - 0.3}`;
+  }
 
   return (
     <g
       transform={`translate(${pos.x}, ${pos.y})`}
       style={{ opacity }}
     >
-      <g transform={`rotate(${yawDeg})`}>
+      <rect
+        x={-bw / 2} y={-bd / 2}
+        width={bw} height={bd}
+        rx={0.3}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeW}
+        style={{ cursor: 'grab' }}
+        onPointerDown={(e) => onPointerDown(e as unknown as RPointerEvent<SVGGElement>, booth.id)}
+      />
+      <polygon
+        points={arrowPts}
+        fill={isSelected ? '#d4af37' : 'rgba(255,255,255,0.25)'}
+        style={{ pointerEvents: 'none' }}
+      />
+      {isSelected && (
         <rect
-          x={-bw / 2} y={-bd / 2}
-          width={bw} height={bd}
-          rx={0.3}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={strokeW}
-          style={{ cursor: 'grab' }}
-          onPointerDown={(e) => onPointerDown(e as unknown as RPointerEvent<SVGGElement>, booth.id)}
+          x={-bw / 2 - 0.15} y={-bd / 2 - 0.15}
+          width={bw + 0.3} height={bd + 0.3}
+          rx={0.4}
+          fill="none"
+          stroke="#d4af37"
+          strokeWidth={0.08}
+          strokeDasharray="0.4 0.3"
+          opacity={0.5}
         />
-        {/* Front-face indicator */}
-        <polygon
-          points={`${-0.5},${-bd / 2 + 0.1} ${0.5},${-bd / 2 + 0.1} ${0},${-bd / 2 - 0.35}`}
-          fill={isSelected ? '#d4af37' : 'rgba(255,255,255,0.3)'}
-          style={{ pointerEvents: 'none' }}
-        />
-        {isSelected && (
-          <rect
-            x={-bw / 2 - 0.15} y={-bd / 2 - 0.15}
-            width={bw + 0.3} height={bd + 0.3}
-            rx={0.4}
-            fill="none"
-            stroke="#d4af37"
-            strokeWidth={0.08}
-            strokeDasharray="0.4 0.3"
-            opacity={0.5}
-          />
-        )}
-        <text
-          x={0} y={-0.2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="#fff"
-          fontSize={Math.min(1.1, bw * 0.17)}
-          fontWeight="700"
-          fontFamily="system-ui, sans-serif"
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          {shortName}
-        </text>
-        <text
-          x={0} y={0.85}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="rgba(255,255,255,0.35)"
-          fontSize={Math.min(0.65, bw * 0.1)}
-          fontFamily="monospace"
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          {booth.scale[0].toFixed(2)} × {booth.scale[2].toFixed(2)}
-        </text>
-
-        {/* Rotation handle */}
-        {isSelected && (
-          <>
-            <line
-              x1={0} y1={-bd / 2}
-              x2={0} y2={-handleArm}
-              stroke="#d4af37" strokeWidth={0.08} opacity={0.5}
-              style={{ pointerEvents: 'none' }}
-            />
-            <circle
-              cx={0} cy={-handleArm}
-              r={HANDLE_R}
-              fill="#d4af37"
-              stroke="#fff"
-              strokeWidth={0.08}
-              style={{ cursor: 'crosshair' }}
-              onPointerDown={(e) => onRotateHandleDown(e, booth.id)}
-            />
-            <text
-              x={0} y={-handleArm + 0.05}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#000"
-              fontSize={0.55}
-              fontWeight="800"
-              fontFamily="system-ui"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              ↻
-            </text>
-          </>
-        )}
-      </g>
+      )}
+      <text
+        x={0} y={-0.2}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="#fff"
+        fontSize={Math.min(1.1, bw * 0.17)}
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
+        {shortName}
+      </text>
+      <text
+        x={0} y={0.85}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="rgba(255,255,255,0.35)"
+        fontSize={Math.min(0.65, bw * 0.1)}
+        fontFamily="monospace"
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
+        {booth.scale[0].toFixed(2)} &times; {booth.scale[2].toFixed(2)}
+      </text>
     </g>
   );
 }
@@ -247,16 +216,28 @@ function SnapCrosshair({ pos }: { pos: { x: number; y: number } }) {
   );
 }
 
-export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth }: CmsHallMapTabProps) {
+export function CmsHallMapTab({
+  booths,
+  selectedId,
+  onSelectBooth,
+  onPatchBooth,
+  hallLayout,
+  onPatchHallLayout,
+}: CmsHallMapTabProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [snapSize, setSnapSize] = useState<SnapSize>(1);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dragSvgPos, setDragSvgPos] = useState<{ x: number; y: number } | null>(null);
-  const [rotate, setRotate] = useState<RotateState | null>(null);
-  const [rotateDeg, setRotateDeg] = useState<number | null>(null);
+  const [entryDrag, setEntryDrag] = useState<EntryDragState | null>(null);
+  const [entrySvgPos, setEntrySvgPos] = useState<{ x: number; y: number } | null>(null);
 
   const gridStep = useMemo(() => (snapEnabled ? snapSize : 5), [snapEnabled, snapSize]);
+  const currentEntry = useMemo<[number, number, number]>(() => {
+    const s = hallLayout?.mainExpoSpawn;
+    if (s && s.length === 3 && s.every((n) => Number.isFinite(n))) return s;
+    return DEFAULT_MAIN_EXPO_SPAWN;
+  }, [hallLayout?.mainExpoSpawn]);
 
   const svgPoint = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -271,7 +252,6 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
   }, []);
 
   const handlePointerDown = useCallback((e: RPointerEvent<SVGGElement>, boothId: string) => {
-    if (rotate) return;
     e.stopPropagation();
     e.preventDefault();
     (e.target as SVGElement).setPointerCapture?.(e.pointerId);
@@ -291,39 +271,40 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
       startWorldZ: booth.position[2],
     });
     setDragSvgPos(bpos);
-  }, [booths, onSelectBooth, svgPoint, rotate]);
+  }, [booths, onSelectBooth, svgPoint]);
 
-  const handleRotateDown = useCallback((e: RPointerEvent<SVGCircleElement>, boothId: string) => {
+  const handleEntryDown = useCallback((e: RPointerEvent<SVGGElement>) => {
+    if (drag) return;
     e.stopPropagation();
     e.preventDefault();
     (e.target as SVGElement).setPointerCapture?.(e.pointerId);
 
-    const booth = booths.find((b) => b.id === boothId);
-    if (!booth) return;
-
-    const bpos = worldToSvg(booth.position[0], booth.position[2]);
-    const { x: mx, y: my } = svgPoint(e.clientX, e.clientY);
-    const pointerAngle = Math.atan2(my - bpos.y, mx - bpos.x) * 180 / Math.PI;
-
-    setRotate({
-      boothId,
-      startAngleDeg: radToDeg(booth.rotation[1]),
-      startPointerAngle: pointerAngle,
+    const [ex, , ez] = currentEntry;
+    const entry = worldToSvg(ex, ez);
+    const { x: sx, y: sy } = svgPoint(e.clientX, e.clientY);
+    setEntryDrag({
+      offsetX: sx - entry.x,
+      offsetY: sy - entry.y,
+      startWorldX: ex,
+      startWorldZ: ez,
     });
-    setRotateDeg(radToDeg(booth.rotation[1]));
-  }, [booths, svgPoint]);
+    setEntrySvgPos(entry);
+  }, [currentEntry, drag, svgPoint]);
 
   const handlePointerMove = useCallback((e: RPointerEvent<SVGSVGElement>) => {
-    if (rotate) {
-      const booth = booths.find((b) => b.id === rotate.boothId);
-      if (!booth) return;
-      const bpos = worldToSvg(booth.position[0], booth.position[2]);
-      const { x: mx, y: my } = svgPoint(e.clientX, e.clientY);
-      const currentAngle = Math.atan2(my - bpos.y, mx - bpos.x) * 180 / Math.PI;
-      const delta = currentAngle - rotate.startPointerAngle;
-      let newDeg = rotate.startAngleDeg + delta;
-      if (snapEnabled) newDeg = snapAngle(newDeg);
-      setRotateDeg(newDeg);
+    if (entryDrag) {
+      const { x: sx, y: sy } = svgPoint(e.clientX, e.clientY);
+      let rawX = sx - entryDrag.offsetX;
+      let rawY = sy - entryDrag.offsetY;
+      if (snapEnabled) {
+        const w = svgToWorld(rawX, rawY);
+        w.x = snap(w.x, snapSize);
+        w.z = snap(w.z, snapSize);
+        const snapped = worldToSvg(w.x, w.z);
+        rawX = snapped.x;
+        rawY = snapped.y;
+      }
+      setEntrySvgPos({ x: rawX, y: rawY });
       return;
     }
     if (!drag) return;
@@ -339,21 +320,25 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
       rawY = snapped.y;
     }
     setDragSvgPos({ x: rawX, y: rawY });
-  }, [drag, rotate, snapEnabled, snapSize, svgPoint, booths]);
+  }, [drag, entryDrag, snapEnabled, snapSize, svgPoint]);
 
   const handlePointerUp = useCallback(() => {
-    if (rotate && rotateDeg !== null) {
-      const booth = booths.find((b) => b.id === rotate.boothId);
-      if (booth) {
-        const newYawRad = degToRad(rotateDeg);
-        if (Math.abs(newYawRad - booth.rotation[1]) > 0.001) {
-          void onPatchBooth(rotate.boothId, {
-            rotation: [booth.rotation[0], newYawRad, booth.rotation[2]],
-          });
-        }
+    if (entryDrag && entrySvgPos) {
+      const world = svgToWorld(entrySvgPos.x, entrySvgPos.y);
+      const hw = HALL_WIDTH / 2;
+      const hd = HALL_DEPTH / 2;
+      const x = Math.max(-hw + 1, Math.min(hw - 1, world.x));
+      const z = Math.max(-hd + 1, Math.min(hd - 1, world.z));
+      if (Math.abs(x - entryDrag.startWorldX) > 0.01 || Math.abs(z - entryDrag.startWorldZ) > 0.01) {
+        const prevYaw = hallLayout?.mainExpoSpawnYaw;
+        const yaw = Number.isFinite(prevYaw) ? (prevYaw as number) : Math.atan2(-x, z);
+        onPatchHallLayout({
+          mainExpoSpawn: [x, 1.7, z],
+          mainExpoSpawnYaw: yaw,
+        });
       }
-      setRotate(null);
-      setRotateDeg(null);
+      setEntryDrag(null);
+      setEntrySvgPos(null);
       return;
     }
 
@@ -369,7 +354,7 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
     }
     setDrag(null);
     setDragSvgPos(null);
-  }, [drag, dragSvgPos, rotate, rotateDeg, booths, onPatchBooth]);
+  }, [drag, dragSvgPos, entryDrag, entrySvgPos, booths, hallLayout?.mainExpoSpawnYaw, onPatchBooth, onPatchHallLayout]);
 
   const alignRow = useCallback((side: 'west' | 'east') => {
     const targetX = side === 'west' ? BOOTH_ROW_X_WEST : BOOTH_ROW_X_EAST;
@@ -472,11 +457,9 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
 
         {/* Status */}
         <div className="ml-auto text-[10px] text-white/30">
-          {rotate
-            ? `Rotating ${rotate.boothId} → ${rotateDeg?.toFixed(0) ?? '—'}°`
-            : drag
-            ? `Moving ${drag.boothId}${dragSvgPos ? ` → (${svgToWorld(dragSvgPos.x, dragSvgPos.y).x.toFixed(1)}, ${svgToWorld(dragSvgPos.x, dragSvgPos.y).z.toFixed(1)})` : ''}`
-            : `${booths.length} booths · ${HALL_WIDTH}×${HALL_DEPTH}m hall`}
+          {drag
+            ? `Moving ${drag.boothId}${dragSvgPos ? ` \u2192 (${svgToWorld(dragSvgPos.x, dragSvgPos.y).x.toFixed(1)}, ${svgToWorld(dragSvgPos.x, dragSvgPos.y).z.toFixed(1)})` : ''}`
+            : `${booths.length} booths \u00b7 ${HALL_WIDTH}\u00d7${HALL_DEPTH}m hall`}
         </div>
       </div>
 
@@ -504,7 +487,7 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
             rx={0.5}
           />
 
-          {/* ── Ballroom stage (east wall) ── */}
+          {/* Ballroom stage (east wall) */}
           {(() => {
             const stageW = 14;
             const stageD = 2.6;
@@ -514,7 +497,6 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
             const screenH = 0.6;
             return (
               <g style={{ pointerEvents: 'none' }}>
-                {/* Stage platform */}
                 <rect
                   x={stagePos.x - stageD / 2} y={stagePos.y - stageW / 2}
                   width={stageD} height={stageW}
@@ -523,7 +505,6 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
                   stroke="rgba(107,68,35,0.4)"
                   strokeWidth={0.1}
                 />
-                {/* LED screen on stage */}
                 <rect
                   x={stagePos.x - 0.15} y={stagePos.y - screenW / 2}
                   width={screenH} height={screenW}
@@ -558,7 +539,45 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
             );
           })()}
 
-          {/* ── Entrance lobby ── */}
+          {/* Visitor entry spawn (drag to reposition) */}
+          {(() => {
+            const [ex, , ez] = currentEntry;
+            const entryPos = entrySvgPos ?? worldToSvg(ex, ez);
+            const entryW = 2.8;
+            const entryD = 3.2;
+            return (
+              <g
+                onPointerDown={handleEntryDown}
+                style={{ cursor: 'grab' }}
+              >
+                <rect
+                  x={entryPos.x - entryW / 2}
+                  y={entryPos.y - entryD / 2}
+                  width={entryW}
+                  height={entryD}
+                  rx={0.25}
+                  fill="rgba(34,197,94,0.12)"
+                  stroke="#22c55e"
+                  strokeWidth={0.14}
+                />
+                <text
+                  x={entryPos.x}
+                  y={entryPos.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="#4ade80"
+                  fontSize={0.75}
+                  fontWeight="700"
+                  fontFamily="system-ui"
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}
+                >
+                  ENTRY
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Entrance lobby */}
           {(() => {
             const lobbyZ = defaultEntranceLobbyZ();
             const lobbyPos = worldToSvg(0, lobbyZ);
@@ -589,7 +608,7 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
             );
           })()}
 
-          {/* ── Aisle center lines ── */}
+          {/* Aisle center lines */}
           <line
             x1={EXPO_AISLE_WEST_X} y1={-hd} x2={EXPO_AISLE_WEST_X} y2={hd}
             stroke="rgba(255,255,255,0.06)" strokeWidth={0.08} strokeDasharray="0.8 0.6"
@@ -626,9 +645,9 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
             EAST ROW
           </text>
 
-          {/* Entrance arrow */}
-          <text x={0} y={hd - 0.6} textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize={0.8} fontFamily="system-ui" style={{ pointerEvents: 'none', userSelect: 'none' }}>
-            ↓ ENTRANCE
+          {/* South reception anchor */}
+          <text x={0} y={hd - 0.6} textAnchor="middle" fill="rgba(255,255,255,0.12)" fontSize={0.7} fontFamily="system-ui" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+            RECEPTION
           </text>
 
           {/* Snap crosshair while dragging */}
@@ -641,11 +660,8 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
               booth={b}
               isSelected={b.id === selectedId}
               isDragging={drag?.boothId === b.id}
-              isRotating={rotate?.boothId === b.id}
               dragPos={drag?.boothId === b.id ? dragSvgPos : null}
-              rotatingDeg={rotate?.boothId === b.id ? rotateDeg : null}
               onPointerDown={handlePointerDown}
-              onRotateHandleDown={handleRotateDown}
             />
           ))}
         </svg>
@@ -654,8 +670,7 @@ export function CmsHallMapTab({ booths, selectedId, onSelectBooth, onPatchBooth 
         <div className="absolute bottom-3 left-3 rounded-lg bg-black/60 px-3 py-2 text-[10px] text-white/40 backdrop-blur-sm border border-white/5">
           <div className="font-semibold text-white/50 mb-1">2D Hall Map</div>
           <div>Drag booths to reposition</div>
-          <div>Drag gold handle to rotate</div>
-          <div>Click to select &middot; Snap: {snapEnabled ? `${snapSize}m / ${ROTATION_SNAP_DEG}°` : 'free'}</div>
+          <div>Click to select &middot; Snap: {snapEnabled ? `${snapSize}m` : 'free'}</div>
         </div>
       </div>
     </div>

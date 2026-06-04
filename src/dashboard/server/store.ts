@@ -1,5 +1,20 @@
 import { connectToDatabase, getVisitorRegistrationStats, type VisitorRegistration } from '../../server/mongodb';
 import type { AnalyticsDashboardData } from '../types';
+import {
+  engagementActionFromLabel,
+  isEngagementAction,
+  buildEngagementActionRows,
+  summarizeEngagementActions,
+  convertingTierFromScore,
+  clampEngagementPoints,
+  ENGAGEMENT_ACTION_POINTS,
+  emptyConversionStats,
+  type EngagementAction,
+  type BoothEngagementActionStats,
+  type BoothConversionStats,
+  visitorEngagementFromPoints,
+  type VisitorEngagementScoreRow,
+} from '../engagementLeadScore';
 
 export type AnalyticsEventType =
   | 'session_start'
@@ -9,7 +24,8 @@ export type AnalyticsEventType =
   | 'doc_close'
   | 'doc_heartbeat'
   | 'booth_enter'
-  | 'booth_exit';
+  | 'booth_exit'
+  | 'cta_engagement';
 
 export interface ExpoAnalyticsEvent {
   _id?: string;
@@ -23,6 +39,8 @@ export interface ExpoAnalyticsEvent {
   docTitle?: string;
   docUrl?: string;
   docVariant?: string;
+  engagementAction?: string;
+  engagementPoints?: number;
   dwellMs?: number;
   createdAt: Date;
 }
@@ -38,6 +56,8 @@ export interface AnalyticsTrackPayload {
     docTitle?: string;
     docUrl?: string;
     docVariant?: string;
+    engagementAction?: string;
+    engagementPoints?: number;
     dwellMs?: number;
     visitId?: string;
     at?: string;
@@ -81,22 +101,63 @@ export type BoothVisitorStats = {
   totalBoothVisitsLast7Days: number;
   totalBoothVisitsGrowthPct: number;
   avgDwellMsInBooth: number;
-  visitTrend: { day: string; label: string; visitors: number }[];
+  visitTrend: { slot: string; label: string; visitors: number }[];
+  /** Calendar day used for hourly trend (YYYY-MM-DD, local). */
+  visitTrendEventDay?: string;
+  visitTrendStartHour: number;
+  visitTrendSpanHours: number;
   mongoConnected: boolean;
 };
 
-function last7DayLabels(): { day: string; label: string }[] {
-  const out: { day: string; label: string }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
+export type BoothVisitorStatsTrendOptions = {
+  trendStartHour?: number;
+  trendSpanHours?: number;
+};
+
+const DEFAULT_TREND_START_HOUR = 9;
+const DEFAULT_TREND_SPAN_HOURS = 8;
+
+function formatHourLabel(hour: number): string {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12} ${period}`;
+}
+
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function hourSlotLabels(
+  eventDay: Date,
+  startHour: number,
+  spanHours: number,
+): { slot: string; label: string }[] {
+  const dayKey = localDateKey(eventDay);
+  const out: { slot: string; label: string }[] = [];
+  for (let i = 0; i < spanHours; i++) {
+    const hour = startHour + i;
     out.push({
-      day: d.toISOString().slice(0, 10),
-      label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      slot: `${dayKey}T${String(hour).padStart(2, '0')}`,
+      label: formatHourLabel(hour),
     });
   }
   return out;
+}
+
+async function resolveVisitTrendEventDay(
+  col: Awaited<ReturnType<typeof analyticsCollection>>,
+  boothId: string,
+): Promise<Date> {
+  const latest = await col.findOne(
+    { type: 'booth_enter', boothId },
+    { sort: { createdAt: -1 }, projection: { createdAt: 1 } },
+  );
+  const d = latest?.createdAt ? new Date(latest.createdAt) : new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function growthPct(current: number, previous: number): number {
@@ -104,8 +165,17 @@ function growthPct(current: number, previous: number): number {
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
-export async function getBoothVisitorStats(boothId: string): Promise<BoothVisitorStats> {
-  const emptyTrend = last7DayLabels().map(({ day, label }) => ({ day, label, visitors: 0 }));
+export async function getBoothVisitorStats(
+  boothId: string,
+  trendOptions: BoothVisitorStatsTrendOptions = {},
+): Promise<BoothVisitorStats> {
+  const trendStartHour = trendOptions.trendStartHour ?? DEFAULT_TREND_START_HOUR;
+  const trendSpanHours = trendOptions.trendSpanHours ?? DEFAULT_TREND_SPAN_HOURS;
+  const eventDay = new Date();
+  eventDay.setHours(0, 0, 0, 0);
+  const emptyTrend = hourSlotLabels(eventDay, trendStartHour, trendSpanHours).map(
+    ({ slot, label }) => ({ slot, label, visitors: 0 }),
+  );
   const empty: BoothVisitorStats = {
     uniqueVisitorsTotal: 0,
     uniqueVisitorsLast7Days: 0,
@@ -116,6 +186,9 @@ export async function getBoothVisitorStats(boothId: string): Promise<BoothVisito
     totalBoothVisitsGrowthPct: 0,
     avgDwellMsInBooth: 0,
     visitTrend: emptyTrend,
+    visitTrendEventDay: localDateKey(eventDay),
+    visitTrendStartHour: trendStartHour,
+    visitTrendSpanHours: trendSpanHours,
     mongoConnected: Boolean(process.env.MONGODB_URI?.trim()),
   };
 
@@ -137,7 +210,6 @@ export async function getBoothVisitorStats(boothId: string): Promise<BoothVisito
     visitsPrev7Agg,
     livePresence,
     dwellAgg,
-    trendAgg,
   ] = await Promise.all([
     col
       .aggregate([
@@ -209,26 +281,40 @@ export async function getBoothVisitorStats(boothId: string): Promise<BoothVisito
         },
       ])
       .toArray(),
-    col
-      .aggregate([
-        { $match: { type: 'booth_enter', boothId, createdAt: { $gte: since7 } } },
-        {
-          $group: {
-            _id: {
-              day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-              visitorKey: VISITOR_KEY_EXPR,
-            },
-          },
-        },
-        {
-          $group: {
-            _id: '$_id.day',
-            visitors: { $sum: 1 },
-          },
-        },
-      ])
-      .toArray(),
   ]);
+
+  const trendEventDay = await resolveVisitTrendEventDay(col, boothId);
+  const trendDayStart = new Date(trendEventDay);
+  trendDayStart.setHours(trendStartHour, 0, 0, 0);
+  const trendDayEnd = new Date(trendDayStart);
+  trendDayEnd.setHours(trendStartHour + trendSpanHours, 0, 0, 0);
+
+  const enterEvents = await col
+    .find({
+      type: 'booth_enter',
+      boothId,
+      createdAt: { $gte: trendDayStart, $lt: trendDayEnd },
+    })
+    .project({ createdAt: 1, visitorId: 1, sessionId: 1 })
+    .limit(5000)
+    .toArray();
+
+  const uniqueBySlot = new Map<string, Set<string>>();
+  for (const e of enterEvents) {
+    const at = new Date(e.createdAt);
+    const slot = `${localDateKey(at)}T${String(at.getHours()).padStart(2, '0')}`;
+    const key =
+      e.visitorId?.trim() ||
+      e.sessionId?.trim() ||
+      `anon-${e._id.toString()}`;
+    const set = uniqueBySlot.get(slot) ?? new Set<string>();
+    set.add(key);
+    uniqueBySlot.set(slot, set);
+  }
+  const trendAgg = [...uniqueBySlot.entries()].map(([slot, set]) => ({
+    _id: slot,
+    visitors: set.size,
+  }));
 
   const uniqueTotal = (uniqueTotalAgg[0] as { n?: number } | undefined)?.n ?? 0;
   const uniqueLast7 = (uniqueLast7Agg[0] as { n?: number } | undefined)?.n ?? 0;
@@ -244,14 +330,16 @@ export async function getBoothVisitorStats(boothId: string): Promise<BoothVisito
       ? Math.round((dwellRow.totalDwell ?? 0) / dwellRow.samples)
       : 0;
 
-  const byDay = new Map(
+  const byHour = new Map(
     (trendAgg as Array<{ _id: string; visitors: number }>).map((r) => [r._id, r.visitors]),
   );
-  const visitTrend = last7DayLabels().map(({ day, label }) => ({
-    day,
-    label,
-    visitors: byDay.get(day) ?? 0,
-  }));
+  const visitTrend = hourSlotLabels(trendEventDay, trendStartHour, trendSpanHours).map(
+    ({ slot, label }) => ({
+      slot,
+      label,
+      visitors: byHour.get(slot) ?? 0,
+    }),
+  );
 
   return {
     uniqueVisitorsTotal: uniqueTotal,
@@ -263,6 +351,9 @@ export async function getBoothVisitorStats(boothId: string): Promise<BoothVisito
     totalBoothVisitsGrowthPct: growthPct(visitsLast7, visitsPrev7),
     avgDwellMsInBooth,
     visitTrend,
+    visitTrendEventDay: localDateKey(trendEventDay),
+    visitTrendStartHour: trendStartHour,
+    visitTrendSpanHours: trendSpanHours,
     mongoConnected: true,
   };
 }
@@ -518,6 +609,8 @@ export async function insertAnalyticsEvents(payload: AnalyticsTrackPayload): Pro
     docTitle: e.docTitle,
     docUrl: e.docUrl,
     docVariant: e.docVariant,
+    engagementAction: e.engagementAction,
+    engagementPoints: e.engagementPoints,
     dwellMs: e.dwellMs,
     visitId: e.visitId,
     createdAt: e.at ? new Date(e.at) : now,
@@ -712,6 +805,103 @@ export async function getBoothSalesChatMessages(
   }));
 }
 
+export type AiChatMessageRow = {
+  id: string;
+  boothId: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  text: string;
+  at: string;
+  visitorId?: string;
+  visitorName?: string;
+};
+
+export interface ExpoAiChatMessage {
+  _id?: string;
+  boothId: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  text: string;
+  visitorId?: string;
+  visitorName?: string;
+  createdAt: Date;
+}
+
+async function aiChatCollection() {
+  const db = await connectToDatabase();
+  const col = db.collection<ExpoAiChatMessage>('expoAiChatMessages');
+  await col.createIndex({ boothId: 1, createdAt: -1 });
+  await col.createIndex({ boothId: 1, threadId: 1, createdAt: 1 });
+  return col;
+}
+
+export async function insertAiChatMessage(payload: {
+  boothId: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  text: string;
+  visitorId?: string;
+  visitorName?: string;
+}): Promise<AiChatMessageRow | null> {
+  if (!process.env.MONGODB_URI?.trim()) return null;
+  if (!payload.boothId?.trim() || !payload.threadId?.trim() || !payload.text?.trim()) {
+    return null;
+  }
+  if (payload.role !== 'user' && payload.role !== 'assistant') return null;
+
+  const col = await aiChatCollection();
+  const createdAt = new Date();
+  const doc: ExpoAiChatMessage = {
+    boothId: payload.boothId.trim(),
+    threadId: payload.threadId.trim(),
+    role: payload.role,
+    text: payload.text.trim(),
+    visitorId: payload.visitorId?.trim() || undefined,
+    visitorName: payload.visitorName?.trim() || undefined,
+    createdAt,
+  };
+  const result = await col.insertOne(doc);
+  const id = result.insertedId?.toString() ?? `mongo-${Date.now()}`;
+  return {
+    id,
+    boothId: doc.boothId,
+    threadId: doc.threadId,
+    role: doc.role,
+    text: doc.text,
+    at: createdAt.toISOString(),
+    visitorId: doc.visitorId,
+    visitorName: doc.visitorName,
+  };
+}
+
+export async function getBoothAiChatMessages(
+  boothId: string,
+  opts?: { threadId?: string; limit?: number },
+): Promise<AiChatMessageRow[]> {
+  if (!process.env.MONGODB_URI?.trim()) return [];
+
+  const col = await aiChatCollection();
+  const filter: Record<string, unknown> = { boothId };
+  if (opts?.threadId?.trim()) filter.threadId = opts.threadId.trim();
+
+  const docs = await col
+    .find(filter)
+    .sort({ createdAt: 1 })
+    .limit(opts?.limit ?? 1000)
+    .toArray();
+
+  return docs.map((d) => ({
+    id: d._id?.toString() ?? `mongo-${d.createdAt.toISOString()}`,
+    boothId: d.boothId,
+    threadId: d.threadId,
+    role: d.role,
+    text: d.text,
+    at: d.createdAt.toISOString(),
+    visitorId: d.visitorId,
+    visitorName: d.visitorName,
+  }));
+}
+
 /** Presence is stale if no ping within this window (client pings every 5s). */
 export const BOOTH_PRESENCE_STALE_MS = 12_000;
 
@@ -858,18 +1048,60 @@ export type BoothVisitorProfile = {
   timeline: VisitorTimelineEvent[];
 };
 
+function normalizeVisitorPhone(phone?: string): string {
+  return phone?.replace(/\D/g, '') ?? '';
+}
+
+function isGenericVisitorName(name?: string): boolean {
+  const n = name?.trim().toLowerCase();
+  return !n || n === 'guest' || n === 'guest visitor';
+}
+
+function sessionMatchesProfile(
+  session: BoothVisitSessionRow,
+  params: {
+    visitorId?: string;
+    sessionId?: string;
+    visitorName?: string;
+    email?: string;
+    phone?: string;
+  },
+): boolean {
+  if (params.visitorId?.trim() && session.visitorId === params.visitorId.trim()) return true;
+  if (params.sessionId?.trim() && session.sessionId === params.sessionId.trim()) return true;
+  const email = params.email?.trim().toLowerCase();
+  if (email && session.email?.trim().toLowerCase() === email) return true;
+  const phone = normalizeVisitorPhone(params.phone);
+  if (phone && normalizeVisitorPhone(session.phone) === phone) return true;
+  const name = params.visitorName?.trim();
+  if (
+    name &&
+    !isGenericVisitorName(name) &&
+    session.visitorName?.toLowerCase() === name.toLowerCase()
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function visitorEventMatch(params: {
   visitorId?: string;
   sessionId?: string;
   visitorName?: string;
+  extraVisitorIds?: string[];
+  extraSessionIds?: string[];
 }): Record<string, unknown> | null {
   const or: Record<string, unknown>[] = [];
-  const id = params.visitorId?.trim();
-  const sid = params.sessionId?.trim();
+  const ids = new Set<string>();
+  const sids = new Set<string>();
+  if (params.visitorId?.trim()) ids.add(params.visitorId.trim());
+  for (const id of params.extraVisitorIds ?? []) if (id?.trim()) ids.add(id.trim());
+  if (params.sessionId?.trim()) sids.add(params.sessionId.trim());
+  for (const sid of params.extraSessionIds ?? []) if (sid?.trim()) sids.add(sid.trim());
   const name = params.visitorName?.trim();
-  if (id) or.push({ visitorId: id });
-  if (sid) or.push({ sessionId: sid });
-  if (name) or.push({ visitorName: name });
+  if (name && !isGenericVisitorName(name)) or.push({ visitorName: name });
+  for (const id of ids) or.push({ visitorId: id });
+  for (const sid of sids) or.push({ sessionId: sid });
   if (or.length === 0) return null;
   return { $or: or };
 }
@@ -926,11 +1158,19 @@ function pairDocumentSessions(
 /** Full activity profile for one visitor at an exhibitor booth. */
 export async function getBoothVisitorProfile(
   boothId: string,
-  params: { visitorId?: string; sessionId?: string; visitorName?: string },
+  params: {
+    visitorId?: string;
+    sessionId?: string;
+    visitorName?: string;
+    email?: string;
+    phone?: string;
+  },
 ): Promise<BoothVisitorProfile | null> {
   const empty: BoothVisitorProfile = {
     visitorId: params.visitorId,
     visitorName: params.visitorName,
+    email: params.email,
+    phone: params.phone,
     sessionId: params.sessionId,
     boothId,
     totalVisits: 0,
@@ -942,41 +1182,66 @@ export async function getBoothVisitorProfile(
     timeline: [],
   };
 
-  const match = visitorEventMatch(params);
-  if (!match) return empty;
-
   if (!process.env.MONGODB_URI?.trim()) return empty;
+
+  const allSessions = await getBoothVisitSessions(boothId, 200);
+  const boothVisits = allSessions
+    .filter((s) => sessionMatchesProfile(s, params))
+    .sort((a, b) => b.enteredAt.localeCompare(a.enteredAt));
+
+  const hasIdentity =
+    Boolean(params.visitorId?.trim()) ||
+    Boolean(params.sessionId?.trim()) ||
+    Boolean(params.email?.trim()) ||
+    Boolean(params.phone?.trim()) ||
+    Boolean(params.visitorName?.trim() && !isGenericVisitorName(params.visitorName));
+
+  if (!hasIdentity && boothVisits.length === 0) return empty;
+
+  const extraVisitorIds = boothVisits.map((v) => v.visitorId).filter(Boolean) as string[];
+  const extraSessionIds = boothVisits.map((v) => v.sessionId).filter(Boolean) as string[];
+
+  const match = visitorEventMatch({
+    visitorId: params.visitorId,
+    sessionId: params.sessionId,
+    visitorName: params.visitorName,
+    extraVisitorIds,
+    extraSessionIds,
+  });
 
   const col = await analyticsCollection();
 
-  // Document events must match this exhibitor booth exactly (no zone fallback — prevents cross-booth leaks).
-  const events = await col
-    .find({
-      $and: [
-        match,
-        { boothId },
-        { type: { $in: ['doc_open', 'doc_close'] } },
-      ],
-    })
-    .sort({ createdAt: 1 })
-    .limit(500)
-    .toArray();
+  const events = match
+    ? await col
+        .find({
+          $and: [
+            match,
+            { boothId },
+            { type: { $in: ['doc_open', 'doc_close'] } },
+          ],
+        })
+        .sort({ createdAt: 1 })
+        .limit(500)
+        .toArray()
+    : [];
 
-  const allSessions = await getBoothVisitSessions(boothId, 200);
-  const boothVisits = allSessions.filter((s) => {
-    if (params.visitorId && s.visitorId === params.visitorId) return true;
-    if (params.sessionId && s.sessionId === params.sessionId) return true;
-    if (params.visitorName && s.visitorName?.toLowerCase() === params.visitorName.toLowerCase()) {
-      return true;
-    }
-    return false;
-  });
+  const knownVisitorIds = new Set(
+    [...boothVisits.map((v) => v.visitorId), params.visitorId].filter(Boolean) as string[],
+  );
+  const knownSessionIds = new Set(
+    [...boothVisits.map((v) => v.sessionId), params.sessionId].filter(Boolean) as string[],
+  );
 
   const faqAll = await getBoothFaqSubmissions(boothId, 200);
   const faqSubs = faqAll.filter((s) => {
-    if (params.visitorId && s.visitorId === params.visitorId) return true;
-    if (params.sessionId && s.sessionId === params.sessionId) return true;
-    if (params.visitorName && s.visitorName?.toLowerCase() === params.visitorName.toLowerCase()) {
+    if (s.visitorId && knownVisitorIds.has(s.visitorId)) return true;
+    if (s.sessionId && knownSessionIds.has(s.sessionId)) return true;
+    const name = params.visitorName?.trim();
+    if (
+      name &&
+      !isGenericVisitorName(name) &&
+      s.visitorName?.toLowerCase() === name.toLowerCase()
+    ) {
       return true;
     }
     return false;
@@ -1060,8 +1325,8 @@ export async function getBoothVisitorProfile(
   return {
     visitorId: resolvedVisitorId,
     visitorName: contact.visitorName || resolvedName,
-    email: boothVisits[0]?.email || contact.email,
-    phone: boothVisits[0]?.phone || contact.phone,
+    email: params.email || boothVisits.find((v) => v.email)?.email || contact.email,
+    phone: params.phone || boothVisits.find((v) => v.phone)?.phone || contact.phone,
     sessionId: params.sessionId || boothVisits[0]?.sessionId || faqSubs[0]?.sessionId,
     boothId,
     totalVisits: boothVisits.length,
@@ -1301,4 +1566,217 @@ function formatZoneLabel(zone?: string): string {
   if (zone === 'ai_chat') return 'AI chat';
   if (zone.startsWith('booth:')) return zone.replace('booth:', '').replace(/-/g, ' ');
   return zone;
+}
+
+export type QuestionnairePossibilityStats = {
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
+  avgScore: number;
+  mongoConnected: boolean;
+};
+
+/** Aggregate buyer questionnaire submissions into high / medium / low possibility buckets. */
+export async function getQuestionnairePossibilityStats(): Promise<QuestionnairePossibilityStats> {
+  if (!process.env.MONGODB_URI?.trim()) {
+    return { high: 0, medium: 0, low: 0, total: 0, avgScore: 0, mongoConnected: false };
+  }
+
+  const db = await connectToDatabase();
+  const agg = await db
+    .collection('buyerQuestionnaires')
+    .aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          avgScore: { $avg: '$totalScore' },
+          high: { $sum: { $cond: [{ $eq: ['$category', 'hot'] }, 1, 0] } },
+          medium: { $sum: { $cond: [{ $eq: ['$category', 'warm'] }, 1, 0] } },
+          low: { $sum: { $cond: [{ $eq: ['$category', 'cold'] }, 1, 0] } },
+        },
+      },
+    ])
+    .toArray();
+
+  const row = agg[0] as
+    | { total?: number; avgScore?: number; high?: number; medium?: number; low?: number }
+    | undefined;
+
+  return {
+    total: row?.total ?? 0,
+    avgScore: Math.round(row?.avgScore ?? 0),
+    high: row?.high ?? 0,
+    medium: row?.medium ?? 0,
+    low: row?.low ?? 0,
+    mongoConnected: true,
+  };
+}
+
+export type BoothEngagementLeadStats = QuestionnairePossibilityStats;
+
+/** Booth menu clicks grouped by action (points chart — not questionnaire lead tiers). */
+export async function getBoothEngagementActionStats(
+  boothId: string,
+): Promise<BoothEngagementActionStats> {
+  const emptyRows = buildEngagementActionRows({});
+  const empty: BoothEngagementActionStats = {
+    ...summarizeEngagementActions(emptyRows),
+    uniqueVisitors: 0,
+    avgPointsPerVisitor: 0,
+    conversion: emptyConversionStats(),
+    mongoConnected: Boolean(process.env.MONGODB_URI?.trim()),
+  };
+  if (!process.env.MONGODB_URI?.trim()) return empty;
+
+  const col = await analyticsCollection();
+  const events = await col
+    .find({
+      boothId,
+      type: { $in: ['cta_engagement', 'doc_open'] },
+    })
+    .project({
+      type: 1,
+      sessionId: 1,
+      visitorId: 1,
+      docTitle: 1,
+      engagementAction: 1,
+      engagementPoints: 1,
+    })
+    .toArray();
+
+  const clickCounts: Partial<Record<EngagementAction, number>> = {};
+  const visitorPoints = new Map<string, number>();
+
+  for (const e of events) {
+    let action: EngagementAction | null = null;
+    if (e.type === 'cta_engagement' && e.engagementAction && isEngagementAction(e.engagementAction)) {
+      action = e.engagementAction;
+    } else if (e.type === 'doc_open' && e.docTitle) {
+      action = engagementActionFromLabel(e.docTitle);
+    }
+    if (!action) continue;
+
+    const points =
+      e.type === 'cta_engagement' && typeof e.engagementPoints === 'number'
+        ? e.engagementPoints
+        : ENGAGEMENT_ACTION_POINTS[action];
+
+    clickCounts[action] = (clickCounts[action] ?? 0) + 1;
+
+    const visitorKey =
+      e.visitorId && String(e.visitorId).trim() !== '' ? String(e.visitorId) : e.sessionId;
+    visitorPoints.set(visitorKey, (visitorPoints.get(visitorKey) ?? 0) + points);
+  }
+
+  const rows = buildEngagementActionRows(clickCounts);
+  const summary = summarizeEngagementActions(rows);
+  const uniqueVisitors = visitorPoints.size;
+
+  const conversionCounts = { high: 0, medium: 0, low: 0 };
+  let conversionScoreSum = 0;
+  let conversionVisitors = 0;
+
+  for (const score of visitorPoints.values()) {
+    const capped = clampEngagementPoints(score);
+    const tier = convertingTierFromScore(capped);
+    if (!tier) continue;
+    conversionCounts[tier] += 1;
+    conversionScoreSum += capped;
+    conversionVisitors += 1;
+  }
+
+  const conversion: BoothConversionStats = {
+    ...conversionCounts,
+    total: conversionVisitors,
+    avgScore:
+      conversionVisitors > 0 ? Math.round((conversionScoreSum / conversionVisitors) * 10) / 10 : 0,
+  };
+
+  return {
+    ...summary,
+    uniqueVisitors,
+    avgPointsPerVisitor:
+      uniqueVisitors > 0 ? Math.round(summary.totalPoints / uniqueVisitors) : 0,
+    conversion,
+    mongoConnected: true,
+  };
+}
+
+export async function getBoothVisitorEngagementScores(
+  boothId: string,
+): Promise<VisitorEngagementScoreRow[]> {
+  if (!process.env.MONGODB_URI?.trim()) return [];
+
+  const col = await analyticsCollection();
+  const events = await col
+    .find({
+      boothId,
+      type: { $in: ['cta_engagement', 'doc_open'] },
+    })
+    .project({
+      visitorId: 1,
+      sessionId: 1,
+      visitorName: 1,
+      type: 1,
+      docTitle: 1,
+      engagementAction: 1,
+      engagementPoints: 1,
+    })
+    .toArray();
+
+  type VisitorAgg = {
+    visitorId?: string;
+    sessionId?: string;
+    visitorName?: string;
+    points: number;
+  };
+
+  const byKey = new Map<string, VisitorAgg>();
+
+  for (const e of events) {
+    let action: EngagementAction | null = null;
+    if (e.type === 'cta_engagement' && e.engagementAction && isEngagementAction(e.engagementAction)) {
+      action = e.engagementAction;
+    } else if (e.type === 'doc_open' && e.docTitle) {
+      action = engagementActionFromLabel(e.docTitle);
+    }
+    if (!action) continue;
+
+    const points =
+      e.type === 'cta_engagement' && typeof e.engagementPoints === 'number'
+        ? e.engagementPoints
+        : ENGAGEMENT_ACTION_POINTS[action];
+
+    const visitorKey =
+      e.visitorId && String(e.visitorId).trim() !== ''
+        ? String(e.visitorId)
+        : e.sessionId ?? 'unknown';
+
+    const existing = byKey.get(visitorKey);
+    if (existing) {
+      existing.points += points;
+      existing.visitorName = existing.visitorName ?? e.visitorName;
+      existing.visitorId = existing.visitorId ?? e.visitorId;
+      existing.sessionId = existing.sessionId ?? e.sessionId;
+    } else {
+      byKey.set(visitorKey, {
+        visitorId: e.visitorId,
+        sessionId: e.sessionId,
+        visitorName: e.visitorName,
+        points,
+      });
+    }
+  }
+
+  return [...byKey.values()]
+    .map((row) =>
+      visitorEngagementFromPoints(row.points, {
+        visitorId: row.visitorId,
+        sessionId: row.sessionId,
+        visitorName: row.visitorName,
+      }),
+    )
+    .sort((a, b) => b.points - a.points);
 }

@@ -1,6 +1,13 @@
 export type VisitorCategory = 'HOT' | 'WARM' | 'VIP' | 'COLD';
 export type QuestionnaireStatus = 'Completed' | 'In Progress' | 'Not Invited';
 
+import type { ConvertingTier } from '@/dashboard/engagementLeadScore';
+import {
+  convertingPctFromPoints,
+  visitorEngagementFromPoints,
+  type VisitorEngagementScoreRow,
+} from '@/dashboard/engagementLeadScore';
+
 export type VisitorInsightRow = {
   id: string;
   name: string;
@@ -9,8 +16,13 @@ export type VisitorInsightRow = {
   email?: string;
   phone?: string;
   avatarHue: number;
+  /** Buyer questionnaire psychological score (0–100) — not menu clicks. */
   leadScore: number;
   scoreLabel: string;
+  /** Booth HUD menu engagement points (14 = 100% converting). */
+  engagementPoints?: number;
+  convertingTier?: ConvertingTier | null;
+  convertingPct?: number;
   category: VisitorCategory;
   hall: string;
   booth: string;
@@ -24,6 +36,10 @@ export type VisitorInsightRow = {
   visitorId?: string;
   sessionId?: string;
   visitId?: string;
+  /** Number of booth visits (aggregated row). */
+  visitCount?: number;
+  /** First time this visitor entered your booth. */
+  firstVisitedAt?: string;
 };
 
 export type VisitorProfileTarget = Pick<
@@ -37,6 +53,9 @@ export type VisitorProfileTarget = Pick<
   | 'avatarHue'
   | 'leadScore'
   | 'scoreLabel'
+  | 'engagementPoints'
+  | 'convertingTier'
+  | 'convertingPct'
   | 'category'
   | 'enteredAt'
   | 'exitedAt'
@@ -44,6 +63,10 @@ export type VisitorProfileTarget = Pick<
   | 'visitorId'
   | 'sessionId'
   | 'visitId'
+  | 'visitCount'
+  | 'firstVisitedAt'
+  | 'email'
+  | 'phone'
 >;
 
 export type VisitorFilterTab = 'all' | 'hot' | 'vip' | 'recent';
@@ -289,6 +312,89 @@ export const DEMO_VISITORS: VisitorInsightRow[] = [
   },
 ];
 
+/** Demo menu-click points per visitor (separate from questionnaire leadScore). */
+const DEMO_ENGAGEMENT_POINTS: Record<string, number> = {
+  v1: 14,
+  v2: 9,
+  v3: 14,
+  v4: 5,
+  v5: 14,
+  v6: 2,
+  v7: 11,
+  v8: 4,
+  v9: 7,
+  v10: 14,
+  v11: 1,
+  v12: 12,
+};
+
+function applyEngagementFields(row: VisitorInsightRow, points: number): VisitorInsightRow {
+  const engagement = visitorEngagementFromPoints(points);
+  return {
+    ...row,
+    engagementPoints: engagement.points,
+    convertingTier: engagement.convertingTier,
+    convertingPct: engagement.convertingPct,
+  };
+}
+
+/** Fill menu engagement columns from demo data when live analytics are empty. */
+export function applyDemoEngagementScores(rows: VisitorInsightRow[]): VisitorInsightRow[] {
+  return rows.map((row) => {
+    const points = DEMO_ENGAGEMENT_POINTS[row.id];
+    if (points === undefined) return row;
+    return applyEngagementFields(row, points);
+  });
+}
+
+/** Merge live booth menu scores — never overwrites leadScore or scoreLabel. */
+export function mergeEngagementScores(
+  rows: VisitorInsightRow[],
+  scores: VisitorEngagementScoreRow[],
+): VisitorInsightRow[] {
+  if (scores.length === 0) return rows;
+
+  const used = new Set<number>();
+  const byVisitorId = new Map<string, VisitorEngagementScoreRow>();
+  const bySessionId = new Map<string, VisitorEngagementScoreRow>();
+  const byName = new Map<string, VisitorEngagementScoreRow>();
+
+  for (const score of scores) {
+    if (score.visitorId) byVisitorId.set(score.visitorId, score);
+    if (score.sessionId) bySessionId.set(score.sessionId, score);
+    const name = score.visitorName?.trim().toLowerCase();
+    if (name) byName.set(name, score);
+  }
+
+  const pickScore = (row: VisitorInsightRow): VisitorEngagementScoreRow | undefined => {
+    if (row.visitorId) {
+      const match = byVisitorId.get(row.visitorId);
+      if (match) return match;
+    }
+    if (row.sessionId) {
+      const match = bySessionId.get(row.sessionId);
+      if (match) return match;
+    }
+    const name = row.name.trim().toLowerCase();
+    if (name) {
+      const match = byName.get(name);
+      if (match) return match;
+    }
+    const idx = scores.findIndex((s, i) => !used.has(i));
+    if (idx >= 0) {
+      used.add(idx);
+      return scores[idx];
+    }
+    return undefined;
+  };
+
+  return rows.map((row) => {
+    const match = pickScore(row);
+    if (!match) return row;
+    return applyEngagementFields(row, match.points);
+  });
+}
+
 export type BoothVisitSessionRow = {
   visitId?: string;
   visitorId?: string;
@@ -312,69 +418,117 @@ export function formatVisitTime(iso?: string): string {
   });
 }
 
-/** Overlay live MongoDB visit sessions onto CRM rows (by visitor name). */
+function isGenericGuestName(name?: string): boolean {
+  const n = name?.trim().toLowerCase();
+  return !n || n === 'guest' || n === 'guest visitor';
+}
+
+/** One CRM row per person — registered id, email, phone, or browser session for anonymous guests. */
+export function visitorIdentityKey(
+  input: Pick<BoothVisitSessionRow, 'visitorId' | 'email' | 'phone' | 'sessionId' | 'visitorName'>,
+): string {
+  if (input.visitorId?.trim()) return `vid:${input.visitorId.trim()}`;
+  if (input.email?.trim()) return `email:${input.email.trim().toLowerCase()}`;
+  if (input.phone?.trim()) return `phone:${input.phone.replace(/\D/g, '')}`;
+  if (input.sessionId?.trim()) return `sess:${input.sessionId.trim()}`;
+  const name = input.visitorName?.trim().toLowerCase();
+  if (name && !isGenericGuestName(name)) return `name:${name}`;
+  return `sess:${input.sessionId?.trim() || 'unknown'}`;
+}
+
+function avatarHueFromKey(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h + key.charCodeAt(i) * 17) % 360;
+  return h;
+}
+
+function pickDisplayIdentity(sessions: BoothVisitSessionRow[]) {
+  const byRecent = [...sessions].sort((a, b) => b.enteredAt.localeCompare(a.enteredAt));
+  const named = sessions.find(
+    (s) => s.visitorName?.trim() && !isGenericGuestName(s.visitorName),
+  );
+  const name =
+    named?.visitorName?.trim() ||
+    byRecent.find((s) => s.visitorName?.trim())?.visitorName?.trim() ||
+    'Guest visitor';
+  return {
+    name,
+    email: sessions.find((s) => s.email?.trim())?.email?.trim(),
+    phone: sessions.find((s) => s.phone?.trim())?.phone?.trim(),
+    visitorId: sessions.find((s) => s.visitorId?.trim())?.visitorId?.trim(),
+    sessionId: byRecent[0]?.sessionId,
+    visitId: byRecent[0]?.visitId,
+  };
+}
+
+function aggregateSessionsToRow(
+  key: string,
+  sessions: BoothVisitSessionRow[],
+  boothCompany: string,
+): VisitorInsightRow {
+  const sorted = [...sessions].sort((a, b) => a.enteredAt.localeCompare(b.enteredAt));
+  const latest = [...sessions].sort((a, b) => b.enteredAt.localeCompare(a.enteredAt))[0]!;
+  const identity = pickDisplayIdentity(sessions);
+  const stillInside = sessions.some((s) => s.stillInside);
+  const latestClosed = [...sessions]
+    .filter((s) => s.exitedAt)
+    .sort((a, b) => b.exitedAt!.localeCompare(a.exitedAt!))[0];
+
+  return {
+    id: `visitor-${key}`,
+    name: identity.name,
+    company: '—',
+    role: '—',
+    email: identity.email,
+    phone: identity.phone,
+    avatarHue: avatarHueFromKey(key),
+    leadScore: 0,
+    scoreLabel: '—',
+    category: 'WARM',
+    hall: 'Your hall',
+    booth: 'Your booth',
+    boothCompany,
+    atYourBooth: stillInside,
+    questionnaire: 'Not Invited',
+    visitCount: sessions.length,
+    firstVisitedAt: sorted[0]?.enteredAt,
+    enteredAt: latest.enteredAt,
+    exitedAt: stillInside ? undefined : latestClosed?.exitedAt ?? latest.exitedAt,
+    stillInside,
+    visitorId: identity.visitorId,
+    sessionId: identity.sessionId,
+    visitId: identity.visitId,
+  };
+}
+
+/** Build one insight row per unique visitor from live booth sessions. */
+export function buildAggregatedVisitorRows(
+  sessions: BoothVisitSessionRow[],
+  boothCompany: string,
+): VisitorInsightRow[] {
+  if (sessions.length === 0) return [];
+
+  const byKey = new Map<string, BoothVisitSessionRow[]>();
+  for (const session of sessions) {
+    const key = visitorIdentityKey(session);
+    const list = byKey.get(key) ?? [];
+    list.push(session);
+    byKey.set(key, list);
+  }
+
+  return [...byKey.entries()]
+    .map(([key, list]) => aggregateSessionsToRow(key, list, boothCompany))
+    .sort((a, b) => (b.enteredAt ?? '').localeCompare(a.enteredAt ?? ''));
+}
+
+/** @deprecated Use {@link buildAggregatedVisitorRows}. */
 export function mergeVisitSessions(
   rows: VisitorInsightRow[],
   sessions: BoothVisitSessionRow[],
   boothCompany: string,
 ): VisitorInsightRow[] {
   if (sessions.length === 0) return rows;
-
-  const usedKeys = new Set<string>();
-  const merged = rows.map((row) => {
-    const session = sessions.find((s) => {
-      const key = s.visitId ?? `${s.sessionId}-${s.enteredAt}`;
-      if (usedKeys.has(key)) return false;
-      const name = s.visitorName?.trim().toLowerCase();
-      return name ? name === row.name.toLowerCase() : false;
-    });
-    if (!session) return row;
-
-    usedKeys.add(session.visitId ?? `${session.sessionId}-${session.enteredAt}`);
-    return {
-      ...row,
-      enteredAt: session.enteredAt,
-      exitedAt: session.exitedAt,
-      stillInside: session.stillInside,
-      atYourBooth: session.stillInside || row.atYourBooth,
-      visitorId: session.visitorId ?? row.visitorId,
-      sessionId: session.sessionId ?? row.sessionId,
-      visitId: session.visitId ?? row.visitId,
-      email: session.email ?? row.email,
-      phone: session.phone ?? row.phone,
-    };
-  });
-
-  for (const session of sessions) {
-    const key = session.visitId ?? `${session.sessionId}-${session.enteredAt}`;
-    if (usedKeys.has(key)) continue;
-    usedKeys.add(key);
-    merged.unshift({
-      id: `live-${key}`,
-      name: session.visitorName?.trim() || 'Guest visitor',
-      company: '—',
-      role: '—',
-      email: session.email,
-      phone: session.phone,
-      avatarHue: 210,
-      leadScore: 0,
-      scoreLabel: '—',
-      category: 'WARM',
-      hall: 'Your hall',
-      booth: 'Your booth',
-      boothCompany,
-      atYourBooth: true,
-      questionnaire: 'Not Invited',
-      enteredAt: session.enteredAt,
-      exitedAt: session.exitedAt,
-      stillInside: session.stillInside,
-      visitorId: session.visitorId,
-      sessionId: session.sessionId,
-      visitId: session.visitId,
-    });
-  }
-
-  return merged;
+  return buildAggregatedVisitorRows(sessions, boothCompany);
 }
 
 export function filterVisitors(
@@ -422,12 +576,12 @@ export function exportVisitorsCsv(rows: VisitorInsightRow[]) {
     'Company',
     'Role',
     'Lead Score',
+    'Interest Pts',
+    'Converting',
     'Category',
-    'Hall',
-    'Booth',
-    'Booth Company',
-    'Entry',
-    'Exit',
+    'Visits',
+    'Last entry',
+    'Last exit',
     'Questionnaire',
   ];
   const lines = rows.map((r) =>
@@ -438,10 +592,14 @@ export function exportVisitorsCsv(rows: VisitorInsightRow[]) {
       r.company,
       r.role,
       r.leadScore,
+      r.engagementPoints ?? '',
+      r.convertingTier
+        ? `${r.convertingTier} (${r.convertingPct ?? convertingPctFromPoints(r.engagementPoints ?? 0)}%)`
+        : r.engagementPoints != null && r.engagementPoints > 0
+          ? 'below threshold'
+          : '',
       r.category,
-      r.hall,
-      r.booth,
-      r.boothCompany,
+      String(r.visitCount ?? 1),
       formatVisitTime(r.enteredAt),
       r.stillInside ? 'In booth' : formatVisitTime(r.exitedAt),
       r.questionnaire,

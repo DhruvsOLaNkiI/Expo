@@ -26,6 +26,10 @@ import {
   loadSalesChatMessagesAsync,
   resolveSalesChatThreadId,
 } from '@/dashboard/salesChatLocal';
+import {
+  appendAiChatMessageAsync,
+  resolveAiChatThreadId,
+} from '@/dashboard/aiChatLocal';
 import { getAnalyticsSessionId } from '@/dashboard/api/client';
 
 type Message = {
@@ -155,6 +159,31 @@ export function AiChatbox() {
         visitorName,
       }),
     [visitorId, visitorName],
+  );
+
+  const aiChatThreadId = useMemo(
+    () =>
+      resolveAiChatThreadId({
+        visitorId,
+        sessionId: getAnalyticsSessionId(),
+        visitorName,
+      }),
+    [visitorId, visitorName],
+  );
+
+  const recordAiChatMessage = useCallback(
+    (role: 'user' | 'assistant', text: string) => {
+      if (!chatBoothId || isSalesMode) return;
+      void appendAiChatMessageAsync({
+        boothId: chatBoothId,
+        threadId: aiChatThreadId,
+        role,
+        text,
+        visitorId,
+        visitorName,
+      });
+    },
+    [chatBoothId, isSalesMode, aiChatThreadId, visitorId, visitorName],
   );
 
   const loadExpoStats = useCallback(async () => {
@@ -293,6 +322,7 @@ export function AiChatbox() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    recordAiChatMessage('user', userMessage.content);
     setInput('');
     setLoading(true);
 
@@ -303,15 +333,17 @@ export function AiChatbox() {
           const quick = tryAnswerExpoStatsQuestion(userMessage.content, stats);
           if (quick) {
             setDebugInfo('📊 Answered from live expo stats');
+            const reply = quick.replace(/\*\*/g, '');
             setMessages((prev) => [
               ...prev,
               {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: quick.replace(/\*\*/g, ''),
+                content: reply,
                 timestamp: Date.now(),
               },
             ]);
+            recordAiChatMessage('assistant', reply);
             setLoading(false);
             return;
           }
@@ -364,11 +396,12 @@ export function AiChatbox() {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
+        recordAiChatMessage('assistant', assistantMessage.content);
         setLoading(false);
         return;
       }
 
-      // General chat via server → OpenRouter (OPENROUTER_API_KEY in .env, not exposed to browser)
+      // General chat via server → OpenRouter
       setDebugInfo('🤖 Asking OpenRouter (free models)…');
 
       const envMaxRaw = import.meta.env.VITE_GEMINI_MAX_OUTPUT_TOKENS;
@@ -514,6 +547,7 @@ export function AiChatbox() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      recordAiChatMessage('assistant', assistantMessage.content);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to connect to AI service. Please check your API key.';
       setDebugInfo(`❌ ${errorMsg}`);
@@ -525,6 +559,7 @@ export function AiChatbox() {
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
+      recordAiChatMessage('assistant', errorMessage.content);
     } finally {
       setLoading(false);
     }

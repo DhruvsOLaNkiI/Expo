@@ -17,6 +17,7 @@ import {
 } from '@/features/shared/data/boothDisplayLayout';
 
 const HALL_OPTIONS: { id: string; label: string }[] = [
+  { id: 'hall-entry-spawn', label: 'Entry spawn (visitor start)' },
   { id: 'hall-entrance-lobby', label: 'Entrance lobby (desk + zone)' },
   { id: 'hall-reception-banner', label: 'Large LED wall' },
   { id: 'hall-plant-0', label: 'Tree 1' },
@@ -78,6 +79,29 @@ export function HallLayoutEditHud() {
     setSaveHint(msg);
     if (saveHintTimer.current) clearTimeout(saveHintTimer.current);
     saveHintTimer.current = setTimeout(() => setSaveHint(null), 2000);
+  };
+
+  const captureEntryFromPlayer = () => {
+    const pos = useStore.getState().playerPosition;
+    const yaw = useStore.getState().playerFacingYaw;
+    if (!pos) {
+      flashSaveHint('Walk to the entry spot, then try again');
+      return;
+    }
+    patchSceneOverride({
+      hallLayout: {
+        mainExpoSpawn: [pos[0], 1.7, pos[2]],
+        mainExpoSpawnYaw: yaw,
+      },
+    });
+    const obj = findLayoutObject('hall-entry-spawn');
+    if (obj) {
+      obj.position.set(pos[0], 0, pos[2]);
+      obj.rotation.y = yaw;
+      obj.updateMatrixWorld(true);
+    }
+    setSel('hall-entry-spawn');
+    flashSaveHint('✓ Entry placement saved from your position');
   };
 
   const saveAndStay = () => {
@@ -319,7 +343,10 @@ export function HallLayoutEditHud() {
           <p className="mt-1 text-[10px] leading-relaxed text-white/55">
             <strong className="text-white/75">Click object</strong> to select · <strong className="text-white/75">G</strong> move · <strong className="text-white/75">R</strong> rotate · <strong className="text-white/75">S</strong> resize
             {!inRegistration && (
-              <> · Pick an <strong className="text-white/75">aisle standee</strong> or booth display below</>
+              <>
+                {' '}
+                · <strong className="text-white/75">Entry spawn</strong> = where visitors appear
+              </>
             )}
           </p>
           {saveHint && (
@@ -343,6 +370,18 @@ export function HallLayoutEditHud() {
           </button>
         </div>
       </div>
+
+      {!inRegistration && (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="w-full rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#f5e6b8] hover:bg-[#d4af37]/20"
+            onClick={captureEntryFromPlayer}
+          >
+            Use my position as entry
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 flex gap-2">
         <button

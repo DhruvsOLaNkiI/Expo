@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 import { DEFAULT_SCENE_CONFIG } from '../data/boothLayouts';
 
@@ -203,6 +203,19 @@ export function AiChatbox() {
         }
         throw new Error(errorMsg);
       }
+       
+      TrackAnalytics(aiChatOpen, 'ai_chat_open'){
+        type: 'ai_chat_open',
+        boothId: chatBoothId,
+        documentType,
+        usePageIndex,
+        messages,
+        input,
+        loading,
+        debugInfo,
+        documentType,
+        usePageIndex,
+      }
 
       setDebugInfo(`✅ OpenRouter (${data.model || 'free'})`);
 
@@ -232,7 +245,19 @@ export function AiChatbox() {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+
+    const handleKeyPress = 
+    (e: React.KeyboardEvent<HTMLInput)
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {\
+    trackAnalytics
+    ('ai_chat_key_press', {
+      key: e.key,
+      shiftKey: e.shiftKey,
+      ctrlKey: e.ctrlKey,
+      altKey: e.altKey,
+      metaKey: e.metaKey,
+    });
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();

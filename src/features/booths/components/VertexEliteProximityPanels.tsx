@@ -62,7 +62,8 @@ export function VertexEliteProximityPanels({
   entranceLocal?: [number, number, number];
 }) {
   const { camera } = useThree();
-  const anchorRef = useRef<THREE.Group>(null);
+  const entranceRef = useRef<THREE.Group>(null);
+  const centerRef = useRef<THREE.Group>(null);
   const smoothed = useRef(0);
   const reportBoothHudProximity = useStore((s) => s.reportBoothHudProximity);
   const ctxRef = useRef<VertexEliteHudContext | null>(null);
@@ -117,24 +118,36 @@ export function VertexEliteProximityPanels({
   const frameCount = useRef(0);
   const worldPos = useRef(new THREE.Vector3());
 
+  const proximityAlpha = (dist: number) => {
+    const FULL = 4.2;
+    const FAR = 10.5;
+    return THREE.MathUtils.clamp((FAR - dist) / (FAR - FULL), 0, 1);
+  };
+
   useFrame((_, delta) => {
     if (cmsPreview || !ctxRef.current) return;
-    if (!anchorRef.current) return;
-    
-    // Throttle proximity checks to every 3 frames for better performance
+    if (!entranceRef.current && !centerRef.current) return;
+
     frameCount.current++;
     if (frameCount.current % 3 !== 0) return;
-    
-    anchorRef.current.getWorldPosition(worldPos.current);
-    const dist = worldPos.current.distanceTo(camera.position);
-    const FULL = 4.2;
-    const FAR = 9.5;
-    const target = THREE.MathUtils.clamp((FAR - dist) / (FAR - FULL), 0, 1);
+
+    let target = 0;
+    for (const ref of [entranceRef, centerRef]) {
+      if (!ref.current) continue;
+      ref.current.getWorldPosition(worldPos.current);
+      target = Math.max(target, proximityAlpha(worldPos.current.distanceTo(camera.position)));
+    }
+
     smoothed.current = THREE.MathUtils.lerp(smoothed.current, target, 1 - Math.pow(0.0015, delta * 60));
     reportBoothHudProximity(boothId, smoothed.current, ctxRef.current);
   });
 
   if (cmsPreview) return null;
 
-  return <group ref={anchorRef} position={entranceLocal} />;
+  return (
+    <>
+      <group ref={entranceRef} position={entranceLocal} />
+      <group ref={centerRef} position={[0, 0, 0]} />
+    </>
+  );
 }

@@ -12,12 +12,15 @@ export type AnalyticsEventInput = {
     | 'doc_close'
     | 'doc_heartbeat'
     | 'booth_enter'
-    | 'booth_exit';
+    | 'booth_exit'
+    | 'cta_engagement';
   zone?: string;
   boothId?: string;
   docTitle?: string;
   docUrl?: string;
   docVariant?: string;
+  engagementAction?: string;
+  engagementPoints?: number;
   dwellMs?: number;
   visitId?: string;
 };
@@ -97,20 +100,92 @@ export type BoothVisitorStats = {
   totalBoothVisitsLast7Days: number;
   totalBoothVisitsGrowthPct: number;
   avgDwellMsInBooth: number;
-  visitTrend: { day: string; label: string; visitors: number }[];
+  visitTrend: { slot: string; label: string; visitors: number }[];
+  visitTrendEventDay?: string;
+  visitTrendStartHour?: number;
+  visitTrendSpanHours?: number;
   mongoConnected: boolean;
 };
 
-export async function fetchBoothVisitorStats(boothId: string): Promise<BoothVisitorStats | null> {
+export type BoothVisitorStatsTrendParams = {
+  trendStartHour?: number;
+  trendSpanHours?: number;
+};
+
+export type QuestionnairePossibilityStats = {
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
+  avgScore: number;
+  mongoConnected: boolean;
+};
+
+export async function fetchBoothVisitorStats(
+  boothId: string,
+  trend?: BoothVisitorStatsTrendParams,
+): Promise<BoothVisitorStats | null> {
   try {
-    const res = await fetch(
-      analyticsApiUrl(`/api/analytics/booth-visitors?boothId=${encodeURIComponent(boothId)}`),
-    );
+    const qs = new URLSearchParams({ boothId });
+    if (trend?.trendStartHour != null) qs.set('trendStartHour', String(trend.trendStartHour));
+    if (trend?.trendSpanHours != null) qs.set('trendSpanHours', String(trend.trendSpanHours));
+    const res = await fetch(analyticsApiUrl(`/api/analytics/booth-visitors?${qs}`));
     const json = (await res.json()) as { ok: boolean; stats?: BoothVisitorStats };
     if (!res.ok || !json.ok || !json.stats) return null;
     return json.stats;
   } catch {
     return null;
+  }
+}
+
+export async function fetchQuestionnairePossibilityStats(): Promise<QuestionnairePossibilityStats | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/questionnaire-possibility'));
+    const json = (await res.json()) as { ok: boolean; stats?: QuestionnairePossibilityStats };
+    if (!res.ok || !json.ok || !json.stats) return null;
+    return json.stats;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBoothEngagementActionStats(
+  boothId: string,
+): Promise<import('../engagementLeadScore').BoothEngagementActionStats | null> {
+  try {
+    const res = await fetch(
+      analyticsApiUrl(
+        `/api/analytics/booth-engagement-actions?boothId=${encodeURIComponent(boothId)}`,
+      ),
+    );
+    const json = (await res.json()) as {
+      ok: boolean;
+      stats?: import('../engagementLeadScore').BoothEngagementActionStats;
+    };
+    if (!res.ok || !json.ok || !json.stats) return null;
+    return json.stats;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBoothVisitorEngagementScores(
+  boothId: string,
+): Promise<import('../engagementLeadScore').VisitorEngagementScoreRow[]> {
+  try {
+    const res = await fetch(
+      analyticsApiUrl(
+        `/api/analytics/booth-visitor-engagement?boothId=${encodeURIComponent(boothId)}`,
+      ),
+    );
+    const json = (await res.json()) as {
+      ok: boolean;
+      scores?: import('../engagementLeadScore').VisitorEngagementScoreRow[];
+    };
+    if (!res.ok || !json.ok || !Array.isArray(json.scores)) return [];
+    return json.scores;
+  } catch {
+    return [];
   }
 }
 
@@ -313,6 +388,89 @@ export async function fetchBoothSalesChatMessages(
   return mergeSalesChatMessages(fromApi, fromLocal);
 }
 
+export type AiChatMessageRow = {
+  id: string;
+  boothId: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  text: string;
+  at: string;
+  visitorId?: string;
+  visitorName?: string;
+};
+
+function aiChatMessageKey(m: AiChatMessageRow): string {
+  return `${m.threadId}|${m.role}|${m.text}|${m.at.slice(0, 19)}`;
+}
+
+function mergeAiChatMessages(fromApi: AiChatMessageRow[], fromLocal: AiChatMessageRow[]): AiChatMessageRow[] {
+  const seenIds = new Set(fromApi.map((m) => m.id));
+  const seenKeys = new Set(fromApi.map(aiChatMessageKey));
+  const merged = [...fromApi];
+  for (const row of fromLocal) {
+    if (seenIds.has(row.id)) continue;
+    const key = aiChatMessageKey(row);
+    if (seenKeys.has(key)) continue;
+    merged.push(row);
+    seenKeys.add(key);
+  }
+  return merged.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+export async function postAiChatMessage(payload: {
+  boothId: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  text: string;
+  visitorId?: string;
+  visitorName?: string;
+}): Promise<AiChatMessageRow | null> {
+  const { createAiChatMessage, appendAiChatMessage } = await import('../aiChatLocal');
+  const localRow = createAiChatMessage(payload);
+
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/ai-chat'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = (await res.json()) as {
+      ok: boolean;
+      message?: AiChatMessageRow;
+      stored?: boolean;
+    };
+    if (res.ok && json.ok && json.message) {
+      appendAiChatMessage(json.message);
+      return json.message;
+    }
+  } catch {
+    /* fall through to local */
+  }
+
+  appendAiChatMessage(localRow);
+  return localRow;
+}
+
+export async function fetchBoothAiChatMessages(
+  boothId: string,
+  threadId?: string,
+): Promise<AiChatMessageRow[]> {
+  let fromApi: AiChatMessageRow[] = [];
+  try {
+    const qs = new URLSearchParams({ boothId });
+    if (threadId?.trim()) qs.set('threadId', threadId.trim());
+    const res = await fetch(analyticsApiUrl(`/api/analytics/booth-ai-chat?${qs}`));
+    const json = (await res.json()) as { ok: boolean; messages?: AiChatMessageRow[] };
+    if (res.ok && json.ok && json.messages) fromApi = json.messages;
+  } catch {
+    /* use local only */
+  }
+
+  const { readAiChatMessages } = await import('../aiChatLocal');
+  const fromLocal = readAiChatMessages(boothId, threadId);
+  return mergeAiChatMessages(fromApi, fromLocal);
+}
+
 export type BoothLivePresenceRow = {
   visitorKey: string;
   visitorId?: string;
@@ -425,13 +583,21 @@ export type BoothVisitorProfileRow = {
 
 export async function fetchBoothVisitorProfile(
   boothId: string,
-  params: { visitorId?: string; sessionId?: string; visitorName?: string },
+  params: {
+    visitorId?: string;
+    sessionId?: string;
+    visitorName?: string;
+    email?: string;
+    phone?: string;
+  },
 ): Promise<BoothVisitorProfileRow | null> {
   try {
     const qs = new URLSearchParams({ boothId });
     if (params.visitorId) qs.set('visitorId', params.visitorId);
     if (params.sessionId) qs.set('sessionId', params.sessionId);
     if (params.visitorName) qs.set('visitorName', params.visitorName);
+    if (params.email) qs.set('email', params.email);
+    if (params.phone) qs.set('phone', params.phone);
     const res = await fetch(analyticsApiUrl(`/api/analytics/booth-visitor-profile?${qs}`));
     const json = (await res.json()) as { ok: boolean; profile?: BoothVisitorProfileRow };
     if (!res.ok || !json.ok || !json.profile) return null;

@@ -101,6 +101,8 @@ export function VisitorProfilePage({ visitor, onBack }: Props) {
         visitorId: visitor.visitorId,
         sessionId: visitor.sessionId,
         visitorName: visitor.name,
+        email: visitor.email,
+        phone: visitor.phone,
       });
       if (!cancelled) {
         setProfile(mergeProfile(live, demoProfile));
@@ -279,6 +281,19 @@ export function VisitorProfilePage({ visitor, onBack }: Props) {
           <div className="vprof-side-block">
             <h4>Session summary</h4>
             <ul className="vprof-summary-list">
+              <li>
+                <span>Total visits</span>
+                <strong>{data.totalVisits}</strong>
+              </li>
+              <li>
+                <span>First visit</span>
+                <strong>
+                  {formatVisitTime(
+                    visitor.firstVisitedAt ??
+                      data.boothVisits[data.boothVisits.length - 1]?.enteredAt,
+                  )}
+                </strong>
+              </li>
               <li>
                 <span>Latest entry</span>
                 <strong>{formatVisitTime(visitor.enteredAt ?? data.boothVisits[0]?.enteredAt)}</strong>

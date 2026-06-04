@@ -11,6 +11,9 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+
+export { readFileAsDataUrl };
+
 export type UploadResult = {
   url: string;
   storage: 'r2' | 'local';

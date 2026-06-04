@@ -1,5 +1,11 @@
 import { useCallback } from 'react';
-import { CmsUploadError, uploadCmsFile } from '@/api/cmsUpload';
+import { CmsUploadError, readFileAsDataUrl, uploadCmsFile } from '@/api/cmsUpload';
+import { EXHIBITOR_SETUP_LOCAL_STORAGE } from './exhibitorConfig';
+import {
+  MAX_BOOTH_LOGO_SOURCE_BYTES,
+  compressBoothLogoToDataUrl,
+  compressSetupImageToDataUrl,
+} from './exhibitorLogo';
 import type { BoothLayoutConfig, BoothLayoutPatch } from '@/features/shared/data/boothLayouts';
 import type { ExhibitorNavId } from './exhibitorConfig';
 import {
@@ -12,11 +18,89 @@ export function exhibitorUploadError(e: unknown): string {
   return e instanceof CmsUploadError ? e.message : e instanceof Error ? e.message : 'Upload failed';
 }
 
+/** Booth logo — compressed data URL stored in booth config (not R2). */
+export async function exhibitorUploadBoothLogo(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new CmsUploadError('Logo must be a PNG, JPG, or WebP image.', 'upload_failed');
+  }
+  if (file.size > MAX_BOOTH_LOGO_SOURCE_BYTES) {
+    throw new CmsUploadError('Logo source file must be under 15 MB.', 'upload_failed');
+  }
+  try {
+    return await compressBoothLogoToDataUrl(file);
+  } catch (e) {
+    throw new CmsUploadError(
+      e instanceof Error ? e.message : 'Could not process logo image',
+      'upload_failed',
+    );
+  }
+}
+
+const SETUP_LOCAL_FOLDERS = new Set(['logo', 'unit-layout', 'floor-plan', 'site-map']);
+
+function isSetupImage(file: File): boolean {
+  return file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+}
+
+function isSetupPdf(file: File): boolean {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+}
+
+/** Booth Setup assets — local data URLs only (no R2) while testing. */
+export async function exhibitorUploadSetupFile(file: File): Promise<string> {
+  if (isSetupImage(file)) {
+    if (file.size > MAX_BOOTH_LOGO_SOURCE_BYTES) {
+      throw new CmsUploadError('Image must be under 15 MB.', 'upload_failed');
+    }
+    try {
+      return await compressSetupImageToDataUrl(file);
+    } catch (e) {
+      throw new CmsUploadError(
+        e instanceof Error ? e.message : 'Could not process image',
+        'upload_failed',
+      );
+    }
+  }
+  if (isSetupPdf(file)) {
+    if (file.size > 4 * 1024 * 1024) {
+      throw new CmsUploadError('PDF must be under 4 MB for local testing.', 'pdf_too_large');
+    }
+    return readFileAsDataUrl(file);
+  }
+  throw new CmsUploadError('Upload must be an image or PDF.', 'upload_failed');
+}
+
+/** Side-wall posters and counter front — larger compress than fascia logos. */
+export async function exhibitorUploadPlacementImage(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new CmsUploadError('Image must be a PNG, JPG, or WebP file.', 'upload_failed');
+  }
+  if (file.size > MAX_BOOTH_LOGO_SOURCE_BYTES) {
+    throw new CmsUploadError('Image must be under 15 MB.', 'upload_failed');
+  }
+  try {
+    return await compressSetupImageToDataUrl(file);
+  } catch (e) {
+    throw new CmsUploadError(
+      e instanceof Error ? e.message : 'Could not process image',
+      'upload_failed',
+    );
+  }
+}
+
 export async function exhibitorUploadFile(
   file: File,
   boothId: string,
   folder: string,
 ): Promise<string> {
+  if (folder === 'logo') {
+    return exhibitorUploadBoothLogo(file);
+  }
+
+  if (EXHIBITOR_SETUP_LOCAL_STORAGE && SETUP_LOCAL_FOLDERS.has(folder)) {
+    return exhibitorUploadSetupFile(file);
+  }
+
   const up = await uploadCmsFile(file, boothId, folder);
   return up.url;
 }
@@ -37,9 +121,13 @@ export function buildExhibitorChecklist(booth: BoothLayoutConfig): ExhibitorChec
 
   return [
     {
-      id: 'logo',
-      label: 'Booth logo',
-      done: Boolean(booth.headerLogoUrl?.trim()),
+      id: 'boothLayout',
+      label: 'Booth layout (logos + project name)',
+      done: Boolean(
+        booth.headerLogoUrl?.trim() ||
+          booth.wallLogoLeftUrl?.trim() ||
+          booth.wallLogoRightUrl?.trim(),
+      ),
       nav: 'setup',
     },
     {
@@ -114,11 +202,15 @@ export function useExhibitorPersist(patchBooth: (p: BoothLayoutPatch) => Promise
     async (patch: BoothLayoutPatch, label: string): Promise<{ ok: boolean; message: string }> => {
       try {
         const ok = await patchBooth(patch);
+        if (!ok) {
+          return {
+            ok: false,
+            message: `${label} could not be saved. Browser storage may be full — use "Clear all wall images", then try again.`,
+          };
+        }
         return {
-          ok,
-          message: ok
-            ? `${label} saved for all visitors`
-            : `${label} saved in this browser — connect MongoDB to share with visitors`,
+          ok: true,
+          message: `${label} saved for this booth. Refresh the 3D expo tab (or use Jump to → your booth) to see walls and header update.`,
         };
       } catch (e) {
         return { ok: false, message: exhibitorUploadError(e) };

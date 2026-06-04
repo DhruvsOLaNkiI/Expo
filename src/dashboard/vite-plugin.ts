@@ -13,9 +13,14 @@ import {
   handleFaqSubmitPost,
   handleSalesChatPost,
   handleBoothSalesChatGet,
+  handleAiChatPost,
+  handleBoothAiChatGet,
   handleBoothPresencePost,
   handleBoothPresenceDelete,
   handleBoothLivePresenceGet,
+  handleQuestionnairePossibilityGet,
+  handleBoothEngagementActionsGet,
+  handleBoothVisitorEngagementGet,
 } from './server/routes';
 
 type ApiConnectServer = {
@@ -88,6 +93,16 @@ function attachAnalyticsApi(server: ApiConnectServer, rootDir: string, mode: str
       return;
     }
 
+    if (url === '/api/analytics/ai-chat' && req.method === 'POST') {
+      void handleAiChatPost(req, res);
+      return;
+    }
+
+    if (url === '/api/analytics/booth-ai-chat' && req.method === 'GET') {
+      void handleBoothAiChatGet(req, res);
+      return;
+    }
+
     if (url === '/api/analytics/booth-presence' && req.method === 'POST') {
       void handleBoothPresencePost(req, res);
       return;
@@ -100,6 +115,21 @@ function attachAnalyticsApi(server: ApiConnectServer, rootDir: string, mode: str
 
     if (url === '/api/analytics/booth-live-presence' && req.method === 'GET') {
       void handleBoothLivePresenceGet(req, res);
+      return;
+    }
+
+    if (url === '/api/analytics/questionnaire-possibility' && req.method === 'GET') {
+      void handleQuestionnairePossibilityGet(res);
+      return;
+    }
+
+    if (url === '/api/analytics/booth-engagement-actions' && req.method === 'GET') {
+      void handleBoothEngagementActionsGet(req, res);
+      return;
+    }
+
+    if (url === '/api/analytics/booth-visitor-engagement' && req.method === 'GET') {
+      void handleBoothVisitorEngagementGet(req, res);
       return;
     }
 

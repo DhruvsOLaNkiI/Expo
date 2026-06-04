@@ -17,7 +17,8 @@ import {
   persistBoothOverridesWithFallback,
   readPersistedBoothOverrides,
 } from '@/store/persist/boothCms';
-import { REG_MAIN_EXPO_SPAWN, REG_SPAWN } from '@/features/shared/data/registrationHall';
+import { mergeHallLayout } from '@/features/shared/data/boothLayouts';
+import { REG_SPAWN, resolveMainExpoSpawn } from '@/features/shared/data/registrationHall';
 import {
   CAMERA_MODE_ORDER,
   type CameraMode,
@@ -80,6 +81,21 @@ function readRegistrationPass(): boolean {
 function persistSceneConfig(config: SceneOverridesInput) {
   try { localStorage.setItem(SCENE_CMS_LS_KEY, JSON.stringify(config)); } catch { /* */ }
 }
+
+function readPersistedSceneConfig(): SceneOverridesInput {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(SCENE_CMS_LS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as SceneOverridesInput)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 
 /** Shown when the Vertex Elite CTA kiosk opens brochure / price list / site map. */
 export type CtaResourcePopup = {
@@ -169,6 +185,8 @@ interface AppState {
   getSceneConfig: () => SceneConfig;
   /** Merge latest local/IDB booth CMS patches into memory (e.g. after exhibitor save). */
   syncBoothOverridesFromPersistence: () => Promise<void>;
+  /** Merge latest scene overrides from localStorage (cross-tab CMS sync). */
+  syncSceneOverridesFromPersistence: () => void;
 
   /** In-expo hall layout editor (TransformControls + saves to scene overrides). */
   hallLayoutEditMode: boolean;
@@ -425,7 +443,9 @@ export const useStore = create<AppState>((set, get) => ({
       return;
     }
     set({ expoPhase: 'expo', registrationUi: 'none' });
-    get().teleportPlayer(REG_MAIN_EXPO_SPAWN);
+    get().teleportPlayer(
+      resolveMainExpoSpawn(mergeHallLayout(get().sceneOverrides.hallLayout)),
+    );
   },
   skipToMainExpo: () => {
     let profile = get().visitorProfile;
@@ -453,7 +473,9 @@ export const useStore = create<AppState>((set, get) => ({
       expoPhase: 'expo',
       showInstructions: false,
     });
-    get().teleportPlayer(REG_MAIN_EXPO_SPAWN);
+    get().teleportPlayer(
+      resolveMainExpoSpawn(mergeHallLayout(get().sceneOverrides.hallLayout)),
+    );
   },
   enterRegistrationLobby: () => {
     set({ expoPhase: 'registration', registrationUi: 'none' });
@@ -478,6 +500,19 @@ export const useStore = create<AppState>((set, get) => ({
 
   initBoothCms: async () => {
     if (get()._boothCmsHydrated) return;
+
+    // Local-first: apply saved overrides (colors, logos, images) from this browser
+    // IMMEDIATELY so the booth renders the user's theme without waiting on the network.
+    // The MongoDB API can be slow/unreachable; we must not block the visible scene on it.
+    const localBooths = await readPersistedBoothOverrides();
+    if (Object.keys(localBooths).length > 0) {
+      const current = get().boothOverrides;
+      const seeded: Record<string, BoothLayoutPatch> = { ...current };
+      for (const id of new Set([...Object.keys(current), ...Object.keys(localBooths)])) {
+        seeded[id] = { ...(current[id] || {}), ...(localBooths[id] || {}) };
+      }
+      set({ boothOverrides: seeded });
+    }
 
     let booths: Record<string, BoothLayoutPatch> = {};
     let sceneFromApi: SceneOverridesInput = {};
@@ -513,7 +548,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     for (const id of REMOVED_BOOTH_IDS) delete booths[id];
 
-    const localBooths = await readPersistedBoothOverrides();
+    // Server data is the base; local overrides (latest user edits) always win per field.
     for (const id of new Set([...Object.keys(booths), ...Object.keys(localBooths)])) {
       booths[id] = { ...(booths[id] || {}), ...(localBooths[id] || {}) };
     }
@@ -556,16 +591,32 @@ export const useStore = create<AppState>((set, get) => ({
     set({ boothOverrides: merged });
   },
 
+  syncSceneOverridesFromPersistence: () => {
+    const local = readPersistedSceneConfig();
+    const current = get().sceneOverrides;
+    const merged = mergeSceneOverridesInput({}, current, local);
+    set({ sceneOverrides: merged });
+  },
+
   patchBoothOverride: async (id, patch) => {
     const prev = get().boothOverrides[id] || {};
-    const definedPatch = Object.fromEntries(
-      Object.entries(patch).filter(([, v]) => v !== undefined)
-    ) as BoothLayoutPatch;
-    const nextEntry = { ...prev, ...definedPatch };
+    const nextEntry = { ...prev } as BoothLayoutPatch;
+    const definedPatch: BoothLayoutPatch = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) continue;
+      if (value === null) {
+        delete (nextEntry as Record<string, unknown>)[key];
+        definedPatch[key as keyof BoothLayoutPatch] = null as never;
+      } else {
+        (nextEntry as Record<string, unknown>)[key] = value;
+        (definedPatch as Record<string, unknown>)[key] = value;
+      }
+    }
     const nextAll = { ...get().boothOverrides, [id]: nextEntry };
     set({ boothOverrides: nextAll });
-    void persistBoothOverridesWithFallback(nextAll);
+    const localOk = await persistBoothOverridesWithFallback(nextAll);
 
+    let remoteOk = false;
     try {
       const res = await fetch('/api/booth-cms/patch', {
         method: 'POST',
@@ -573,10 +624,12 @@ export const useStore = create<AppState>((set, get) => ({
         body: JSON.stringify({ boothId: id, patch: definedPatch }),
       });
       const data = await res.json();
-      return !!data?.ok;
+      remoteOk = !!data?.ok;
     } catch {
-      return false;
+      remoteOk = false;
     }
+    // Colors/images live in browser storage — local save must succeed for the expo to show them.
+    return localOk || remoteOk;
   },
 
   resetBoothOverride: async (id) => {

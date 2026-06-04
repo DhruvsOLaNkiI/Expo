@@ -22,6 +22,15 @@ export type LuxuryBoothProps = {
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: import('./boothWallMetrics').BoothWallPlacementAdjustments;
+  headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: import('@/features/shared/data/boothLayouts').PlacedImage[];
   brochureUrl?: string;
@@ -101,6 +110,15 @@ export function SideExpoBooths({
           videoUrl={b.videoUrl}
           stageScreenUrl={b.stageScreenUrl}
           headerLogoUrl={b.headerLogoUrl}
+          headerBranding={b.headerBranding}
+          wallLogoLeftUrl={b.wallLogoLeftUrl}
+          wallLogoRightUrl={b.wallLogoRightUrl}
+          sideWallLeftImageUrl={b.sideWallLeftImageUrl}
+          sideWallRightImageUrl={b.sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={b.exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={b.exteriorWallRightImageUrl}
+          counterFrontImageUrl={b.counterFrontImageUrl}
+          wallPlacementAdjustments={b.wallPlacementAdjustments}
           lighting={b.lighting}
           placedImages={b.placedImages}
           brochureUrl={b.brochureUrl}

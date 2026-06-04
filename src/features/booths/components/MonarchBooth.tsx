@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
-import { BoothHostessGreeter } from './Booths';
+import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
@@ -253,6 +253,8 @@ export function MonarchBooth({
       {/* Wall wash lights for maroon texture */}
       <pointLight position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
       <pointLight position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
+
+      <BoothStandee name={name} accent={champagneGold} boothId={id} displayLayout={displayLayout} />
 
       <VertexEliteProximityPanels
         boothId={id}

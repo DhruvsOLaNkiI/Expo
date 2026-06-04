@@ -1,17 +1,22 @@
 import { useKeyboardControls } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { PointerLockControls } from 'three-stdlib';
 import { CAMERA_MODES } from '@/features/expo/camera/cameraModes';
 import { useStore } from '@/store';
-import { regBounds, REG_MAIN_EXPO_SPAWN, REG_SPAWN } from '@/features/shared/data/registrationHall';
 import {
   EXPO_AISLE_EAST_X,
   EXPO_AISLE_WEST_X,
   HALL_HALF_DEPTH,
   HALL_HALF_WIDTH,
 } from '@/features/shared/data/boothLayouts';
+import {
+  regBounds,
+  REG_SPAWN,
+  resolveMainExpoSpawn,
+  resolveMainExpoSpawnYaw,
+} from '@/features/shared/data/registrationHall';
 import { LocalVisitorAvatar } from './LocalVisitorAvatar';
 
 /** Realistic walking speed ~4.5 km/h = ~1.25 m/s. Expo feel is slightly faster. */
@@ -57,8 +62,12 @@ function applyCameraFromFeet(
 }
 
 /** Level view — avoids staring at the floor (common when spawn/rotation was never reset). */
-function resetCameraView(camera: THREE.PerspectiveCamera, mode: keyof typeof CAMERA_MODES) {
-  camera.rotation.set(0, 0, 0, 'YXZ');
+function resetCameraView(
+  camera: THREE.PerspectiveCamera,
+  mode: keyof typeof CAMERA_MODES,
+  yaw = 0,
+) {
+  camera.rotation.set(0, yaw, 0, 'YXZ');
   const preset = CAMERA_MODES[mode];
   camera.fov = preset.fov;
   camera.updateProjectionMatrix();
@@ -68,7 +77,20 @@ export function Player() {
   const { gl } = useThree();
   const camera = useThree((s) => s.camera as THREE.PerspectiveCamera);
   const controlsRef = useRef<PointerLockControls | null>(null);
-  const feetRef = useRef(new THREE.Vector3(REG_MAIN_EXPO_SPAWN[0], 0, REG_MAIN_EXPO_SPAWN[2]));
+  const hallLayoutOv = useStore((s) => s.sceneOverrides.hallLayout);
+  const mainSpawn = useMemo(
+    () => resolveMainExpoSpawn(hallLayoutOv),
+    [
+      hallLayoutOv?.mainExpoSpawn?.[0],
+      hallLayoutOv?.mainExpoSpawn?.[1],
+      hallLayoutOv?.mainExpoSpawn?.[2],
+    ],
+  );
+  const mainSpawnYaw = useMemo(
+    () => resolveMainExpoSpawnYaw(hallLayoutOv),
+    [hallLayoutOv?.mainExpoSpawnYaw],
+  );
+  const feetRef = useRef(new THREE.Vector3(mainSpawn[0], 0, mainSpawn[2]));
   const velocityRef = useRef(new THREE.Vector3());
   const [, get] = useKeyboardControls();
   const setShowInstructions = useStore((state) => state.setShowInstructions);
@@ -102,10 +124,12 @@ export function Player() {
     if (!target) return;
     feetRef.current.set(target[0], 0, target[2]);
     velocityRef.current.set(0, 0, 0);
-    resetCameraView(camera, cameraMode);
+    const atEntry =
+      Math.abs(target[0] - mainSpawn[0]) < 0.25 && Math.abs(target[2] - mainSpawn[2]) < 0.25;
+    resetCameraView(camera, cameraMode, atEntry ? mainSpawnYaw : 0);
     applyCameraFromFeet(camera, feetRef.current, cameraMode);
     useStore.setState({ teleportTarget: null, playerPosition: null });
-  }, [teleportNonce, camera, cameraMode]);
+  }, [teleportNonce, camera, cameraMode, mainSpawnYaw]);
 
   /* ── initial spawn (once per page load) ── */
   useLayoutEffect(() => {
@@ -114,11 +138,11 @@ export function Player() {
     if (expoPhase === 'registration') {
       feetRef.current.set(REG_SPAWN[0], 0, REG_SPAWN[2]);
     } else {
-      feetRef.current.set(REG_MAIN_EXPO_SPAWN[0], 0, REG_MAIN_EXPO_SPAWN[2]);
+      feetRef.current.set(mainSpawn[0], 0, mainSpawn[2]);
     }
-    resetCameraView(camera, cameraMode);
+    resetCameraView(camera, cameraMode, expoPhase === 'expo' ? mainSpawnYaw : 0);
     applyCameraFromFeet(camera, feetRef.current, cameraMode);
-  }, [camera, expoPhase, cameraMode]);
+  }, [camera, expoPhase, cameraMode, mainSpawn, mainSpawnYaw]);
 
   /* ── snap spawn only when switching lobby ↔ main expo (not on camera mode change) ── */
   const prevExpoPhaseRef = useRef(expoPhase);
@@ -128,13 +152,13 @@ export function Player() {
     if (expoPhase === 'registration') {
       feetRef.current.set(REG_SPAWN[0], 0, REG_SPAWN[2]);
     } else {
-      feetRef.current.set(REG_MAIN_EXPO_SPAWN[0], 0, REG_MAIN_EXPO_SPAWN[2]);
+      feetRef.current.set(mainSpawn[0], 0, mainSpawn[2]);
     }
     velocityRef.current.set(0, 0, 0);
     const mode = useStore.getState().cameraMode;
-    resetCameraView(camera, mode);
+    resetCameraView(camera, mode, expoPhase === 'expo' ? mainSpawnYaw : 0);
     applyCameraFromFeet(camera, feetRef.current, mode);
-  }, [expoPhase, camera]);
+  }, [expoPhase, camera, mainSpawn, mainSpawnYaw]);
 
   /* ── pointer lock (desktop) ───────────────────────────────── */
   useEffect(() => {
@@ -317,6 +341,15 @@ export function Player() {
     const speed = velocityRef.current.length();
     setPlayerFacingYaw(camera.rotation.y);
     useStore.getState().setPlayerSpeed(speed);
+    if (hallLayoutEditMode && expoPhase === 'expo') {
+      const x = feetRef.current.x;
+      const z = feetRef.current.z;
+      const y = mainSpawn[1];
+      const prev = useStore.getState().playerPosition;
+      if (!prev || Math.abs(prev[0] - x) > 0.02 || Math.abs(prev[2] - z) > 0.02) {
+        useStore.setState({ playerPosition: [x, y, z] });
+      }
+    }
     applyCameraFromFeet(camera, feetRef.current, cameraMode);
   });
 

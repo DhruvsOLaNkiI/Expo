@@ -7,6 +7,16 @@ import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/Skeleto
 import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
+import { BoothFasciaLogo, BoothSignageFascia } from './BoothSignageFascia';
+import {
+  resolveBoothHeaderBranding,
+  resolveFasciaLayout,
+  resolveHeaderLogoScale,
+} from '@/features/shared/data/boothLayouts';
+import { BOOTH_CMS_PERSIST_EVENT } from '@/store/persist/boothCms';
+import { BoothWallLogos } from './BoothWallLogos';
+import { BoothPlacementImages } from './BoothPlacementImages';
+import { BoothSideWallAssembly } from './BoothSideWallAssembly';
 import { VertexEliteCtaKiosk } from './VertexEliteCtaKiosk';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { HallAisleStandees } from './HallAisleStandees';
@@ -15,7 +25,9 @@ import { SideExpoBooths } from './SideExpoBooths';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, VERTEX_ELITE_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
+import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothPlacedImageInteractive } from './BoothPlacedImageInteractive';
+import { BoothPlacedImage } from './BoothPlacedImageMesh';
 import {
   applyBoothOverrides,
   buildDefaultBoothLayoutList,
@@ -25,6 +37,7 @@ import {
   siteMapUrlsFromConfig,
   mergeHallLayout,
   mergeSceneConfig,
+  resolveEcoBoothSurfaceColors,
   type PlacedImage,
   type HostessQuickReply,
   type MediaItem,
@@ -343,6 +356,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
   const sceneOverrides = useStore((s) => s.sceneOverrides);
   const hallLayout = useMemo(() => mergeHallLayout(sceneOverrides.hallLayout), [sceneOverrides.hallLayout]);
   const initBoothCms = useStore((s) => s.initBoothCms);
+  const syncBoothOverridesFromPersistence = useStore((s) => s.syncBoothOverridesFromPersistence);
+  const syncSceneOverridesFromPersistence = useStore(
+    (s) => (s as unknown as { syncSceneOverridesFromPersistence?: () => void }).syncSceneOverridesFromPersistence,
+  );
 
   const showStandardBooths = sceneOverrides.showStandardBooths ?? DEFAULT_SCENE_CONFIG.showStandardBooths;
   const showHallCanopy = sceneOverrides.showHallCanopy ?? DEFAULT_SCENE_CONFIG.showHallCanopy;
@@ -361,6 +378,44 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
   useEffect(() => {
     void initBoothCms();
   }, [initBoothCms]);
+
+  useEffect(() => {
+    const syncFromPersistence = () => {
+      void syncBoothOverridesFromPersistence();
+      if (typeof syncSceneOverridesFromPersistence === 'function') {
+        syncSceneOverridesFromPersistence();
+      }
+    };
+
+    syncFromPersistence();
+
+    const onStorage = () => syncFromPersistence();
+    const onFocus = () => syncFromPersistence();
+    const onVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        syncFromPersistence();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', onStorage);
+      window.addEventListener('focus', onFocus);
+      window.addEventListener(BOOTH_CMS_PERSIST_EVENT, onStorage);
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', onStorage);
+        window.removeEventListener('focus', onFocus);
+        window.removeEventListener(BOOTH_CMS_PERSIST_EVENT, onStorage);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+    };
+  }, [syncBoothOverridesFromPersistence, syncSceneOverridesFromPersistence]);
 
   const layouts = useMemo(
     () => applyBoothOverrides(buildDefaultBoothLayoutList(), boothOverrides),
@@ -414,6 +469,9 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               color={b.color}
               accent={b.accent}
               counterColor={b.counterColor}
+              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              headerBranding={b.headerBranding}
+              company={b.company}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               lighting={b.lighting}
@@ -432,7 +490,6 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               showCtaKiosk={showVertexEliteCtaKiosk}
               displayLayout={b.displayLayout}
               media={b.media}
-              company={b.company}
             />
           );
         } else if (b.id === 'builder-8') {
@@ -447,9 +504,22 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               color={b.color}
               accent={b.accent}
               counterColor={b.counterColor}
+              backWallColor={b.backWallColor}
+              tvWallColor={b.tvWallColor}
+              headerFasciaColor={b.headerFasciaColor}
+              counterTopColor={b.counterTopColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
-              headerLogoUrl={b.headerLogoUrl}
+              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              headerBranding={b.headerBranding}
+              wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
+              wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
+              sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallLeftImageUrl) || undefined}
+              sideWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallRightImageUrl) || undefined}
+              exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
+              exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
+              counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              wallPlacementAdjustments={b.wallPlacementAdjustments}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -482,7 +552,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
-              headerLogoUrl={b.headerLogoUrl}
+              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -514,7 +584,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
-              headerLogoUrl={b.headerLogoUrl}
+              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -546,7 +616,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
-              headerLogoUrl={b.headerLogoUrl}
+              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -578,7 +648,16 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
-              headerLogoUrl={b.headerLogoUrl}
+              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              headerBranding={b.headerBranding}
+              wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
+              wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
+              sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallLeftImageUrl) || undefined}
+              sideWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallRightImageUrl) || undefined}
+              exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
+              exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
+              counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              wallPlacementAdjustments={b.wallPlacementAdjustments}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -779,6 +858,15 @@ export function StandardLuxuryBooth({
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
+  headerBranding,
+  wallLogoLeftUrl,
+  wallLogoRightUrl,
+  sideWallLeftImageUrl,
+  sideWallRightImageUrl,
+  exteriorWallLeftImageUrl,
+  exteriorWallRightImageUrl,
+  counterFrontImageUrl,
+  wallPlacementAdjustments,
   lighting,
   placedImages,
   brochureUrl = '',
@@ -806,6 +894,15 @@ export function StandardLuxuryBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: import('./boothWallMetrics').BoothWallPlacementAdjustments;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -825,36 +922,29 @@ export function StandardLuxuryBooth({
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   const glow = accent || '#d4af37';
-  const floorPadColor = '#f0ede4';
-  const headerSubtitle = company?.tagline?.trim() || 'LUXURY RESIDENCES';
+  const wallColor = color?.trim() || '#fcfaf5';
+  const floorPadColor = wallColor;
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       {/* Back Wall with Luxury Trim */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        <meshStandardMaterial color={color} roughness={0.4} metalness={0.6} />
+        <meshStandardMaterial color={wallColor} roughness={0.4} metalness={0.6} />
       </mesh>
       
       {/* Accent Wall Pillars */}
       <mesh position={[-5.8, 3, -3.9]}>
         <boxGeometry args={[0.2, 6.2, 0.6]} />
-        <meshStandardMaterial color={accent} metalness={1} roughness={0.1} />
+        <meshStandardMaterial color={glow} metalness={0.85} roughness={0.15} emissive={glow} emissiveIntensity={0.12} />
       </mesh>
       <mesh position={[5.8, 3, -3.9]}>
         <boxGeometry args={[0.2, 6.2, 0.6]} />
-        <meshStandardMaterial color={accent} metalness={1} roughness={0.1} />
+        <meshStandardMaterial color={glow} metalness={0.85} roughness={0.15} emissive={glow} emissiveIntensity={0.12} />
       </mesh>
 
-      {/* Side Walls */}
-      <mesh position={[-5.75, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 6, 4]} />
-        <meshStandardMaterial color={color} roughness={0.4} />
-      </mesh>
-      <mesh position={[5.75, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 6, 4]} />
-        <meshStandardMaterial color={color} roughness={0.4} />
-      </mesh>
+      {/* Side walls + entrance wings (image-placable white panels) */}
+      <BoothSideWallAssembly color={wallColor} />
 
       {/* Floor Pad with Recessed LED Strip */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
@@ -866,36 +956,19 @@ export function StandardLuxuryBooth({
         <meshStandardMaterial color={lighting.ledStripColor} emissive={lighting.ledStripColor} emissiveIntensity={lighting.ledStripIntensity} />
       </mesh>
 
-      {/* Header canopy — grey satin fascia + gold title (same style as ballroom wall accents) */}
-      {headerLogoUrl ? (
-        <>
-          <mesh position={[0, 6.5, -4]} castShadow>
-            <boxGeometry args={[12.5, 1.5, 0.6]} />
-            <meshPhysicalMaterial
-              color="#fcfcfc"
-              roughness={0.2}
-              metalness={0}
-              clearcoat={0.48}
-              clearcoatRoughness={0.22}
-              envMapIntensity={0.15}
-              reflectivity={0.35}
-            />
-          </mesh>
-          <Suspense fallback={null}>
-            <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={accent} />
-          </Suspense>
-        </>
-      ) : (
-        <LuxuryBoothHeaderCanopy
-          title={name}
-          subtitle={headerSubtitle}
-          accent={accent}
-          width={12.5}
-          height={1.5}
-          depth={0.72}
-          position={[0, 6.5, -3.64]}
-        />
-      )}
+      {/* Header fascia — fixed logo / project name / RERA zones */}
+      <BoothSignageFascia
+        boothName={name}
+        accent={glow}
+        headerLogoUrl={headerLogoUrl}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={wallColor}
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
 
       {/* Interactive Concierge Desk */}
       <group position={[0, 0.5, 0]}>
@@ -959,6 +1032,21 @@ export function StandardLuxuryBooth({
         />
       </BoothDisplayEditable>
 
+      <Suspense fallback={null}>
+        <BoothWallLogos
+          wallLogoLeftUrl={wallLogoLeftUrl}
+          wallLogoRightUrl={wallLogoRightUrl}
+        />
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+        />
+      </Suspense>
+
 
       <spotLight
         position={[0, 7.5, -1.2]}
@@ -1001,29 +1089,7 @@ export function StandardLuxuryBooth({
   );
 }
 
-export function BoothPlacedImage({ item }: { item: PlacedImage }) {
-  const tex = useTexture(item.url);
-  useLayoutEffect(() => {
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.needsUpdate = true;
-  }, [tex]);
-  return (
-    <mesh position={item.position} rotation={item.rotation}>
-      <planeGeometry args={item.size} />
-      <meshStandardMaterial
-        map={tex}
-        transparent
-        alphaTest={0.05}
-        toneMapped={false}
-        roughness={0.5}
-        depthWrite
-        polygonOffset
-        polygonOffsetFactor={-2}
-        polygonOffsetUnits={-2}
-      />
-    </mesh>
-  );
-}
+export { BoothPlacedImage } from './BoothPlacedImageMesh';
 
 export function EcoSignageImage({ url }: { url: string }) {
   const tex = useTexture(url);
@@ -1042,7 +1108,11 @@ export function EcoSignageImage({ url }: { url: string }) {
 /* ─── Eco luxury booth (builder-8) — white + green palette ─── */
 export function EcoEdenBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  videoUrl, stageScreenUrl, headerLogoUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', siteMapUrls,
+  backWallColor, tvWallColor, headerFasciaColor, counterTopColor,
+  videoUrl, stageScreenUrl, headerLogoUrl, headerBranding, wallLogoLeftUrl, wallLogoRightUrl,
+  sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
+  wallPlacementAdjustments,
+  lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', siteMapUrls,
   signageImageUrl,
   media = [],
   company,
@@ -1058,9 +1128,22 @@ export function EcoEdenBooth({
   color: string;
   accent: string;
   counterColor: string;
+  backWallColor?: string;
+  tvWallColor?: string;
+  headerFasciaColor?: string;
+  counterTopColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: import('./boothWallMetrics').BoothWallPlacementAdjustments;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -1080,11 +1163,20 @@ export function EcoEdenBooth({
 }) {
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
-  const darkGreen = accent || '#164e2f';
+  const surfaces = resolveEcoBoothSurfaceColors({
+    color,
+    accent,
+    counterColor,
+    backWallColor,
+    tvWallColor,
+    headerFasciaColor,
+    counterTopColor,
+  });
+  const { wallColor, backWallColor: rearWallColor, tvWallColor: tvPanelColor, headerFasciaColor: fasciaBg, counterTopColor: deskTopColor, accent: darkGreen, counterColor: deskBodyColor } = surfaces;
   const leafGreen = company?.brandPrimary?.trim() || '#3d9a5a';
-  const whiteMatte = color || '#ffffff';
+  /** Standing signage screen — fixed so wall-color themes do not repaint this panel. */
+  const signageScreenColor = '#fafaf8';
   const glow = leafGreen;
-  const headerSubtitle = company?.tagline?.trim() || 'LUXURY RESIDENCES';
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -1092,18 +1184,17 @@ export function EcoEdenBooth({
       {/* Back Wall */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        <meshStandardMaterial color="#e4e8e5" roughness={0.55} metalness={0.08} />
+        <meshStandardMaterial color={rearWallColor} roughness={0.55} metalness={0.08} />
       </mesh>
 
-      {/* Side Walls */}
-      <mesh position={[-5.75, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 6, 4]} />
-        <meshStandardMaterial color={whiteMatte} roughness={0.4} />
+      {/* TV bay panel — behind main LED (separate from rear wall & side wings) */}
+      <mesh position={[0, 3, -3.82]} receiveShadow>
+        <planeGeometry args={[7.2, 4.1]} />
+        <meshStandardMaterial color={tvPanelColor} roughness={0.5} metalness={0.06} />
       </mesh>
-      <mesh position={[5.75, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 6, 4]} />
-        <meshStandardMaterial color={whiteMatte} roughness={0.4} />
-      </mesh>
+
+      {/* Side walls + entrance wings */}
+      <BoothSideWallAssembly color={wallColor} />
 
       {/* Dark Green Premium Trims */}
       {/* Vertical pillars */}
@@ -1119,29 +1210,6 @@ export function EcoEdenBooth({
         <meshStandardMaterial color={darkGreen} metalness={0.8} roughness={0.2} />
       </mesh>
 
-      {/* Vertical Green Plant Wall Panel (Left Side) */}
-      <group position={[-5.45, 3, -1.8]}>
-        <mesh receiveShadow>
-          <boxGeometry args={[0.1, 5.8, 3.8]} />
-          <meshStandardMaterial color="#0a2a12" roughness={0.9} />
-        </mesh>
-        {/* Decorative "leaves" - simple meshes for performance */}
-        {Array.from({ length: 40 }).map((_, i) => (
-          <mesh
-            key={`leaf-${i}`}
-            position={[
-              0.08,
-              (Math.random() - 0.5) * 5.5,
-              (Math.random() - 0.5) * 3.5
-            ]}
-            rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
-          >
-            <planeGeometry args={[0.3, 0.15]} />
-            <meshStandardMaterial color={leafGreen} side={THREE.DoubleSide} />
-          </mesh>
-        ))}
-      </group>
-
       {/* Floor Pad with Hidden LED Strip */}
       <mesh position={[0, 0.05, -1.5]} receiveShadow>
         <boxGeometry args={[12, 0.1, 5.5]} />
@@ -1153,48 +1221,39 @@ export function EcoEdenBooth({
         <meshStandardMaterial color="#fff4d6" emissive="#fff4d6" emissiveIntensity={1.5} />
       </mesh>
 
-      {headerLogoUrl ? (
-        <>
-          <mesh position={[0, 6.5, -4]} castShadow>
-            <boxGeometry args={[12.5, 1.5, 0.6]} />
-            <meshPhysicalMaterial
-              color="#fcfcfc"
-              roughness={0.2}
-              metalness={0}
-              clearcoat={0.48}
-              clearcoatRoughness={0.22}
-              envMapIntensity={0.15}
-              reflectivity={0.35}
-            />
-          </mesh>
-          <Suspense fallback={null}>
-            <BoothHeaderLogo url={headerLogoUrl} tagline={name} accent={darkGreen} />
-          </Suspense>
-        </>
-      ) : (
-        <LuxuryBoothHeaderCanopy
-          title={name}
-          subtitle={headerSubtitle}
-          accent={darkGreen}
-          fasciaColor="#fcfcfc"
-          subtitleColor={leafGreen}
-          width={12.5}
-          height={1.5}
-          depth={0.72}
-          position={[0, 6.5, -3.64]}
-        />
-      )}
+      <BoothSignageFascia
+        boothName={name}
+        accent={darkGreen}
+        headerLogoUrl={headerLogoUrl}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={fasciaBg}
+        subtitleColor={leafGreen}
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
 
-      {/* Premium Reception Desk */}
+      {/* Premium Reception Desk — white body + green top cap (same layout as Luxe Towers gold trim) */}
       <group position={[0, 0.5, 0]}>
         <mesh position={[0, 0, 0]} castShadow receiveShadow>
           <boxGeometry args={[4, 1, 1]} />
-          <meshStandardMaterial color={whiteMatte} metalness={0.1} roughness={0.2} />
+          <meshStandardMaterial
+            color={deskBodyColor}
+            metalness={0.1}
+            roughness={0.2}
+          />
         </mesh>
-        {/* Green Trim */}
-        <mesh position={[0, -0.48, 0]} castShadow receiveShadow>
-          <boxGeometry args={[4.2, 0.14, 1.15]} />
-          <meshStandardMaterial color={darkGreen} metalness={0.35} roughness={0.28} />
+        <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+          <boxGeometry args={[4.2, 0.1, 1.2]} />
+          <meshStandardMaterial
+            color={deskTopColor}
+            metalness={0.42}
+            roughness={0.22}
+            emissive={leafGreen}
+            emissiveIntensity={0.08}
+          />
         </mesh>
         {/* Counter LED TV */}
         <BoothDisplayEditable
@@ -1243,6 +1302,21 @@ export function EcoEdenBooth({
         />
       </BoothDisplayEditable>
 
+      <Suspense fallback={null}>
+        <BoothWallLogos
+          wallLogoLeftUrl={wallLogoLeftUrl}
+          wallLogoRightUrl={wallLogoRightUrl}
+        />
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+        />
+      </Suspense>
+
       {/* Elegant Standing Digital Signage Board (Right Side) */}
       <BoothDisplayEditable
         boothId={id}
@@ -1262,7 +1336,7 @@ export function EcoEdenBooth({
         <group position={[0, 1.2, 0.06]}>
           <mesh>
             <planeGeometry args={[1.1, 2.3]} />
-            <meshStandardMaterial color={whiteMatte} />
+            <meshStandardMaterial color={signageScreenColor} />
           </mesh>
           {signageImageUrl ? (
             <Suspense fallback={null}>
@@ -1274,7 +1348,7 @@ export function EcoEdenBooth({
                 {name}
               </Text>
               <Text position={[0, 0.65, 0.01]} fontSize={0.06} color={leafGreen} maxWidth={1} textAlign="center">
-                {headerSubtitle}
+                {company?.tagline?.trim() || 'LUXURY RESIDENCES'}
               </Text>
               <mesh position={[0, -0.1, 0.01]}>
                 <planeGeometry args={[0.4, 0.4]} />
@@ -1327,6 +1401,8 @@ export function EcoEdenBooth({
 /* ─── Futuristic Vertex Elite Studio Booth ─── */
 export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
+  headerLogoUrl,
+  headerBranding,
   videoUrl, stageScreenUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', customFaqQuestions = [], siteMapUrls,
   media = [],
   company,
@@ -1345,6 +1421,8 @@ export function VertexEliteBooth({
   color: string;
   accent: string;
   counterColor: string;
+  headerLogoUrl?: string;
+  headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   videoUrl: string;
   stageScreenUrl?: string;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
@@ -1373,193 +1451,129 @@ export function VertexEliteBooth({
   displayLayout?: BoothDisplayLayout;
 }) {
   const glow = accent;
-  const dark = '#0c0c12';
-  const glass = '#1a1a28';
-  /** Matte LED trim — avoids mirror reflections on walls/floor. */
-  const ledStrip = (intensity = 1.1) => (
-    <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={intensity} roughness={0.92} metalness={0} />
-  );
+  const wallColor = color?.trim() || '#fcfaf5';
+  const fasciaColor = wallColor;
+  const deskBodyColor = counterColor?.trim() || '#ffffff';
+  const floorPadColor = '#efede6';
   const hq = hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES;
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
+  const fasciaLogoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
+  const fasciaLogoScale = resolveHeaderLogoScale(headerBranding);
+  const { centerLogo, hideCenterText } = resolveFasciaLayout(headerBranding);
+  const fasciaTitle = resolveBoothHeaderBranding({
+    name,
+    headerBranding,
+    companyTagline: company?.tagline,
+  }).projectName;
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
-      {/* ── Matte floor (no mirror reflections) ── */}
-      <mesh position={[0, 0.02, -1.5]} receiveShadow>
-        <boxGeometry args={[13, 0.04, 7]} />
-        <meshStandardMaterial color="#0a0a10" roughness={0.72} metalness={0.18} envMapIntensity={0.15} />
+      <mesh position={[0, 3, -4]} receiveShadow castShadow>
+        <boxGeometry args={[12, 6, 0.5]} />
+        <meshStandardMaterial color={wallColor} roughness={0.55} metalness={0.08} />
       </mesh>
-      {/* Floor LED edge strips */}
-      {[[-6.3, 0.04, -1.5], [6.3, 0.04, -1.5]].map(([x, y, z], i) => (
-        <mesh key={`fstrip-${i}`} position={[x, y, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.06, 7]} />
-          {ledStrip(1.0)}
+
+      <BoothSideWallAssembly color={wallColor} />
+
+      {[-5.8, 5.8].map((x, i) => (
+        <mesh key={`pillar-${i}`} position={[x, 3, -3.9]}>
+          <boxGeometry args={[0.2, 6.2, 0.6]} />
+          <meshStandardMaterial color={glow} metalness={0.8} roughness={0.25} />
         </mesh>
       ))}
-      {/* Front threshold LED strip */}
-      <mesh position={[0, 0.04, 2.05]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[13, 0.08]} />
-        {ledStrip(1.1)}
+      <mesh position={[0, 6.08, -3.9]}>
+        <boxGeometry args={[12.2, 0.2, 0.6]} />
+        <meshStandardMaterial color={glow} metalness={0.8} roughness={0.25} />
       </mesh>
 
-      {/* ── Back wall ── */}
-      <mesh position={[0, 3.2, -4.5]} receiveShadow>
-        <boxGeometry args={[13, 6.4, 0.35]} />
-        <meshStandardMaterial color={dark} roughness={0.78} metalness={0.22} envMapIntensity={0.12} />
+      <mesh position={[0, 0.05, -1.5]} receiveShadow>
+        <boxGeometry args={[12, 0.1, 5.5]} />
+        <meshStandardMaterial color={floorPadColor} roughness={0.6} />
       </mesh>
-      {/* Vertical accent LED strips on back wall */}
-      {[-6.2, 6.2].map((x, i) => (
-        <mesh key={`vled-${i}`} position={[x, 3.2, -4.28]}>
-          <boxGeometry args={[0.06, 6.4, 0.02]} />
-          {ledStrip(1.0)}
-        </mesh>
-      ))}
-      {/* Horizontal LED strip top of back wall */}
-      <mesh position={[0, 6.42, -4.28]}>
-        <boxGeometry args={[12.5, 0.06, 0.02]} />
-        {ledStrip(1.0)}
-      </mesh>
-      {/* Horizontal LED strip bottom */}
-      <mesh position={[0, 0.08, -4.28]}>
-        <boxGeometry args={[12.5, 0.06, 0.02]} />
-        {ledStrip(0.9)}
+      <mesh position={[0, 0.06, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.05]} />
+        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.25} />
       </mesh>
 
-      {/* ── Side walls — matte dark panels (no mirror glare) ── */}
-      {[[-6.2, 1], [6.2, 1]].map(([x], i) => (
-        <mesh key={`side-${i}`} position={[x, 3.2, -1.5]} receiveShadow>
-          <boxGeometry args={[0.25, 6.4, 6]} />
-          <meshStandardMaterial color={glass} roughness={0.88} metalness={0.08} transparent opacity={0.94} envMapIntensity={0.1} />
-        </mesh>
-      ))}
-      {/* Side wall inner LED strips */}
-      {[-6.05, 6.05].map((x, i) => (
-        <mesh key={`sided-${i}`} position={[x, 0.08, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.04, 6]} />
-          {ledStrip(0.85)}
-        </mesh>
-      ))}
-
-      {/* ── Ceiling slab ── */}
-      <mesh position={[0, 6.55, -1.5]}>
-        <boxGeometry args={[13, 0.2, 7]} />
-        <meshStandardMaterial color="#0a0a10" roughness={0.7} metalness={0.28} envMapIntensity={0.12} />
+      <mesh position={[0, 6.5, -4]} castShadow>
+        <boxGeometry args={[12.5, 1.5, 0.8]} />
+        <meshStandardMaterial color={fasciaColor} roughness={0.55} metalness={0.18} />
       </mesh>
-
-      {/* Ceiling oval trim — unlit material so overhead spots do not specular-flare on it */}
-      <mesh position={[0, 6.32, -1.5]} rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[2.75, 0.11, 32, 160]} />
-        <meshBasicMaterial color={glow} toneMapped />
+      <mesh position={[0, 6.5, -3.58]}>
+        <boxGeometry args={[12.5, 1.42, 0.04]} />
+        <meshStandardMaterial color={glow} metalness={0.75} roughness={0.25} />
       </mesh>
-
-      {/* ── Back canopy slab ── */}
-      <mesh position={[0, 6.84, -4.38]}>
-        <boxGeometry args={[13.2, 1.1, 0.74]} />
-        <meshStandardMaterial color="#08080f" roughness={0.55} metalness={0.35} envMapIntensity={0.1} />
+      <mesh position={[0, 6.5, -3.56]}>
+        <boxGeometry args={[12.08, 1.22, 0.02]} />
+        <meshStandardMaterial color={fasciaColor} roughness={0.55} metalness={0.1} />
       </mesh>
-      <mesh position={[0, 7.395, -4.38]}>
-        <boxGeometry args={[13.18, 0.05, 0.76]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.45} metalness={0.2} roughness={0.65} />
-      </mesh>
+      {fasciaLogoUrl && !centerLogo ? (
+        <Suspense fallback={null}>
+          <group position={[-4.25, 6.5, -3.5]}>
+            <BoothFasciaLogo url={fasciaLogoUrl} scale={fasciaLogoScale} />
+          </group>
+        </Suspense>
+      ) : null}
+      {fasciaLogoUrl && centerLogo ? (
+        <Suspense fallback={null}>
+          <group position={[0, 6.5, -3.52]}>
+            <BoothFasciaLogo url={fasciaLogoUrl} scale={fasciaLogoScale} variant="center" />
+          </group>
+        </Suspense>
+      ) : null}
+      {!hideCenterText ? (
+        <Text
+          position={[0, 6.5, -3.52]}
+          fontSize={0.72}
+          color={glow}
+          anchorX="center"
+          anchorY="middle"
+          letterSpacing={0.04}
+          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
+        >
+          {fasciaTitle}
+          <meshStandardMaterial
+            attach="material"
+            color={glow}
+            emissive={glow}
+            emissiveIntensity={0.55}
+            metalness={0.3}
+            roughness={0.45}
+          />
+        </Text>
+      ) : null}
 
-      {/* ── FRONT ENTRANCE FASCIA — header at z≈+1.84, fully visible from the aisle ──
-           Ceiling front edge is at z = −1.5 + 3.5 = +2.0.
-           Fascia slab: center z=1.84, depth=0.32 → front face z=2.0.
-           Sign center z=2.09, depth=0.18 → back=2.0 (flush), front=2.18 (protrudes). ── */}
-
-      {/* Main fascia structural slab */}
-      <mesh position={[0, 6.12, 1.84]}>
-        <boxGeometry args={[13.2, 1.22, 0.32]} />
-        <meshStandardMaterial color="#08080f" roughness={0.5} metalness={0.35} envMapIntensity={0.1} />
-      </mesh>
-
-      {/* Gold top rail */}
-      <mesh position={[0, 6.74, 1.84]}>
-        <boxGeometry args={[13.18, 0.055, 0.34]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.4} metalness={0.45} roughness={0.42} />
-      </mesh>
-      {/* Gold bottom rail */}
-      <mesh position={[0, 5.50, 1.84]}>
-        <boxGeometry args={[13.18, 0.055, 0.34]} />
-        <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.4} metalness={0.45} roughness={0.42} />
-      </mesh>
-      {/* Gold left/right end caps */}
-      {[-6.56, 6.56].map((x, i) => (
-        <mesh key={`ffront-${i}`} position={[x, 6.12, 1.84]}>
-          <boxGeometry args={[0.055, 1.18, 0.34]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} metalness={0.45} roughness={0.42} />
-        </mesh>
-      ))}
-
-      {/* Ceiling-to-fascia join cap */}
-      <mesh position={[0, 6.545, 1.84]}>
-        <boxGeometry args={[13.2, 0.12, 0.34]} />
-        <meshStandardMaterial color="#07070e" metalness={0.25} roughness={0.7} envMapIntensity={0.08} />
-      </mesh>
-
-      {/* ── VERTEX ELITE sign on front face of fascia, protrudes toward aisle ── */}
-      <Suspense fallback={null}>
-        <VertexEliteCanopyBranding glow={glow} />
-      </Suspense>
-
-      {/* ── Main LED wall display (large) ── */}
       <BoothDisplayEditable
         boothId={id}
         slot="main"
         layout={displayLayout}
-        defaults={VERTEX_ELITE_DISPLAY_DEFAULTS.main}
+        defaults={{ ...VERTEX_ELITE_DISPLAY_DEFAULTS.main, position: [0, 3, -3.7] }}
       >
-        <mesh>
-          <boxGeometry args={[8.5, 4.5, 0.12]} />
-          <meshStandardMaterial color="#030308" metalness={0.35} roughness={0.55} envMapIntensity={0.1} />
+        <mesh castShadow>
+          <boxGeometry args={[6.6, 3.8, 0.2]} />
+          <meshStandardMaterial color="#0b0b12" metalness={0.85} roughness={0.15} />
         </mesh>
-        <mesh position={[0, 0, 0.02]}>
-          <boxGeometry args={[8.7, 4.7, 0.01]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} transparent opacity={0.28} roughness={0.9} metalness={0} />
-        </mesh>
-        <group position={[0, 0, 0.07]}>
-          <Suspense fallback={<LedScreenSuspenseFallback args={[8.3, 4.3]} />}>
-            <LedScreenSurface args={[8.3, 4.3]} url={stageLedUrl} />
+        <group position={[0, 0, 0.11]}>
+          <Suspense fallback={<LedScreenSuspenseFallback args={[6.4, 3.6]} />}>
+            <LedScreenSurface args={[6.4, 3.6]} url={stageLedUrl} />
           </Suspense>
         </group>
+        <mesh position={[0, 0, -0.1]}>
+          <planeGeometry args={[7, 4.2]} />
+          <meshStandardMaterial color="#f6f2e8" emissive="#f6f2e8" emissiveIntensity={0.38} />
+        </mesh>
       </BoothDisplayEditable>
 
-      {/* ── Floating reception desk ── */}
-      <group position={[0, 0.55, 0.8]}>
-        <mesh>
-          <boxGeometry args={[5, 1.1, 0.9]} />
-          <meshStandardMaterial color="#111118" roughness={0.65} metalness={0.25} envMapIntensity={0.1} />
+      <group position={[0, 0.5, 0]}>
+        <mesh position={[0, 0, 0]} castShadow receiveShadow>
+          <boxGeometry args={[4, 1, 1]} />
+          <meshStandardMaterial color={deskBodyColor} metalness={0.2} roughness={0.45} />
         </mesh>
-        <mesh position={[0, 0.56, 0]}>
-          <boxGeometry args={[5.2, 0.06, 1.0]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.35} metalness={0.2} roughness={0.7} />
+        <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+          <boxGeometry args={[4.2, 0.1, 1.2]} />
+          <meshStandardMaterial color={glow} metalness={0.55} roughness={0.22} />
         </mesh>
-        {/* Desk front LED strip */}
-        <mesh position={[0, 0, 0.46]}>
-          <boxGeometry args={[5, 0.04, 0.01]} />
-          {ledStrip(0.95)}
-        </mesh>
-        {/* Counter tablet — mounted on desk (not floating) */}
-        <BoothDisplayEditable
-          boothId={id}
-          slot="counter"
-          layout={displayLayout}
-          defaults={VERTEX_ELITE_DISPLAY_DEFAULTS.counter}
-        >
-          <mesh castShadow>
-            <boxGeometry args={[1.4, 0.9, 0.06]} />
-            <meshStandardMaterial color="#05050a" metalness={0.3} roughness={0.55} envMapIntensity={0.08} />
-          </mesh>
-          <Suspense fallback={<LedScreenSuspenseFallback args={[1.3, 0.82]} />}>
-            <LedScreenSurface args={[1.3, 0.82]} url={stageLedUrl} position={[0, 0, 0.04]} />
-          </Suspense>
-          <mesh position={[0, -0.52, 0.02]}>
-            <boxGeometry args={[0.38, 0.12, 0.22]} />
-            <meshStandardMaterial color="#111118" metalness={0.35} roughness={0.5} />
-          </mesh>
-        </BoothDisplayEditable>
-        {/* Hostess */}
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} cmsPreview={cmsPreview} hostessQuickReplies={hq} />
         </Suspense>
@@ -1580,6 +1594,8 @@ export function VertexEliteBooth({
           />
         </BoothDisplayEditable>
       )}
+
+      <BoothStandee name={name} accent={glow} boothId={id} displayLayout={displayLayout} />
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -1602,76 +1618,6 @@ export function VertexEliteBooth({
       />
 
       {/* No invisible “open booth card” hitbox: canopy / interior clicks should not open the legacy center modal (HUD + kiosk handle CTAs). */}
-
-      {/* ── Lounge chairs — no castShadow on small pieces ── */}
-      {[[-3.5, 0, 1.8], [3.5, 0, 1.8]].map(([cx, cy, cz], ci) => (
-        <group key={`chair-${ci}`} position={[cx, cy, cz]} rotation={[0, ci === 0 ? 0.3 : -0.3, 0]}>
-          <mesh position={[0, 0.22, 0]}>
-            <boxGeometry args={[0.9, 0.18, 0.9]} />
-            <meshStandardMaterial color="#1a1a22" roughness={0.35} metalness={0.6} />
-          </mesh>
-          <mesh position={[0, 0.36, 0]}>
-            <boxGeometry args={[0.82, 0.1, 0.82]} />
-            <meshStandardMaterial color="#222230" roughness={0.7} metalness={0.15} />
-          </mesh>
-          <mesh position={[0, 0.52, -0.38]}>
-            <boxGeometry args={[0.82, 0.35, 0.1]} />
-            <meshStandardMaterial color="#222230" roughness={0.65} metalness={0.15} />
-          </mesh>
-          {[[-0.35, 0, -0.35], [0.35, 0, -0.35], [-0.35, 0, 0.35], [0.35, 0, 0.35]].map(([lx, , lz], li) => (
-            <mesh key={`leg-${li}`} position={[lx, 0.07, lz]}>
-              <cylinderGeometry args={[0.025, 0.025, 0.14, 6]} />
-              <meshStandardMaterial color="#888" metalness={0.95} roughness={0.1} />
-            </mesh>
-          ))}
-        </group>
-      ))}
-
-      {/* ── Side tables ── */}
-      {[[-2.4, 0, 2.0], [2.4, 0, 2.0]].map(([tx, ty, tz], ti) => (
-        <group key={`table-${ti}`} position={[tx, ty, tz]}>
-          <mesh position={[0, 0.32, 0]}>
-            <cylinderGeometry args={[0.3, 0.3, 0.04, 16]} />
-            <meshStandardMaterial color="#ccc" roughness={0.12} metalness={0.2} transparent opacity={0.65} />
-          </mesh>
-          <mesh position={[0, 0.16, 0]}>
-            <cylinderGeometry args={[0.04, 0.04, 0.32, 6]} />
-            <meshStandardMaterial color="#333" metalness={0.9} roughness={0.15} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* ── Indoor plants ── */}
-      {[[-5.2, 0, -3.8], [5.2, 0, -3.8], [-5.2, 0, 1.0], [5.2, 0, 1.0]].map(([px, py, pz], pi) => (
-        <group key={`plant-${pi}`} position={[px, py, pz]}>
-          <mesh position={[0, 0.35, 0]}>
-            <cylinderGeometry args={[0.28, 0.22, 0.7, 10]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.5} metalness={0.6} />
-          </mesh>
-          <mesh position={[0, 1.1, 0]}>
-            <cylinderGeometry args={[0.035, 0.045, 0.8, 5]} />
-            <meshStandardMaterial color="#3d2b15" roughness={0.85} />
-          </mesh>
-          {/* 2 spheres instead of 4 for foliage */}
-          {[[0, 1.68, 0, 0.38], [0, 1.9, 0, 0.24]].map(([fx, fy, fz, r], fi) => (
-            <mesh key={`leaf-${fi}`} position={[fx, fy, fz]}>
-              <sphereGeometry args={[r, 8, 7]} />
-              <meshStandardMaterial color="#1a5c2a" roughness={0.75} />
-            </mesh>
-          ))}
-        </group>
-      ))}
-
-      {/* ── Pedestal (display base — model via CMS placed images or standee) ── */}
-      <group position={[-3.5, 0, -2.5]}>
-        <Cylinder args={[0.7, 0.7, 0.9, 20]} position={[0, 0.45, 0]}>
-          <meshStandardMaterial color="#111116" roughness={0.1} metalness={0.9} />
-        </Cylinder>
-        <mesh position={[0, 0.91, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.55, 0.68, 32]} />
-          <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={0.85} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
-        </mesh>
-      </group>
 
       {placedImages.map((img) => (
         <Suspense key={img.id} fallback={null}>

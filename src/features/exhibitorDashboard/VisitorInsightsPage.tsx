@@ -18,22 +18,39 @@ import {
   LogIn,
   LogOut,
   Mail,
+  MousePointerClick,
   Network,
   Phone,
   Search,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react';
-import { fetchBoothVisitSessions } from '@/dashboard/api/client';
+import {
+  fetchBoothVisitSessions,
+  fetchBoothVisitorEngagementScores,
+} from '@/dashboard/api/client';
+import {
+  CONVERTING_SCORE_MAX,
+  CONVERTING_TIER_REFERENCE,
+  CONVERTING_TIER_SEGMENTS,
+  clampEngagementPoints,
+  convertingPctFromPoints,
+  convertingTierBadgeLabel,
+  convertingTierShortLabel,
+  type ConvertingTier,
+} from '@/dashboard/engagementLeadScore';
 import type { ExhibitorNavId } from './exhibitorConfig';
 import { useExhibitorBooth } from './useExhibitorBooth';
 import {
   DEMO_VISITORS,
   LEAD_VELOCITY,
   VISITOR_FILTER_TABS,
+  applyDemoEngagementScores,
   exportVisitorsCsv,
   filterVisitors,
   formatVisitTime,
-  mergeVisitSessions,
+  mergeEngagementScores,
+  buildAggregatedVisitorRows,
   type QuestionnaireStatus,
   type VisitorCategory,
   type VisitorFilterTab,
@@ -55,6 +72,12 @@ const CATEGORY_CLASS: Record<VisitorCategory, string> = {
   COLD: 'vcrm-cat-cold',
 };
 
+const CONVERTING_BADGE_CLASS: Record<ConvertingTier, string> = {
+  high: 'vcrm-conv-high',
+  medium: 'vcrm-conv-medium',
+  low: 'vcrm-conv-low',
+};
+
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -69,13 +92,59 @@ function LeadScoreRing({ score, label }: { score: number; label: string }) {
   return (
     <div className="vcrm-score-cell">
       <div
-        className="vcrm-score-ring"
+        className="vcrm-score-ring vcrm-score-ring-lead"
         style={{ background: `conic-gradient(#22d3ee ${pct * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
       >
         <span>{score}</span>
       </div>
       <small>{label}</small>
     </div>
+  );
+}
+
+function InterestPtsCell({ points }: { points?: number }) {
+  if (points == null || points <= 0) {
+    return <span className="vcrm-visit-empty">—</span>;
+  }
+  const capped = clampEngagementPoints(points);
+  const pct = convertingPctFromPoints(capped);
+  return (
+    <div className="vcrm-score-cell vcrm-interest-cell">
+      <div
+        className="vcrm-score-ring vcrm-score-ring-interest"
+        style={{ background: `conic-gradient(#a78bfa ${pct * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
+      >
+        <span>{capped}</span>
+      </div>
+      <small>{pct}% · max {CONVERTING_SCORE_MAX}</small>
+    </div>
+  );
+}
+
+function ConvertingTierBadge({
+  tier,
+  points,
+}: {
+  tier?: ConvertingTier | null;
+  points?: number;
+}) {
+  if (points == null || points <= 0) {
+    return <span className="vcrm-visit-empty">—</span>;
+  }
+  if (!tier) {
+    return (
+      <span className="vcrm-conv-badge vcrm-conv-below">
+        Below threshold
+        <em>{points} pts</em>
+      </span>
+    );
+  }
+  const seg = CONVERTING_TIER_SEGMENTS.find((s) => s.id === tier);
+  return (
+    <span className={`vcrm-conv-badge ${CONVERTING_BADGE_CLASS[tier]}`}>
+      {convertingTierShortLabel(tier)} · {seg?.pctRange ?? ''}
+      <em>{points} pts</em>
+    </span>
   );
 }
 
@@ -155,6 +224,152 @@ function ContactCell({ email, phone }: { email?: string; phone?: string }) {
   );
 }
 
+function LeadScoreOverviewSection({ rows }: { rows: VisitorInsightRow[] }) {
+  const scored = rows.filter((r) => r.leadScore > 0);
+  const avg =
+    scored.length > 0
+      ? Math.round(scored.reduce((n, r) => n + r.leadScore, 0) / scored.length)
+      : 0;
+  const top = [...scored].sort((a, b) => b.leadScore - a.leadScore).slice(0, 4);
+
+  return (
+    <article className="exb-card vcrm-summary-card vcrm-lead-score-section">
+      <div className="vcrm-summary-head">
+        <div>
+          <h3>
+            <Sparkles size={16} />
+            Lead Score
+          </h3>
+          <p className="vcrm-section-note">
+            Buyer questionnaire — psychological purchase intent. This is <strong>different data</strong>{' '}
+            from menu Interest Pts below.
+          </p>
+        </div>
+        <div className="vcrm-summary-stat">
+          <strong>{avg}</strong>
+          <span>Avg score</span>
+        </div>
+      </div>
+      <ul className="vcrm-summary-visitors">
+        {top.length === 0 ? (
+          <li className="vcrm-summary-empty">No questionnaire scores yet.</li>
+        ) : (
+          top.map((row) => (
+            <li key={row.id}>
+              <div className="vcrm-avatar vcrm-avatar-sm" style={{ background: `hsl(${row.avatarHue} 45% 38%)` }}>
+                {initials(row.name)}
+              </div>
+              <div className="vcrm-summary-visitor-meta">
+                <strong>{row.name}</strong>
+                <span>{row.scoreLabel}</span>
+              </div>
+              <LeadScoreRing score={row.leadScore} label={row.scoreLabel} />
+            </li>
+          ))
+        )}
+      </ul>
+    </article>
+  );
+}
+
+function MenuInterestSection({ rows }: { rows: VisitorInsightRow[] }) {
+  const engaged = rows.filter((r) => (r.engagementPoints ?? 0) > 0);
+  const avgPts =
+    engaged.length > 0
+      ? Math.round(
+          (engaged.reduce((n, r) => n + (r.engagementPoints ?? 0), 0) / engaged.length) * 10,
+        ) / 10
+      : 0;
+
+  const tierCounts = { high: 0, medium: 0, low: 0, below: 0 };
+  for (const row of engaged) {
+    const tier = row.convertingTier;
+    if (tier === 'high') tierCounts.high += 1;
+    else if (tier === 'medium') tierCounts.medium += 1;
+    else if (tier === 'low') tierCounts.low += 1;
+    else tierCounts.below += 1;
+  }
+
+  const top = [...engaged].sort((a, b) => (b.engagementPoints ?? 0) - (a.engagementPoints ?? 0)).slice(0, 4);
+
+  return (
+    <article className="exb-card vcrm-summary-card vcrm-menu-interest-section">
+      <div className="vcrm-summary-head">
+        <div>
+          <h3>
+            <MousePointerClick size={16} />
+            Interest Pts &amp; Converting
+          </h3>
+          <p className="vcrm-section-note">
+            Booth HUD menu clicks — <strong>{CONVERTING_SCORE_MAX} pts = 100%</strong> converting
+            possibility. Separate from questionnaire Lead Score.
+          </p>
+        </div>
+        <div className="vcrm-summary-stat vcrm-summary-stat-interest">
+          <strong>{avgPts}</strong>
+          <span>Avg interest pts</span>
+        </div>
+      </div>
+
+      <table className="vcrm-tier-table">
+        <thead>
+          <tr>
+            <th>Tier</th>
+            <th>Points</th>
+            <th>Converting</th>
+            <th>Visitors</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CONVERTING_TIER_REFERENCE.map((ref) => {
+            const key = ref.tier.toLowerCase() as 'high' | 'medium' | 'low';
+            const count = tierCounts[key];
+            return (
+              <tr key={ref.tier}>
+                <td>
+                  <span className="vcrm-tier-dot" style={{ background: ref.color }} />
+                  {ref.tier}
+                </td>
+                <td>{ref.points}</td>
+                <td>{ref.pct}</td>
+                <td>{count}</td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td>
+              <span className="vcrm-tier-dot vcrm-tier-dot-muted" />
+              Below threshold
+            </td>
+            <td>&lt; 3.5</td>
+            <td>—</td>
+            <td>{tierCounts.below}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <ul className="vcrm-summary-visitors">
+        {top.length === 0 ? (
+          <li className="vcrm-summary-empty">No menu engagement yet.</li>
+        ) : (
+          top.map((row) => (
+            <li key={row.id}>
+              <div className="vcrm-avatar vcrm-avatar-sm" style={{ background: `hsl(${row.avatarHue} 45% 38%)` }}>
+                {initials(row.name)}
+              </div>
+              <div className="vcrm-summary-visitor-meta">
+                <strong>{row.name}</strong>
+                <span>{convertingTierBadgeLabel(row.convertingTier ?? null, row.engagementPoints ?? 0)}</span>
+              </div>
+              <InterestPtsCell points={row.engagementPoints} />
+            </li>
+          ))
+        )}
+      </ul>
+    </article>
+  );
+}
+
 function VisitorRow({
   row,
   onOpen,
@@ -183,7 +398,10 @@ function VisitorRow({
           <div>
             <strong>{row.name}</strong>
             <span>{row.company}</span>
-            <em>{row.role}</em>
+            <em>
+              {row.role}
+              {(row.visitCount ?? 0) > 1 ? ` · ${row.visitCount} visits` : ''}
+            </em>
           </div>
         </div>
       </td>
@@ -194,14 +412,16 @@ function VisitorRow({
         <LeadScoreRing score={row.leadScore} label={row.scoreLabel} />
       </td>
       <td>
+        <InterestPtsCell points={row.engagementPoints} />
+      </td>
+      <td>
+        <ConvertingTierBadge tier={row.convertingTier} points={row.engagementPoints} />
+      </td>
+      <td>
         <span className={`vcrm-cat ${CATEGORY_CLASS[row.category]}`}>{row.category}</span>
       </td>
       <td>
-        <div className="vcrm-booth-loc">
-          <strong>{row.hall}</strong>
-          <span>{row.booth}</span>
-          <em>{row.boothCompany}</em>
-        </div>
+        <span className="vcrm-visit-count">{(row.visitCount ?? 1).toLocaleString()}</span>
       </td>
       <td>
         <VisitTimeCell iso={row.enteredAt} />
@@ -224,12 +444,21 @@ export function VisitorInsightsPage({ onOpenProfile }: Props) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [visitSessions, setVisitSessions] = useState<Awaited<ReturnType<typeof fetchBoothVisitSessions>>>([]);
+  const [engagementScores, setEngagementScores] = useState<
+    Awaited<ReturnType<typeof fetchBoothVisitorEngagementScores>>
+  >([]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const sessions = await fetchBoothVisitSessions(boothId);
-      if (!cancelled) setVisitSessions(sessions);
+      const [sessions, scores] = await Promise.all([
+        fetchBoothVisitSessions(boothId),
+        fetchBoothVisitorEngagementScores(boothId),
+      ]);
+      if (!cancelled) {
+        setVisitSessions(sessions);
+        setEngagementScores(scores);
+      }
     };
     void load();
     const interval = window.setInterval(() => void load(), 30_000);
@@ -239,10 +468,17 @@ export function VisitorInsightsPage({ onOpenProfile }: Props) {
     };
   }, [boothId]);
 
-  const allRows = useMemo(
-    () => mergeVisitSessions(DEMO_VISITORS, visitSessions, boothCompany),
-    [visitSessions, boothCompany],
-  );
+  const allRows = useMemo(() => {
+    const base =
+      visitSessions.length > 0
+        ? buildAggregatedVisitorRows(visitSessions, boothCompany)
+        : DEMO_VISITORS;
+    const withEngagement =
+      engagementScores.length > 0
+        ? mergeEngagementScores(base, engagementScores)
+        : applyDemoEngagementScores(base);
+    return withEngagement;
+  }, [visitSessions, engagementScores, boothCompany]);
 
   const filtered = useMemo(
     () => filterVisitors(allRows, tab, search, boothCompany),
@@ -305,11 +541,25 @@ export function VisitorInsightsPage({ onOpenProfile }: Props) {
           ))}
         </div>
         <p className="vcrm-tab-hint">
-          Showing visitors at <strong>{boothCompany}</strong> when viewing All (no search)
+          One row per visitor at <strong>{boothCompany}</strong> — click a row for full visit history
         </p>
       </div>
 
+      <section className="exb-row exb-row-split vcrm-dual-summary">
+        <LeadScoreOverviewSection rows={allRows} />
+        <MenuInterestSection rows={allRows} />
+      </section>
+
       <section className="exb-card vcrm-table-card">
+        <div className="vcrm-table-legend">
+          <p>
+            <strong>Lead Score</strong> — questionnaire intent (kept separate).{' '}
+            <strong>Interest Pts</strong> — menu engagement ({CONVERTING_SCORE_MAX} = 100%).{' '}
+            <strong>Visits</strong> — total booth entries; times on profile.{' '}
+            <strong>Converting</strong> — High · 100% (14), Medium · 50% (7–13.5), Low · 25%
+            (3.5–6.5), below threshold under 3.5 pts.
+          </p>
+        </div>
         <div className="exb-table-scroll">
           <table className="exb-table vcrm-table">
             <thead>
@@ -317,17 +567,19 @@ export function VisitorInsightsPage({ onOpenProfile }: Props) {
                 <th>Visitor</th>
                 <th>Contact</th>
                 <th>Lead Score</th>
+                <th>Interest Pts</th>
+                <th>Converting</th>
                 <th>Category</th>
-                <th>Current Booth</th>
-                <th>Entry</th>
-                <th>Exit</th>
+                <th>Visits</th>
+                <th>Last entry</th>
+                <th>Last exit</th>
                 <th>Questionnaire</th>
               </tr>
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="exb-empty">
+                  <td colSpan={9} className="exb-empty">
                     No visitors match your filters.
                   </td>
                 </tr>

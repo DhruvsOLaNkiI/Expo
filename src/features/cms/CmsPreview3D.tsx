@@ -5,8 +5,18 @@ import * as THREE from 'three';
 import { LedScreenSurface, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothPlacedImageInteractive } from '@/features/booths/components/BoothPlacedImageInteractive';
 import { VertexEliteBooth } from '@/features/booths/components/Booths';
-import type { BoothLighting, PlacedImage, HostessQuickReply } from '@/features/shared/data/boothLayouts';
+import type {
+  BoothHeaderBranding,
+  BoothLighting,
+  CompanyProfile,
+  PlacedImage,
+  HostessQuickReply,
+} from '@/features/shared/data/boothLayouts';
 import { siteMapUrlsFromConfig } from '@/features/shared/data/boothLayouts';
+import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
+import { BoothWallLogos } from '@/features/booths/components/BoothWallLogos';
+import { BoothPlacementImages } from '@/features/booths/components/BoothPlacementImages';
+import { BOOTH_WALL, boothSideWallMainArgs, boothSideWallWingArgs, type BoothPlacementSlot } from '@/features/booths/components/boothWallMetrics';
 
 const FONT =
   'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
@@ -20,6 +30,16 @@ export type PreviewProps = {
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl: string;
+  headerBranding?: BoothHeaderBranding;
+  company?: CompanyProfile;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: import('@/features/booths/components/boothWallMetrics').BoothWallPlacementAdjustments;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
   placingImageUrl: string | null;
@@ -32,6 +52,8 @@ export type PreviewProps = {
   siteMapUrl?: string;
   siteMapGallery?: string[];
   hostessQuickReplies?: HostessQuickReply[];
+  /** Exhibitor setup — click a fixed wall slot to upload an image there. */
+  onPlacementSlotClick?: (slot: BoothPlacementSlot) => void;
 };
 
 /* ─── Clickable surface that reports intersection point + normal ─── */
@@ -67,6 +89,38 @@ function ClickableSurface({
   );
 }
 
+function PlacementSlotPicker({
+  slot,
+  position,
+  args,
+  onPick,
+}: {
+  slot: BoothPlacementSlot;
+  position: [number, number, number];
+  args: [number, number, number];
+  onPick: (slot: BoothPlacementSlot) => void;
+}) {
+  return (
+    <mesh
+      position={position}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPick(slot);
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto';
+      }}
+    >
+      <boxGeometry args={args} />
+      <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
+    </mesh>
+  );
+}
+
 /* ─── Header logo ─── */
 function PreviewHeaderLogo({ url, accent, tagline }: { url: string; accent: string; tagline: string }) {
   const tex = useTexture(url);
@@ -91,17 +145,23 @@ function PreviewHeaderLogo({ url, accent, tagline }: { url: string; accent: stri
 
 /* ─── Booth geometry ─── */
 function BoothScene({
-  boothId, name, color, accent, counterColor, videoUrl, stageScreenUrl, headerLogoUrl, lighting,
+  boothId, name, color, accent, counterColor, videoUrl, stageScreenUrl, headerLogoUrl,
+  headerBranding, company,
+  wallLogoLeftUrl, wallLogoRightUrl,
+  sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
+  wallPlacementAdjustments, lighting,
   placedImages, placingImageUrl, onSurfaceClick, selectedImageId, onSelectImage, onDragImage,
   brochureUrl = '',
   priceListUrl = '',
   siteMapUrl = '',
   siteMapGallery = [],
   hostessQuickReplies = [],
+  onPlacementSlotClick,
 }: PreviewProps) {
   const isVertexElite = boothId === 'vertex-elite';
+  const safeLogoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
   const siteMapUrls = siteMapUrlsFromConfig({ siteMapUrl, siteMapGallery });
-  const hasLogo = Boolean(headerLogoUrl?.trim()) && !isVertexElite;
+  const hasLogo = Boolean(safeLogoUrl) && !isVertexElite;
   const placing = Boolean(placingImageUrl);
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, true);
 
@@ -128,6 +188,9 @@ function BoothScene({
             color={color}
             accent={accent}
             counterColor={counterColor}
+            headerLogoUrl={safeLogoUrl || undefined}
+            headerBranding={headerBranding}
+            company={company}
             videoUrl={videoUrl}
             lighting={lighting}
             placedImages={placedImages}
@@ -195,15 +258,78 @@ function BoothScene({
       <mesh position={[-5.8, 3, -3.9]}><boxGeometry args={[0.2, 6.2, 0.6]} /><meshStandardMaterial color={accent} metalness={0.85} roughness={0.15} /></mesh>
       <mesh position={[5.8, 3, -3.9]}><boxGeometry args={[0.2, 6.2, 0.6]} /><meshStandardMaterial color={accent} metalness={0.85} roughness={0.15} /></mesh>
 
-      {/* Side walls */}
-      <ClickableSurface active={placing} onHit={handleHit} position={[-5.75, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 6, 4]} />
+      {/* Side walls + entrance wings (click-to-place surfaces) */}
+      <ClickableSurface active={placing} onHit={handleHit} position={[-BOOTH_WALL.sideCenterX, BOOTH_WALL.exteriorPosterY, BOOTH_WALL.mainCenterZ]} receiveShadow castShadow>
+        <boxGeometry args={boothSideWallMainArgs()} />
         <meshStandardMaterial color={color} roughness={0.45} />
       </ClickableSurface>
-      <ClickableSurface active={placing} onHit={handleHit} position={[5.75, 3, -2]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 6, 4]} />
+      <ClickableSurface active={placing} onHit={handleHit} position={[BOOTH_WALL.sideCenterX, BOOTH_WALL.exteriorPosterY, BOOTH_WALL.mainCenterZ]} receiveShadow castShadow>
+        <boxGeometry args={boothSideWallMainArgs()} />
         <meshStandardMaterial color={color} roughness={0.45} />
       </ClickableSurface>
+      <ClickableSurface active={placing} onHit={handleHit} position={[-BOOTH_WALL.sideCenterX, BOOTH_WALL.innerPosterY, BOOTH_WALL.wingCenterZ]} receiveShadow castShadow>
+        <boxGeometry args={boothSideWallWingArgs()} />
+        <meshStandardMaterial color={color} roughness={0.45} />
+      </ClickableSurface>
+      <ClickableSurface active={placing} onHit={handleHit} position={[BOOTH_WALL.sideCenterX, BOOTH_WALL.innerPosterY, BOOTH_WALL.wingCenterZ]} receiveShadow castShadow>
+        <boxGeometry args={boothSideWallWingArgs()} />
+        <meshStandardMaterial color={color} roughness={0.45} />
+      </ClickableSurface>
+      {placing && (
+        <>
+          <ClickableSurface active onHit={handleHit} position={[-BOOTH_WALL.outerFaceX, BOOTH_WALL.exteriorPosterY, BOOTH_WALL.exteriorPosterZ]}>
+            <boxGeometry args={[0.04, 5.8, BOOTH_WALL.mainDepth - 0.1]} />
+            {clearHitMat}
+          </ClickableSurface>
+          <ClickableSurface active onHit={handleHit} position={[BOOTH_WALL.outerFaceX, BOOTH_WALL.exteriorPosterY, BOOTH_WALL.exteriorPosterZ]}>
+            <boxGeometry args={[0.04, 5.8, BOOTH_WALL.mainDepth - 0.1]} />
+            {clearHitMat}
+          </ClickableSurface>
+          <ClickableSurface active onHit={handleHit} position={[-BOOTH_WALL.innerFaceX, BOOTH_WALL.innerPosterY, BOOTH_WALL.innerPosterZ]}>
+            <boxGeometry args={[0.04, 5.8, BOOTH_WALL.wingDepth - 0.1]} />
+            {clearHitMat}
+          </ClickableSurface>
+          <ClickableSurface active onHit={handleHit} position={[BOOTH_WALL.innerFaceX, BOOTH_WALL.innerPosterY, BOOTH_WALL.innerPosterZ]}>
+            <boxGeometry args={[0.04, 5.8, BOOTH_WALL.wingDepth - 0.1]} />
+            {clearHitMat}
+          </ClickableSurface>
+        </>
+      )}
+
+      {onPlacementSlotClick && (
+        <>
+          <PlacementSlotPicker
+            slot="exteriorLeft"
+            position={[-BOOTH_WALL.outerFaceX, BOOTH_WALL.exteriorPosterY, BOOTH_WALL.exteriorPosterZ]}
+            args={[0.06, 5.6, BOOTH_WALL.mainDepth - 0.15]}
+            onPick={onPlacementSlotClick}
+          />
+          <PlacementSlotPicker
+            slot="exteriorRight"
+            position={[BOOTH_WALL.outerFaceX, BOOTH_WALL.exteriorPosterY, BOOTH_WALL.exteriorPosterZ]}
+            args={[0.06, 5.6, BOOTH_WALL.mainDepth - 0.15]}
+            onPick={onPlacementSlotClick}
+          />
+          <PlacementSlotPicker
+            slot="interiorLeft"
+            position={[-BOOTH_WALL.innerFaceX, BOOTH_WALL.innerPosterY, BOOTH_WALL.innerPosterZ]}
+            args={[0.06, 5.6, BOOTH_WALL.wingDepth - 0.1]}
+            onPick={onPlacementSlotClick}
+          />
+          <PlacementSlotPicker
+            slot="interiorRight"
+            position={[BOOTH_WALL.innerFaceX, BOOTH_WALL.innerPosterY, BOOTH_WALL.innerPosterZ]}
+            args={[0.06, 5.6, BOOTH_WALL.wingDepth - 0.1]}
+            onPick={onPlacementSlotClick}
+          />
+          <PlacementSlotPicker
+            slot="counterFront"
+            position={[0, 0.52, 0.54]}
+            args={[3.6, 0.9, 0.06]}
+            onPick={onPlacementSlotClick}
+          />
+        </>
+      )}
 
       {/* Floor */}
       <ClickableSurface active={placing} onHit={handleHit} position={[0, 0.05, -1.5]} receiveShadow>
@@ -223,7 +349,7 @@ function BoothScene({
         </ClickableSurface>
         {hasLogo ? (
           <Suspense fallback={null}>
-            <PreviewHeaderLogo url={headerLogoUrl.trim()} accent={accent} tagline={name || 'Booth'} />
+            <PreviewHeaderLogo url={safeLogoUrl} accent={accent} tagline={name || 'Booth'} />
           </Suspense>
         ) : (
           <Text position={[0, 6.5, -3.58]} fontSize={0.6} color={accent} anchorX="center" anchorY="middle" font={FONT}>
@@ -255,6 +381,21 @@ function BoothScene({
         <group position={[0, 0, 0.11]}><LedScreenSurface args={[6.2, 3.4]} url={stageLedUrl} /></group>
       </group>
 
+      <Suspense fallback={null}>
+        <BoothWallLogos
+          wallLogoLeftUrl={wallLogoLeftUrl}
+          wallLogoRightUrl={wallLogoRightUrl}
+        />
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+        />
+      </Suspense>
+
       {/* Pedestal */}
       <group position={[-3, 0.5, -1.5]}>
         <mesh castShadow receiveShadow><cylinderGeometry args={[0.8, 0.8, 1, 32]} /><meshStandardMaterial color="#ffffff" roughness={0.1} metalness={0.1} /></mesh>
@@ -267,14 +408,13 @@ function BoothScene({
 
       {/* Placed images */}
       {placedImages.map((img) => (
-        <Suspense key={img.id} fallback={null}>
-          <BoothPlacedImageInteractive
-            item={img}
-            selected={img.id === selectedImageId}
-            onSelect={() => onSelectImage(img.id)}
-            onDrag={(pos) => onDragImage(img.id, pos)}
-          />
-        </Suspense>
+        <BoothPlacedImageInteractive
+          key={img.id}
+          item={img}
+          selected={img.id === selectedImageId}
+          onSelect={() => onSelectImage(img.id)}
+          onDrag={(pos) => onDragImage(img.id, pos)}
+        />
       ))}
     </group>
   );
@@ -309,7 +449,9 @@ export function CmsPreview3D(props: PreviewProps) {
 
       <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-black/60 px-4 py-2 backdrop-blur-lg">
         {placing ? (
-          <span className="text-[10px] text-[#d4af37] font-semibold animate-pulse">Click on a booth surface to place image</span>
+          <span className="text-[10px] text-[#d4af37] font-semibold animate-pulse">
+            Click the <strong>large white aisle side wall</strong> in the 3D preview
+          </span>
         ) : (
           <>
             <span className="text-[10px] text-white/30">LMB: Orbit</span>

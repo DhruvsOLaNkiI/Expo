@@ -1,4 +1,4 @@
-import { Torus } from '@react-three/drei';
+import { Html, Torus } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '@/store';
 import { Suspense, useState, useRef, useLayoutEffect, useMemo } from 'react';
@@ -10,6 +10,11 @@ import {
   mergeHallLayout,
   mergeSceneConfig,
 } from '@/features/shared/data/boothLayouts';
+import { LayoutEditableGroup } from '@/features/shared/LayoutEditableGroup';
+import {
+  resolveMainExpoSpawn,
+  resolveMainExpoSpawnYaw,
+} from '@/features/shared/data/registrationHall';
 
 /** Main entrance LED — use an asset that exists in /public */
 const RECEPTION_LED_VIDEO = '/13391496_3840_2160_60fps.mp4';
@@ -45,6 +50,8 @@ export function ExpoHall({ showVideos = false }: { showVideos?: boolean }) {
   const gridLineCountZ = Math.floor(hallDepth / gridStep) + 1;
   const [ox, oy, oz] = hallLayout.entranceLobbyOffset;
   const [bx, by, bz] = hallLayout.receptionBannerOffset;
+  const entrySpawn = resolveMainExpoSpawn(hallLayout);
+  const entrySpawnYaw = resolveMainExpoSpawnYaw(hallLayout);
 
   return (
     <group>
@@ -165,6 +172,65 @@ export function ExpoHall({ showVideos = false }: { showVideos?: boolean }) {
           <pointLight position={[halfW - 2, wallHeight * 0.65, halfD - 2]} intensity={28} distance={55} decay={2} color="#fffaf4" />
         </>
       )}
+
+      <LayoutEditableGroup
+        name="hall-entry-spawn"
+        position={[entrySpawn[0], 0, entrySpawn[2]]}
+        rotation={[0, entrySpawnYaw, 0]}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+          <ringGeometry args={[0.65, 0.95, 40]} />
+          <meshBasicMaterial
+            color="#d4af37"
+            transparent
+            opacity={hallLayoutEditMode ? 0.95 : 0.4}
+            depthWrite={false}
+          />
+        </mesh>
+        <mesh position={[0, 0.5, -1.1]} rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.35, 0.7, 3]} />
+          <meshBasicMaterial color="#f5e6b8" transparent opacity={hallLayoutEditMode ? 0.9 : 0.35} />
+        </mesh>
+        <Html
+          position={[0, 1.35, 0]}
+          center
+          distanceFactor={10}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: 10,
+              background: 'rgba(8,8,16,0.88)',
+              border: '1px solid rgba(212,175,55,0.45)',
+              color: '#f5e6b8',
+              fontSize: 11,
+              fontWeight: 600,
+              textAlign: 'center',
+              maxWidth: 220,
+              lineHeight: 1.35,
+            }}
+          >
+            {hallLayoutEditMode ? (
+              <>
+                Visitor entry spawn
+                <br />
+                <span style={{ fontWeight: 400, color: '#94a3b8' }}>
+                  Drag in Edit layout · Save layout — does not open a door
+                </span>
+              </>
+            ) : (
+              <>
+                New visitors start here
+                <br />
+                <span style={{ fontWeight: 400, color: '#94a3b8' }}>
+                  Gold ring is spawn only — use left/right booth buttons to open PDFs
+                </span>
+              </>
+            )}
+          </div>
+        </Html>
+      </LayoutEditableGroup>
 
       {/* ======= ENTRANCE LOBBY (layout anchors kept; desk + LED hidden) ======= */}
       <group name="hall-entrance-lobby" position={[ox, oy, entranceZ + oz]}>

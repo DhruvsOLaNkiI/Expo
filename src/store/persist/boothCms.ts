@@ -1,6 +1,15 @@
 import type { BoothLayoutPatch } from '@/features/shared/data/boothLayouts';
 
 const BOOTH_CMS_LS_KEY = 'virtual-expo-booth-cms-overrides';
+
+/** Fired after booth overrides are written (expo tab can listen; `storage` only fires across tabs). */
+export const BOOTH_CMS_PERSIST_EVENT = 'virtual-expo-booth-cms-updated';
+
+function notifyBoothCmsPersisted() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(BOOTH_CMS_PERSIST_EVENT));
+}
+
 const IDB_NAME = 'virtual-expo-cms';
 const IDB_STORE = 'kv';
 const IDB_BOOTH_KEY = 'booth-overrides';
@@ -96,16 +105,54 @@ async function idbDeleteJson(): Promise<void> {
   }
 }
 
+/** Theme fields — must survive LS/IDB merge when LS is stale but IDB has the latest save. */
+const BOOTH_THEME_KEYS = [
+  'color',
+  'accent',
+  'counterColor',
+  'backWallColor',
+  'tvWallColor',
+  'headerFasciaColor',
+  'counterTopColor',
+] as const;
+
+function mergeBoothPatches(
+  fromIdb: BoothLayoutPatch | undefined,
+  fromLs: BoothLayoutPatch | undefined,
+): BoothLayoutPatch {
+  const idb = fromIdb || {};
+  const ls = fromLs || {};
+  const out: BoothLayoutPatch = { ...idb, ...ls };
+  for (const key of BOOTH_THEME_KEYS) {
+    const lsVal = ls[key];
+    const idbVal = idb[key];
+    const lsMissing = lsVal === undefined || lsVal === null || lsVal === '';
+    if (lsMissing && idbVal !== undefined && idbVal !== null && idbVal !== '') {
+      (out as Record<string, unknown>)[key] = idbVal;
+    }
+  }
+  return out;
+}
+
 /** Try localStorage; on quota error persist full JSON to IndexedDB instead. */
 export async function persistBoothOverridesWithFallback(overrides: Record<string, BoothLayoutPatch>): Promise<boolean> {
   const json = JSON.stringify(overrides);
   try {
     localStorage.setItem(BOOTH_CMS_LS_KEY, json);
     void idbDeleteJson();
+    notifyBoothCmsPersisted();
     return true;
   } catch (e) {
     if (import.meta.env.DEV) console.warn('[virtual-expo] booth CMS: localStorage full, using IndexedDB', e);
-    return idbPutJson(json);
+    // Drop stale LS so readPersistedBoothOverrides does not overwrite fresh IDB data (colors were vanishing).
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(BOOTH_CMS_LS_KEY);
+    } catch {
+      /* */
+    }
+    const ok = await idbPutJson(json);
+    if (ok) notifyBoothCmsPersisted();
+    return ok;
   }
 }
 
@@ -119,7 +166,7 @@ function parseOverrides(raw: string | null): Record<string, BoothLayoutPatch> {
   }
 }
 
-/** Merge localStorage + IndexedDB booth patches (IDB field values win per booth). */
+/** Merge localStorage + IndexedDB booth patches (localStorage wins per field when both exist). */
 export async function readPersistedBoothOverrides(): Promise<Record<string, BoothLayoutPatch>> {
   let fromLs: Record<string, BoothLayoutPatch> = {};
   try {
@@ -137,7 +184,7 @@ export async function readPersistedBoothOverrides(): Promise<Record<string, Boot
   const ids = new Set([...Object.keys(fromLs), ...Object.keys(fromIdb)]);
   const merged: Record<string, BoothLayoutPatch> = {};
   for (const id of ids) {
-    merged[id] = { ...(fromLs[id] || {}), ...(fromIdb[id] || {}) };
+    merged[id] = mergeBoothPatches(fromIdb[id], fromLs[id]);
   }
   return merged;
 }

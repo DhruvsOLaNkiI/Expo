@@ -1,6 +1,7 @@
 import { Bell } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { EXHIBITOR_NAV, boothDisplayCode, type ExhibitorNavId } from './exhibitorConfig';
+import { EXHIBITOR_NAV, type ExhibitorNavId } from './exhibitorConfig';
+import { BoothSwitcher } from './BoothSwitcher';
 import { useExhibitorBooth } from './useExhibitorBooth';
 
 type Props = {
@@ -20,29 +21,12 @@ export function ExhibitorDashboardLayout({
   headerExtra,
   children,
 }: Props) {
-  const { booth, boothId, loading } = useExhibitorBooth();
-  const company = booth?.company.companyName ?? 'Your Company';
-  const logoUrl = booth?.headerLogoUrl?.trim();
-  const initials = company
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const { loading } = useExhibitorBooth();
 
   return (
     <div className="exb-root">
       <aside className="exb-sidebar">
-        <div className="exb-brand-card">
-          <div className="exb-logo">
-            {logoUrl ? <img src={logoUrl} alt="" className="exb-logo-img" /> : initials}
-          </div>
-          <div>
-            <h3>{company}</h3>
-            <p>Booth · {boothDisplayCode(boothId)}</p>
-            <span className="exb-online">● Online</span>
-          </div>
-        </div>
+        <BoothSwitcher />
         <nav className="exb-nav">
           {EXHIBITOR_NAV.map((item) => (
             <button

@@ -10,9 +10,14 @@ import {
   insertFaqSubmission,
   insertSalesChatMessage,
   getBoothSalesChatMessages,
+  insertAiChatMessage,
+  getBoothAiChatMessages,
   upsertBoothPresence,
   removeBoothPresence,
   getBoothLivePresence,
+  getQuestionnairePossibilityStats,
+  getBoothEngagementActionStats,
+  getBoothVisitorEngagementScores,
   type AnalyticsTrackPayload,
 } from './store';
 
@@ -97,8 +102,13 @@ export async function handleBoothVisitorStatsGet(
     sendJson(res, 400, { ok: false, error: 'boothId query required' });
     return;
   }
+  const trendStartHour = parseInt(url.searchParams.get('trendStartHour') ?? '', 10);
+  const trendSpanHours = parseInt(url.searchParams.get('trendSpanHours') ?? '', 10);
   try {
-    const stats = await getBoothVisitorStats(boothId);
+    const stats = await getBoothVisitorStats(boothId, {
+      trendStartHour: Number.isFinite(trendStartHour) ? trendStartHour : undefined,
+      trendSpanHours: Number.isFinite(trendSpanHours) ? trendSpanHours : undefined,
+    });
     sendJson(res, 200, { ok: true, stats });
   } catch (e: unknown) {
     sendJson(res, 500, {
@@ -229,12 +239,17 @@ export async function handleBoothVisitorProfileGet(
   const visitorId = url.searchParams.get('visitorId')?.trim();
   const sessionId = url.searchParams.get('sessionId')?.trim();
   const visitorName = url.searchParams.get('visitorName')?.trim();
+  const email = url.searchParams.get('email')?.trim();
+  const phone = url.searchParams.get('phone')?.trim();
   if (!boothId) {
     sendJson(res, 400, { ok: false, error: 'boothId query required' });
     return;
   }
-  if (!visitorId && !sessionId && !visitorName) {
-    sendJson(res, 400, { ok: false, error: 'visitorId, sessionId, or visitorName required' });
+  if (!visitorId && !sessionId && !visitorName && !email && !phone) {
+    sendJson(res, 400, {
+      ok: false,
+      error: 'visitorId, sessionId, visitorName, email, or phone required',
+    });
     return;
   }
   try {
@@ -242,6 +257,8 @@ export async function handleBoothVisitorProfileGet(
       visitorId,
       sessionId,
       visitorName,
+      email,
+      phone,
     });
     sendJson(res, 200, { ok: true, profile });
   } catch (e: unknown) {
@@ -328,6 +345,89 @@ export async function handleBoothSalesChatGet(
   }
   try {
     const messages = await getBoothSalesChatMessages(boothId, { threadId });
+    sendJson(res, 200, { ok: true, messages });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleAiChatPost(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const raw = await readJsonBody(req);
+  let body: {
+    boothId?: string;
+    threadId?: string;
+    role?: 'user' | 'assistant';
+    text?: string;
+    visitorId?: string;
+    visitorName?: string;
+  };
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    sendJson(res, 400, { ok: false, error: 'Invalid JSON' });
+    return;
+  }
+
+  if (
+    !body.boothId?.trim() ||
+    !body.threadId?.trim() ||
+    !body.text?.trim() ||
+    (body.role !== 'user' && body.role !== 'assistant')
+  ) {
+    sendJson(res, 400, { ok: false, error: 'boothId, threadId, role, and text required' });
+    return;
+  }
+
+  if (!process.env.MONGODB_URI?.trim()) {
+    sendJson(res, 200, { ok: true, stored: false });
+    return;
+  }
+
+  try {
+    const message = await insertAiChatMessage({
+      boothId: body.boothId,
+      threadId: body.threadId,
+      role: body.role,
+      text: body.text,
+      visitorId: body.visitorId,
+      visitorName: body.visitorName,
+    });
+    if (!message) {
+      sendJson(res, 500, { ok: false, error: 'Failed to store message' });
+      return;
+    }
+    sendJson(res, 200, { ok: true, stored: true, message });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleBoothAiChatGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const boothId = url.searchParams.get('boothId')?.trim();
+  const threadId = url.searchParams.get('threadId')?.trim();
+  if (!boothId) {
+    sendJson(res, 400, { ok: false, error: 'boothId query required' });
+    return;
+  }
+  if (!process.env.MONGODB_URI?.trim()) {
+    sendJson(res, 200, { ok: true, messages: [] });
+    return;
+  }
+  try {
+    const messages = await getBoothAiChatMessages(boothId, { threadId });
     sendJson(res, 200, { ok: true, messages });
   } catch (e: unknown) {
     sendJson(res, 500, {
@@ -436,6 +536,60 @@ export async function handleBoothLivePresenceGet(
   try {
     const presence = await getBoothLivePresence(boothId);
     sendJson(res, 200, { ok: true, presence });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleQuestionnairePossibilityGet(res: ServerResponse): Promise<void> {
+  try {
+    const stats = await getQuestionnairePossibilityStats();
+    sendJson(res, 200, { ok: true, stats });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleBoothEngagementActionsGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const boothId = url.searchParams.get('boothId')?.trim();
+  if (!boothId) {
+    sendJson(res, 400, { ok: false, error: 'boothId query required' });
+    return;
+  }
+  try {
+    const stats = await getBoothEngagementActionStats(boothId);
+    sendJson(res, 200, { ok: true, stats });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleBoothVisitorEngagementGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const boothId = url.searchParams.get('boothId')?.trim();
+  if (!boothId) {
+    sendJson(res, 400, { ok: false, error: 'boothId query required' });
+    return;
+  }
+  try {
+    const scores = await getBoothVisitorEngagementScores(boothId);
+    sendJson(res, 200, { ok: true, scores });
   } catch (e: unknown) {
     sendJson(res, 500, {
       ok: false,

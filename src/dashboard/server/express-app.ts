@@ -13,9 +13,14 @@ import {
   handleFaqSubmitPost,
   handleSalesChatPost,
   handleBoothSalesChatGet,
+  handleAiChatPost,
+  handleBoothAiChatGet,
   handleBoothPresencePost,
   handleBoothPresenceDelete,
   handleBoothLivePresenceGet,
+  handleQuestionnairePossibilityGet,
+  handleBoothEngagementActionsGet,
+  handleBoothVisitorEngagementGet,
 } from './routes';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,6 +86,14 @@ export function createAnalyticsServer(opts: CreateAnalyticsServerOptions = {}) {
     void handleBoothSalesChatGet(req, res);
   });
 
+  app.post('/api/analytics/ai-chat', (req, res) => {
+    void handleAiChatPost(req, res);
+  });
+
+  app.get('/api/analytics/booth-ai-chat', (req, res) => {
+    void handleBoothAiChatGet(req, res);
+  });
+
   app.post('/api/analytics/booth-presence', (req, res) => {
     void handleBoothPresencePost(req, res);
   });
@@ -91,6 +104,18 @@ export function createAnalyticsServer(opts: CreateAnalyticsServerOptions = {}) {
 
   app.get('/api/analytics/booth-live-presence', (req, res) => {
     void handleBoothLivePresenceGet(req, res);
+  });
+
+  app.get('/api/analytics/questionnaire-possibility', (_req, res) => {
+    void handleQuestionnairePossibilityGet(res);
+  });
+
+  app.get('/api/analytics/booth-engagement-actions', (req, res) => {
+    void handleBoothEngagementActionsGet(req, res);
+  });
+
+  app.get('/api/analytics/booth-visitor-engagement', (req, res) => {
+    void handleBoothVisitorEngagementGet(req, res);
   });
 
   app.get('/api/analytics/health', (_req, res) => {

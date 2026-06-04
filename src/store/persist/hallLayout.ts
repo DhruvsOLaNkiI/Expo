@@ -83,6 +83,16 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
 
   obj.updateMatrixWorld(true);
 
+  if (selection === 'hall-entry-spawn') {
+    patchSceneOverride({
+      hallLayout: {
+        mainExpoSpawn: [obj.position.x, 1.7, obj.position.z],
+        mainExpoSpawnYaw: obj.rotation.y,
+      },
+    });
+    return true;
+  }
+
   if (selection === 'hall-entrance-lobby') {
     const ez = defaultEntranceLobbyZ();
     patchSceneOverride({

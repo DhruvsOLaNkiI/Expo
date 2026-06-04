@@ -1,12 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Calendar, Download } from 'lucide-react';
+import { useExhibitorBooth } from './useExhibitorBooth';
 import { ExhibitorDashboardLayout } from './ExhibitorDashboardLayout';
+import { ExhibitorBoothProvider } from './ExhibitorBoothContext';
 import { OverviewDashboard } from './OverviewDashboard';
 import { ExhibitorSetupPage } from './ExhibitorSetupPage';
 import { ExhibitorDocumentsPage } from './ExhibitorDocumentsPage';
 import { DocumentsBrochuresPage } from './DocumentsBrochuresPage';
 import { ExhibitorFaqPage } from './ExhibitorFaqPage';
 import { ExhibitorSalesChatPage } from './ExhibitorSalesChatPage';
+import { ExhibitorAssistanceHistoryPage } from './ExhibitorAssistanceHistoryPage';
 import { VisitorInsightsPage } from './VisitorInsightsPage';
 import { VisitorProfilePage } from './VisitorProfilePage';
 import type { VisitorProfileTarget } from './visitorInsightsData';
@@ -49,14 +52,16 @@ const PAGE_COPY: Record<
   },
   live: { title: 'Live Visitors', subtitle: 'Coming soon', ready: false },
   engagement: { title: 'Engagement', subtitle: 'Coming soon', ready: false },
-  leads: { title: 'Leads & Enquiries', subtitle: 'Coming soon', ready: false },
-  ratings: { title: 'Ratings & Feedback', subtitle: 'Coming soon', ready: false },
   insights: {
     title: 'Visitor Intelligence CRM',
     subtitle: 'Lead scores, booth activity, and follow-up pipeline for your expo visitors',
     ready: true,
   },
-  assistance: { title: 'Assistance History', subtitle: 'Coming soon', ready: false },
+  assistance: {
+    title: 'Assistance History',
+    subtitle: 'Visitor conversations with your booth AI assistant',
+    ready: true,
+  },
   reports: { title: 'Reports', subtitle: 'Coming soon', ready: false },
 };
 
@@ -68,13 +73,27 @@ const READY_NAV: ExhibitorNavId[] = [
   'faq',
   'salesChat',
   'insights',
+  'assistance',
 ];
 
 export function ExhibitorDashboard() {
+  return (
+    <ExhibitorBoothProvider>
+      <ExhibitorDashboardInner />
+    </ExhibitorBoothProvider>
+  );
+}
+
+function ExhibitorDashboardInner() {
   const [activeNav, setActiveNav] = useState<ExhibitorNavId>('overview');
   const [docsHeader, setDocsHeader] = useState<ReactNode>(null);
   const [profileVisitor, setProfileVisitor] = useState<VisitorProfileTarget | null>(null);
+  const { boothId } = useExhibitorBooth();
   const copy = PAGE_COPY[activeNav];
+
+  useEffect(() => {
+    setProfileVisitor(null);
+  }, [boothId]);
 
   useEffect(() => {
     if (activeNav !== 'documents') setDocsHeader(null);
@@ -129,6 +148,7 @@ export function ExhibitorDashboard() {
       {activeNav === 'uploads' && <ExhibitorDocumentsPage onNav={setActiveNav} />}
       {activeNav === 'faq' && <ExhibitorFaqPage onNav={setActiveNav} />}
       {activeNav === 'salesChat' && <ExhibitorSalesChatPage onNav={setActiveNav} />}
+      {activeNav === 'assistance' && <ExhibitorAssistanceHistoryPage onNav={setActiveNav} />}
       {activeNav === 'insights' &&
         (profileVisitor ? (
           <VisitorProfilePage visitor={profileVisitor} onBack={() => setProfileVisitor(null)} />

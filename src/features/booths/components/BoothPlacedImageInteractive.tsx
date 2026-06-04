@@ -1,11 +1,12 @@
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
-import { useLayoutEffect, useRef, useCallback } from 'react';
+import { Suspense, useLayoutEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
+import { resolveTextureUrlForWebGL } from '@/config/webglTextureUrl';
 import type { PlacedImage } from '@/features/shared/data/boothLayouts';
+import { PlacedImageErrorBoundary } from './BoothPlacedImageMesh';
 
-/** CMS-style placed image with selection outline and drag-to-reposition. */
-export function BoothPlacedImageInteractive({
+function PlacedImageInteractiveInner({
   item,
   selected,
   onSelect,
@@ -34,7 +35,7 @@ export function BoothPlacedImageInteractive({
     if (!meshRef.current) return;
     dragging.current = true;
     const normal = new THREE.Vector3(0, 0, 1).applyEuler(
-      new THREE.Euler(item.rotation[0], item.rotation[1], item.rotation[2])
+      new THREE.Euler(item.rotation[0], item.rotation[1], item.rotation[2]),
     );
     plane.current.setFromNormalAndCoplanarPoint(normal, meshRef.current.position);
     (e.nativeEvent.target as HTMLElement)?.setPointerCapture?.(e.nativeEvent.pointerId);
@@ -45,7 +46,7 @@ export function BoothPlacedImageInteractive({
     e.stopPropagation();
     const pointer = new THREE.Vector2(
       (e.nativeEvent.offsetX / gl.domElement.clientWidth) * 2 - 1,
-      -(e.nativeEvent.offsetY / gl.domElement.clientHeight) * 2 + 1
+      -(e.nativeEvent.offsetY / gl.domElement.clientHeight) * 2 + 1,
     );
     raycaster.setFromCamera(pointer, camera);
     if (raycaster.ray.intersectPlane(plane.current, intersection.current)) {
@@ -90,5 +91,36 @@ export function BoothPlacedImageInteractive({
         </lineSegments>
       )}
     </mesh>
+  );
+}
+
+/** CMS-style placed image with selection outline and drag-to-reposition. */
+export function BoothPlacedImageInteractive({
+  item,
+  selected,
+  onSelect,
+  onDrag,
+}: {
+  item: PlacedImage;
+  selected: boolean;
+  onSelect: () => void;
+  onDrag: (pos: [number, number, number]) => void;
+}) {
+  const safeUrl = resolveTextureUrlForWebGL(item.url);
+  if (!safeUrl) return null;
+
+  const safeItem = safeUrl === item.url ? item : { ...item, url: safeUrl };
+
+  return (
+    <PlacedImageErrorBoundary>
+      <Suspense fallback={null}>
+        <PlacedImageInteractiveInner
+          item={safeItem}
+          selected={selected}
+          onSelect={onSelect}
+          onDrag={onDrag}
+        />
+      </Suspense>
+    </PlacedImageErrorBoundary>
   );
 }

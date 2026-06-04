@@ -8,12 +8,47 @@ import {
   maxUploadBytesFromEnv,
   maxUploadMbFromEnv,
 } from './src/constants/uploadLimits';
+import { isAllowedR2TextureUrl } from './src/config/webglTextureUrl';
 import { buildObjectKey, isR2Configured, normalizeR2ObjectKey, uploadBufferToR2 } from './src/server/r2';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
+}
+
+async function handleTextureProxy(
+  req: IncomingMessage,
+  res: ServerResponse,
+  publicBase: string,
+) {
+  const fullUrl = req.url ?? '';
+  const q = fullUrl.indexOf('?');
+  const params = new URLSearchParams(q >= 0 ? fullUrl.slice(q + 1) : '');
+  const target = params.get('url')?.trim() ?? '';
+  if (!target || !isAllowedR2TextureUrl(target, publicBase)) {
+    sendJson(res, 400, { ok: false, error: 'Invalid or disallowed texture URL' });
+    return;
+  }
+
+  try {
+    const normalized = normalizeR2PublicUrl(target);
+    const upstream = await fetch(normalized, { headers: { Accept: 'image/*,*/*' } });
+    if (!upstream.ok) {
+      sendJson(res, upstream.status, { ok: false, error: `Upstream returned ${upstream.status}` });
+      return;
+    }
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.statusCode = 200;
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.end(buf);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('Texture proxy failed:', msg);
+    sendJson(res, 502, { ok: false, error: msg });
+  }
 }
 
 type ApiConnectServer = { middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void } };
@@ -98,6 +133,11 @@ function attachR2Api(server: ApiConnectServer, rootDir: string, mode: string) {
 
         if (url === '/api/assets/status' && req.method === 'GET') {
           sendJson(res as ServerResponse, 200, { ok: true, configured: isR2Configured() });
+          return;
+        }
+
+        if (url === '/api/assets/texture' && req.method === 'GET') {
+          void handleTextureProxy(req, res as ServerResponse, env.R2_PUBLIC_BASE_URL ?? '');
           return;
         }
 

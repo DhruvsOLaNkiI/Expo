@@ -357,6 +357,7 @@ export function CmsDashboard() {
   const [placedImages, setPlacedImages] = useState<PlacedImage[]>([]);
   const [placingImageUrl, setPlacingImageUrl] = useState<string | null>(null);
   const [placingLabel, setPlacingLabel] = useState('');
+  const [repositionImageId, setRepositionImageId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [hostessQuickReplies, setHostessQuickReplies] = useState<HostessQuickReply[]>([]);
 
@@ -620,21 +621,39 @@ export function CmsDashboard() {
     if (!placingImageUrl) return;
     const ry = Math.atan2(normal[0], normal[2]);
     const rx = -Math.asin(normal[1]);
-    const nudge = 0.02;
+    const nudge = 0.003;
+    const position: [number, number, number] = [
+      pos[0] + normal[0] * nudge,
+      pos[1] + normal[1] * nudge,
+      pos[2] + normal[2] * nudge,
+    ];
+    const rotation: [number, number, number] = [rx, ry, 0];
+
+    if (repositionImageId) {
+      setPlacedImages((prev) =>
+        prev.map((p) => (p.id === repositionImageId ? { ...p, position, rotation } : p)),
+      );
+      setRepositionImageId(null);
+      setPlacingImageUrl(null);
+      setPlacingLabel('');
+      showToast('Image moved to wall — drag to fine-tune, then Apply Changes');
+      return;
+    }
+
     const newImg: PlacedImage = {
       id: `pi-${Date.now()}`,
       url: placingImageUrl,
       label: placingLabel || 'image',
-      position: [pos[0] + normal[0] * nudge, pos[1] + normal[1] * nudge, pos[2] + normal[2] * nudge],
-      rotation: [rx, ry, 0],
+      position,
+      rotation,
       size: [2, 1.5],
     };
     setPlacedImages((prev) => [...prev, newImg]);
     setPlacingImageUrl(null);
     setPlacingLabel('');
     setSelectedImageId(newImg.id);
-    showToast('Image placed — drag to reposition, adjust size in panel');
-  }, [placingImageUrl, placingLabel]);
+    showToast('Image placed — drag to reposition, then Apply Changes');
+  }, [placingImageUrl, placingLabel, repositionImageId]);
 
   const handleDragImage = useCallback((id: string, pos: [number, number, number]) => {
     setPlacedImages((prev) => prev.map((p) => p.id === id ? { ...p, position: pos } : p));
@@ -803,6 +822,8 @@ export function CmsDashboard() {
                 selectedId={selectedId}
                 onSelectBooth={setSelectedId}
                 onPatchBooth={patch}
+                hallLayout={sceneConfig.hallLayout}
+                onPatchHallLayout={(hallLayoutPatch) => patchScene({ hallLayout: hallLayoutPatch })}
               />
             ) : isHallDisplay ? (
               <CmsHallDisplayPreview stageScreenUrl={hallBallroomUrl} />
@@ -911,6 +932,8 @@ export function CmsDashboard() {
                   placingImageUrl={placingImageUrl}
                   setPlacingImageUrl={setPlacingImageUrl}
                   setPlacingLabel={setPlacingLabel}
+                  repositionImageId={repositionImageId}
+                  setRepositionImageId={setRepositionImageId}
                   selectedImageId={selectedImageId}
                   setSelectedImageId={setSelectedImageId}
                   removePlacedImage={removePlacedImage}
@@ -2360,6 +2383,7 @@ function PlacedImageSizeFields({
 /* ─── IMAGES TAB (click-to-place) ─── */
 function ImagesTab({
   boothId, toastUploadResult, placedImages, placingImageUrl, setPlacingImageUrl, setPlacingLabel,
+  repositionImageId, setRepositionImageId,
   selectedImageId, setSelectedImageId, removePlacedImage, updatePlacedImage,
 }: {
   boothId: string;
@@ -2368,24 +2392,34 @@ function ImagesTab({
   placingImageUrl: string | null;
   setPlacingImageUrl: (url: string | null) => void;
   setPlacingLabel: (l: string) => void;
+  repositionImageId: string | null;
+  setRepositionImageId: (id: string | null) => void;
   selectedImageId: string | null;
   setSelectedImageId: (id: string | null) => void;
   removePlacedImage: (id: string) => void;
   updatePlacedImage: (id: string, patch: Partial<PlacedImage>) => void;
 }) {
   const selectedImg = placedImages.find((p) => p.id === selectedImageId);
+  const cancelPlacing = () => {
+    setPlacingImageUrl(null);
+    setPlacingLabel('');
+    setRepositionImageId(null);
+  };
 
   return (
     <>
       <SectionTitle>Place Image on Booth</SectionTitle>
       <p className="text-[10px] text-white/35 leading-relaxed mb-3">
-        Upload an image, then <strong className="text-white/50">click on any booth surface</strong> in the 3D preview to place it. Drag to reposition.
+        Upload an image, then <strong className="text-white/50">click the large white aisle side wall</strong> in the 3D preview.
+        Orbit is paused while placing. Drag after placing to fine-tune. Click <strong className="text-white/50">Apply Changes</strong> to save.
       </p>
       {placingImageUrl ? (
         <div className="rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/5 p-3 mb-3">
-          <p className="text-[11px] text-[#d4af37] font-semibold mb-2 animate-pulse">Click a surface in the 3D view to place</p>
+          <p className="text-[11px] text-[#d4af37] font-semibold mb-2 animate-pulse">
+            {repositionImageId ? 'Click the wall where you want this image' : 'Click the side wall in the 3D view to place'}
+          </p>
           <img src={placingImageUrl} alt="placing" className="mx-auto max-h-20 rounded border border-white/10 object-contain mb-2" />
-          <button className="w-full rounded border border-white/10 px-2 py-1 text-[10px] text-white/40 hover:bg-white/5" onClick={() => setPlacingImageUrl(null)}>
+          <button className="w-full rounded border border-white/10 px-2 py-1 text-[10px] text-white/40 hover:bg-white/5" onClick={cancelPlacing}>
             Cancel
           </button>
         </div>
@@ -2426,6 +2460,17 @@ function ImagesTab({
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
+                <button
+                  type="button"
+                  className="w-full rounded border border-[#d4af37]/35 bg-[#d4af37]/10 px-2 py-1.5 text-[10px] font-semibold text-[#d4af37] hover:bg-[#d4af37]/15"
+                  onClick={() => {
+                    setRepositionImageId(img.id);
+                    setPlacingImageUrl(img.url);
+                    setPlacingLabel(img.label);
+                  }}
+                >
+                  Move to wall — click in 3D
+                </button>
                 <PlacedImageSizeFields
                   size={img.size}
                   onCommit={(size) => updatePlacedImage(img.id, { size })}

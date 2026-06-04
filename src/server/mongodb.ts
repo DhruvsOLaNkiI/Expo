@@ -3,6 +3,11 @@ import { MongoClient, Db, Collection } from 'mongodb';
 let cachedDb: Db | null = null;
 let cachedClient: MongoClient | null = null;
 
+/** When a connect attempt failed, skip retries for this long so API calls fail fast instead of hanging. */
+const CONNECT_RETRY_COOLDOWN_MS = 15_000;
+let lastConnectFailAt = 0;
+let lastConnectError = '';
+
 export type PageIndexDocType = 'brochure' | 'priceList' | 'siteLayout' | 'unitLayout';
 
 export type PageIndexStatus = 'pending' | 'indexing' | 'ready' | 'failed';
@@ -147,10 +152,23 @@ export async function connectToDatabase(): Promise<Db> {
     throw new Error('MONGODB_URI environment variable is not set. Add it to .env file.');
   }
 
+  // Fail fast if a recent attempt already failed (avoids 30s hangs on every API call
+  // when the cluster is unreachable, e.g. DNS ENOTFOUND / paused Atlas cluster).
+  const sinceFail = Date.now() - lastConnectFailAt;
+  if (lastConnectFailAt && sinceFail < CONNECT_RETRY_COOLDOWN_MS) {
+    throw new Error(lastConnectError || 'MongoDB unavailable (recent connect failed)');
+  }
+
   try {
-    const client = new MongoClient(mongoUri);
+    const client = new MongoClient(mongoUri, {
+      // Short timeouts so an unreachable cluster fails in seconds, not the 30s default.
+      serverSelectionTimeoutMS: 5_000,
+      connectTimeoutMS: 5_000,
+    });
     await client.connect();
-    
+    lastConnectFailAt = 0;
+    lastConnectError = '';
+
     const db = client.db('virtual-expo');
     
     cachedClient = client;
@@ -177,7 +195,9 @@ export async function connectToDatabase(): Promise<Db> {
     console.log('Connected to MongoDB successfully');
     return db;
   } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
+    lastConnectFailAt = Date.now();
+    lastConnectError = error instanceof Error ? error.message : 'MongoDB connect failed';
+    console.error('Failed to connect to MongoDB:', lastConnectError);
     throw error;
   }
 }

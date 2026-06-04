@@ -4,12 +4,16 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   Pie,
   PieChart,
   ResponsiveContainer,
   Tooltip,
-  Cell as PieSlice,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import {
   Bell,
@@ -17,7 +21,6 @@ import {
   Clock3,
   Download,
   FileText,
-  UserCheck,
   Users,
   UsersRound,
 } from 'lucide-react';
@@ -30,9 +33,15 @@ import {
 } from '@tanstack/react-table';
 import './exhibitorDashboard.css';
 import { ExhibitorBoothPreview } from './ExhibitorBoothPreview';
-import { TrafficHeatmap } from './TrafficHeatmap';
 import { useExhibitorBooth } from './useExhibitorBooth';
-import { boothDisplayCode, type ExhibitorNavId } from './exhibitorConfig';
+import {
+  boothDisplayCode,
+  DEFAULT_EVENT_TREND_START_HOUR,
+  EVENT_TREND_HOUR_PRESETS,
+  EVENT_TREND_SPAN_HOURS,
+  formatHourRangeLabel,
+  type ExhibitorNavId,
+} from './exhibitorConfig';
 import { ExhibitorChecklistBanner } from './ExhibitorChecklistBanner';
 import {
   buildExhibitorChecklist,
@@ -44,11 +53,28 @@ import {
   fetchBoothLivePresence,
   fetchBoothVisitSessions,
   fetchBoothVisitorStats,
+  fetchQuestionnairePossibilityStats,
+  fetchBoothEngagementActionStats,
   type BoothDocumentStatRow,
   type BoothLivePresence,
   type BoothVisitorStats,
+  type QuestionnairePossibilityStats,
   type FaqSubmissionRow,
 } from '@/dashboard/api/client';
+import {
+  buildConvertingChart,
+  buildDemoEngagementActionStats,
+  CONVERTING_SCORE_MAX,
+  type BoothEngagementActionStats,
+  type ConvertingChartRow,
+  type EngagementActionRow,
+} from '@/dashboard/engagementLeadScore';
+import {
+  buildLeadPossibilityChart,
+  DEMO_LEAD_POSSIBILITY_COUNTS,
+  QUESTIONNAIRE_MAX_SCORE,
+  type LeadPossibilityChartRow,
+} from './leadPossibility';
 
 type DocRow = { document: string; opens: number; avgTime: string; downloads: number; progress: number };
 
@@ -208,12 +234,6 @@ function formatGrowthPct(pct: number): string {
   return `${sign}${pct}%`;
 }
 
-const qualityLeads = [
-  { name: 'Hot Leads', value: 25, color: '#ef4444' },
-  { name: 'Warm Leads', value: 31, color: '#f59e0b' },
-  { name: 'Cold Leads', value: 18, color: '#3b82f6' },
-];
-
 const funnelData = [
   { value: 1683, name: 'Booth Entered', fill: '#8b5cf6' },
   { value: 982, name: 'Viewed Brochure', fill: '#3b82f6' },
@@ -273,15 +293,197 @@ function VisitorEngagementFunnel() {
   );
 }
 
-const heatX = ['Entry', 'Reception', 'Lounge', 'TV Screen', 'Brochure Wall', 'Agent Desk', 'Exit'];
-const heatY = ['10 AM', '12 PM', '2 PM', '4 PM', '6 PM'];
-const heatData = [
-  [20, 35, 42, 50, 29, 31, 12],
-  [28, 41, 52, 60, 33, 38, 19],
-  [35, 48, 66, 74, 41, 45, 24],
-  [30, 43, 58, 62, 38, 40, 20],
-  [18, 27, 36, 44, 26, 29, 15],
-];
+function LeadPossibilityPie({
+  rows,
+  total,
+}: {
+  rows: LeadPossibilityChartRow[];
+  total: number;
+}) {
+  const ordered = [...rows].sort((a, b) => {
+    const rank = { high: 0, medium: 1, low: 2 };
+    return rank[a.id] - rank[b.id];
+  });
+
+  const tierLabel = (id: LeadPossibilityChartRow['id']) =>
+    id === 'high' ? 'High' : id === 'medium' ? 'Medium' : 'Low';
+
+  return (
+    <div className="exb-sidechart-body exb-possibility-body">
+      <div className="exb-sidechart-main">
+        <div className="exb-sidechart-visual exb-possibility-visual">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={ordered}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={0}
+                outerRadius="96%"
+                paddingAngle={2}
+                stroke="rgba(15,23,42,0.9)"
+                strokeWidth={2}
+              >
+                {ordered.map((row) => (
+                  <Cell key={row.id} fill={row.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ background: '#0b1220', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 12 }}
+                formatter={(value: number, _name, item) => {
+                  const row = item.payload as LeadPossibilityChartRow;
+                  return [`${value} leads (${row.sharePct}%)`, row.name];
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="exb-sidechart-legend">
+          <div className="exb-sidechart-total">
+            <strong>{total}</strong>
+            <span>Total Leads</span>
+          </div>
+          {ordered.map((row) => (
+            <div key={row.id} className="exb-funnel-metric">
+              <span className="exb-funnel-dot" style={{ backgroundColor: row.color }} />
+              <span className="exb-funnel-label">
+                {tierLabel(row.id)} · {row.pctRange}
+                <small className="exb-funnel-sub">{row.scoreRange} pts</small>
+              </span>
+              <b className="exb-funnel-pct">{row.sharePct}%</b>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="exb-funnel-foot">
+        <span>{total} questionnaire leads</span>
+        <span>Score 12–48</span>
+      </div>
+    </div>
+  );
+}
+
+function BoothEngagementBarChart({ rows }: { rows: EngagementActionRow[] }) {
+  const chartRows = rows
+    .filter((row) => row.clicks > 0)
+    .map((row) => ({
+      ...row,
+      name: `${row.label} (+${row.pointsPerClick})`,
+    }));
+
+  if (chartRows.length === 0) {
+    return (
+      <div className="exb-chart-empty" style={{ minHeight: 180 }}>
+        No menu clicks yet — points appear when visitors tap Brochure, Price list, Chat, and other booth buttons.
+      </div>
+    );
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(220, chartRows.length * 36)}>
+      <BarChart data={chartRows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
+        <CartesianGrid stroke="rgba(255,255,255,0.08)" horizontal={false} />
+        <XAxis type="number" hide />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={118}
+          tick={{ fill: '#94a3b8', fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          contentStyle={{ background: '#0b1220', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 12 }}
+          formatter={(value: number, _name, item) => {
+            const row = item.payload as EngagementActionRow & { name: string };
+            return [`${value} pts`, `${row.clicks} click${row.clicks === 1 ? '' : 's'}`];
+          }}
+        />
+        <Bar dataKey="totalPoints" radius={[0, 8, 8, 0]} barSize={18}>
+          {chartRows.map((row) => (
+            <Cell key={row.action} fill={row.color} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ConvertingPossibilityPie({
+  rows,
+  total,
+  avgScore,
+}: {
+  rows: ConvertingChartRow[];
+  total: number;
+  avgScore: number;
+}) {
+  const ordered = [...rows].sort((a, b) => {
+    const rank = { high: 0, medium: 1, low: 2 };
+    return rank[a.id] - rank[b.id];
+  });
+
+  const tierLabel = (id: ConvertingChartRow['id']) =>
+    id === 'high' ? 'High' : id === 'medium' ? 'Medium' : 'Low';
+
+  return (
+    <div className="exb-sidechart-body exb-possibility-body">
+      <div className="exb-sidechart-main">
+        <div className="exb-sidechart-visual exb-possibility-visual">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={ordered}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={0}
+                outerRadius="96%"
+                paddingAngle={2}
+                stroke="rgba(15,23,42,0.9)"
+                strokeWidth={2}
+              >
+                {ordered.map((row) => (
+                  <Cell key={row.id} fill={row.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ background: '#0b1220', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 12 }}
+                formatter={(value: number, _name, item) => {
+                  const row = item.payload as ConvertingChartRow;
+                  return [`${value} visitors (${row.sharePct}%)`, row.name];
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="exb-sidechart-legend">
+          <div className="exb-sidechart-total">
+            <strong>{total}</strong>
+            <span>Scored Visitors</span>
+          </div>
+          {ordered.map((row) => (
+            <div key={row.id} className="exb-funnel-metric">
+              <span className="exb-funnel-dot" style={{ backgroundColor: row.color }} />
+              <span className="exb-funnel-label">
+                {tierLabel(row.id)} · {row.pctRange}
+                <small className="exb-funnel-sub">{row.scoreRange} pts</small>
+              </span>
+              <b className="exb-funnel-pct">{row.sharePct}%</b>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="exb-funnel-foot">
+        <span>14 pts = 100% converting</span>
+        <span>Avg {avgScore} pts / visitor</span>
+      </div>
+    </div>
+  );
+}
 
 const columnHelper = createColumnHelper<DocRow>();
 const docColumns: ColumnDef<DocRow, unknown>[] = [
@@ -366,6 +568,10 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
   const [liveVisitors, setLiveVisitors] = useState<LiveVisitorRow[]>([]);
   const [faqStats, setFaqStats] = useState<FaqOverviewStats>(EMPTY_FAQ_STATS);
   const [assistanceHistory, setAssistanceHistory] = useState<AssistanceRow[]>([]);
+  const [possibilityStats, setPossibilityStats] = useState<QuestionnairePossibilityStats | null>(null);
+  const [engagementStats, setEngagementStats] = useState<BoothEngagementActionStats | null>(null);
+  const [trendStartHour, setTrendStartHour] = useState(DEFAULT_EVENT_TREND_START_HOUR);
+  const [trendPresetId, setTrendPresetId] = useState('9-17');
   const checklist = booth ? buildExhibitorChecklist(booth) : [];
   const progress = exhibitorChecklistProgress(checklist);
   const table = useReactTable({
@@ -377,10 +583,15 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [stats, docs, faqSubs] = await Promise.all([
-        fetchBoothVisitorStats(boothId),
+      const [stats, docs, faqSubs, qStats, eStats] = await Promise.all([
+        fetchBoothVisitorStats(boothId, {
+          trendStartHour,
+          trendSpanHours: EVENT_TREND_SPAN_HOURS,
+        }),
         fetchBoothDocumentStats(boothId),
         fetchBoothFaqSubmissions(boothId),
+        fetchQuestionnairePossibilityStats(),
+        fetchBoothEngagementActionStats(boothId),
       ]);
       if (cancelled) return;
       if (stats) setVisitorStats(stats);
@@ -388,6 +599,8 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
       const faq = aggregateFaqStats(faqSubs);
       setFaqStats(faq);
       setAssistanceHistory(assistanceFromFaq(faqSubs));
+      if (qStats) setPossibilityStats(qStats);
+      if (eStats) setEngagementStats(eStats);
     };
     void load();
     const timer = window.setInterval(() => void load(), 30_000);
@@ -395,7 +608,7 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [boothId]);
+  }, [boothId, trendStartHour]);
 
   useEffect(() => {
     let cancelled = false;
@@ -468,31 +681,64 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
         icon: FileText,
         sparkValues: trend.length ? trend : undefined,
       },
-      {
-        title: 'FAQ Engagements',
-        value: String(faqStats.uniqueVisitors),
-        sub: `${faqStats.totalQuestions} answers submitted`,
-        growth: faqStats.totalQuestions > 0 ? `${faqStats.avgQuestions} avg / visitor` : 'No FAQ data yet',
-        color: '#ec4899',
-        icon: UserCheck,
-      },
     ];
-  }, [visitorStats, trendSpark, faqStats, livePresence]);
+  }, [visitorStats, trendSpark, livePresence]);
 
   const visitTrendChart = useMemo(
     () =>
-      visitorStats?.visitTrend.map((d) => ({ day: d.label, visitors: d.visitors })) ?? [
-        { day: '—', visitors: 0 },
+      visitorStats?.visitTrend.map((d) => ({ hour: d.label, visitors: d.visitors })) ?? [
+        { hour: '—', visitors: 0 },
       ],
     [visitorStats],
   );
 
-  const hasVisitTrend = useMemo(
-    () => visitTrendChart.some((d) => d.visitors > 0),
-    [visitTrendChart],
+  const trendRangeLabel = formatHourRangeLabel(trendStartHour, EVENT_TREND_SPAN_HOURS);
+  const trendEventDayLabel = visitorStats?.visitTrendEventDay
+    ? new Date(`${visitorStats.visitTrendEventDay}T12:00:00`).toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'Event day';
+
+  const showVisitTrendChart = visitTrendChart.length > 0 && visitTrendChart[0]?.hour !== '—';
+
+  const possibilityChart = useMemo(() => {
+    const useLive = possibilityStats?.mongoConnected && (possibilityStats.total ?? 0) > 0;
+    const counts = useLive
+      ? { high: possibilityStats!.high, medium: possibilityStats!.medium, low: possibilityStats!.low }
+      : DEMO_LEAD_POSSIBILITY_COUNTS;
+    return buildLeadPossibilityChart(counts);
+  }, [possibilityStats]);
+
+  const possibilityTotal = useMemo(
+    () => possibilityChart.reduce((s, x) => s + x.value, 0),
+    [possibilityChart],
   );
 
-  const hot = useMemo(() => qualityLeads.reduce((s, x) => s + x.value, 0), []);
+  const usingPossibilityDemo = !possibilityStats?.mongoConnected || (possibilityStats?.total ?? 0) === 0;
+
+  const engagementDisplay = useMemo(() => {
+    const useLive =
+      engagementStats?.mongoConnected && (engagementStats.totalClicks ?? 0) > 0;
+    return useLive ? engagementStats! : buildDemoEngagementActionStats();
+  }, [engagementStats]);
+
+  const usingEngagementDemo =
+    !engagementStats?.mongoConnected || (engagementStats?.totalClicks ?? 0) === 0;
+
+  const conversionChart = useMemo(() => {
+    const conversion = engagementDisplay.conversion;
+    return buildConvertingChart({
+      high: conversion.high,
+      medium: conversion.medium,
+      low: conversion.low,
+    });
+  }, [engagementDisplay.conversion]);
+
+  const conversionTotal = engagementDisplay.conversion.total;
+  const usingConversionDemo =
+    usingEngagementDemo || (engagementStats?.conversion?.total ?? 0) === 0;
 
   return (
     <>
@@ -521,17 +767,39 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
 
         <section className="exb-kpi-grid">{kpis.map((k) => <KpiCard key={k.title} {...k} />)}</section>
 
-        <section className="exb-row exb-row-2">
+        <section className="exb-row exb-row-split">
           <article className="exb-card exb-chart-card">
-            <div className="exb-card-head">
-              <h3>Booth Visit Trend</h3>
-              <button type="button" className="exb-pill">
-                Last 7 Days · unique / day
-              </button>
+            <div className="exb-card-head exb-card-head-trend">
+              <div>
+                <h3>Booth Visit Trend</h3>
+                <p className="exb-chart-sub">
+                  {trendEventDayLabel} · unique visitors per hour · {EVENT_TREND_SPAN_HOURS}h window
+                </p>
+              </div>
+              <label className="exb-trend-filter">
+                <span className="exb-sr-only">Event hours</span>
+                <select
+                  className="exb-pill exb-pill-select"
+                  value={trendPresetId}
+                  onChange={(e) => {
+                    const preset = EVENT_TREND_HOUR_PRESETS.find((p) => p.id === e.target.value);
+                    if (!preset) return;
+                    setTrendPresetId(preset.id);
+                    setTrendStartHour(preset.startHour);
+                  }}
+                  aria-label="Filter chart by event hours"
+                >
+                  {EVENT_TREND_HOUR_PRESETS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            {hasVisitTrend ? (
+            {showVisitTrendChart ? (
               <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={visitTrendChart}>
+                <AreaChart data={visitTrendChart} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
                   <defs>
                     <linearGradient id="visitLine" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.5} />
@@ -539,42 +807,95 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                  <Tooltip contentStyle={{ background: '#0b1220', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 12 }} />
+                  <XAxis
+                    dataKey="hour"
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={8}
+                    interval={0}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: 'rgba(139,92,246,0.35)', strokeWidth: 1 }}
+                    contentStyle={{
+                      background: '#0b1220',
+                      border: '1px solid rgba(255,255,255,0.16)',
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                    labelFormatter={(label) => `${label} · ${trendRangeLabel}`}
+                    formatter={(value) => [`${value} unique visitors`, '']}
+                  />
                   <Area type="monotone" dataKey="visitors" stroke="#8b5cf6" fill="url(#visitLine)" strokeWidth={3} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
               <div className="exb-chart-empty">
-                No booth visits yet — data appears when visitors enter your booth in the 3D expo.
+                No visits in {trendRangeLabel} yet — try another hour range or wait for guests to enter your booth.
               </div>
             )}
           </article>
 
-          <article className="exb-card">
-            <div className="exb-card-head"><h3>Visitor Quality (Leads)</h3></div>
-            <div className="exb-donut-wrap">
-              <ResponsiveContainer width="52%" height={220}>
-                <PieChart>
-                  <Pie data={qualityLeads} dataKey="value" nameKey="name" innerRadius={62} outerRadius={90} paddingAngle={2}>
-                    {qualityLeads.map((x) => <PieSlice key={x.name} fill={x.color} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="exb-legend">
-                <h4>{hot}<span>Total Leads</span></h4>
-                {qualityLeads.map((x) => <p key={x.name}><i style={{ background: x.color }} />{x.name}<b>{x.value}</b></p>)}
-                <ul>
-                  <li><span>Lead Conversion</span><b>5.9%</b></li>
-                  <li><span>Qualified Leads</span><b>68.9%</b></li>
-                  <li><span>Interested Visitors</span><b>32.4%</b></li>
-                </ul>
-              </div>
+          <article className="exb-card exb-funnel-card exb-possibility-card">
+            <div className="exb-card-head">
+              <h3>Lead Possibility Score</h3>
+              {usingPossibilityDemo ? (
+                <span className="exb-pill">Sample</span>
+              ) : (
+                <span className="exb-pill">
+                  Avg {possibilityStats?.avgScore ?? 0}/{QUESTIONNAIRE_MAX_SCORE}
+                </span>
+              )}
             </div>
+            <LeadPossibilityPie rows={possibilityChart} total={possibilityTotal} />
           </article>
         </section>
 
-        <section className="exb-row exb-row-2 exb-row-funnel">
+        <section className="exb-row exb-row-split">
+          <article className="exb-card exb-engagement-bar-card">
+            <div className="exb-card-head">
+              <h3>Visitor Interest Points</h3>
+              {usingEngagementDemo ? (
+                <span className="exb-pill">Sample</span>
+              ) : (
+                <span className="exb-pill">
+                  {engagementDisplay.totalPoints} pts · {engagementDisplay.totalClicks} clicks
+                </span>
+              )}
+            </div>
+            <p className="exb-muted exb-engagement-hint">
+              Points from booth menu taps — Brochure +3, Site layout +4, Chat +2, etc.
+            </p>
+            <BoothEngagementBarChart rows={engagementDisplay.actions} />
+            <div className="exb-funnel-foot">
+              <span>{engagementDisplay.uniqueVisitors || '—'} visitors clicked</span>
+              <span>Avg {engagementDisplay.avgPointsPerVisitor || 0} pts / visitor</span>
+            </div>
+          </article>
+
+          <article className="exb-card exb-funnel-card exb-possibility-card">
+            <div className="exb-card-head">
+              <h3>Converting Possibility</h3>
+              {usingConversionDemo ? (
+                <span className="exb-pill">Sample</span>
+              ) : (
+                <span className="exb-pill">
+                  Max {CONVERTING_SCORE_MAX} pts = 100%
+                </span>
+              )}
+            </div>
+            <p className="exb-muted exb-engagement-hint">
+              High converting: 14 pts (100%) · 7 pts (50%) · 3.5 pts (25%) from menu engagement.
+            </p>
+            <ConvertingPossibilityPie
+              rows={conversionChart}
+              total={conversionTotal}
+              avgScore={engagementDisplay.conversion.avgScore}
+            />
+          </article>
+        </section>
+
+        <section className="exb-row exb-row-split">
           <article className="exb-card">
             <div className="exb-card-head"><h3>Top Brochures & Documents</h3><button type="button" className="exb-link" onClick={onOpenDocuments}>View All</button></div>
             {docRows.length === 0 ? (
@@ -612,7 +933,7 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
           </article>
         </section>
 
-        <section className="exb-row exb-row-4">
+        <section className="exb-row exb-row-split">
           <article className="exb-card">
             <div className="exb-card-head">
               <h3>AI Assistant & FAQ Analytics</h3>
@@ -660,17 +981,17 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
           </article>
         </section>
 
-        <section className="exb-row exb-row-5">
+        <section className="exb-row exb-row-split">
           <article className="exb-card">
             <div className="exb-card-head">
               <h3>Assistance History</h3>
-              <button type="button" className="exb-link" onClick={() => onNav?.('faq')}>View All</button>
+              <button type="button" className="exb-link" onClick={() => onNav?.('assistance')}>View All</button>
             </div>
             <table className="exb-table">
               <thead><tr><th>Visitor</th><th>Time</th><th>Request</th><th>Status</th></tr></thead>
               <tbody>
                 {assistanceHistory.length === 0 ? (
-                  <tr><td colSpan={4} className="exb-empty">No FAQ responses recorded yet.</td></tr>
+                  <tr><td colSpan={4} className="exb-empty">No AI conversations recorded yet.</td></tr>
                 ) : (
                   assistanceHistory.map((r) => (
                     <tr key={`${r.visitor}-${r.time}-${r.request}`}>
@@ -694,24 +1015,6 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
             </div>
             <ExhibitorBoothPreview />
           </article>
-        </section>
-
-        <section className="exb-card exb-heatmap-card">
-          <div className="exb-card-head"><h3>Traffic Heatmap (Booth)</h3><button className="exb-link">View Full Heatmap</button></div>
-          <div className="exb-heatmap-wrap">
-            <TrafficHeatmap
-              xLabels={heatX}
-              yLabels={heatY}
-              data={heatData}
-              cellStyle={(_, ratio) => ({
-                background: `rgba(${Math.round(255 * ratio)}, ${Math.round(180 * (1 - ratio) + 80)}, ${Math.round(255 * (1 - ratio))}, 0.88)`,
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '8px',
-                fontSize: '11px',
-                color: '#e5e7eb',
-              })}
-            />
-          </div>
         </section>
     </>
   );

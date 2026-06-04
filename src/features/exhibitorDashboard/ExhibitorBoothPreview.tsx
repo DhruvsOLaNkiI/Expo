@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { CmsPreview3D } from '@/features/cms/CmsPreview3D';
 import { boothStageScreenUrl } from '@/features/shared/data/boothLayouts';
+import { sanitizeBoothLogoUrlForWebGL } from './exhibitorLogo';
 import { useExhibitorBooth } from './useExhibitorBooth';
 
 const noop = () => {};
@@ -44,7 +45,16 @@ export function ExhibitorBoothPreview() {
         counterColor={booth.counterColor}
         videoUrl={booth.videoUrl}
         stageScreenUrl={boothStageScreenUrl(booth)}
-        headerLogoUrl={booth.headerLogoUrl ?? ''}
+        headerLogoUrl={sanitizeBoothLogoUrlForWebGL(booth.headerLogoUrl) ?? ''}
+        headerBranding={booth.headerBranding}
+        company={booth.company}
+        wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(booth.wallLogoLeftUrl) ?? ''}
+        wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(booth.wallLogoRightUrl) ?? ''}
+        sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(booth.sideWallLeftImageUrl) ?? ''}
+        sideWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(booth.sideWallRightImageUrl) ?? ''}
+        exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(booth.exteriorWallLeftImageUrl) ?? ''}
+        exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(booth.exteriorWallRightImageUrl) ?? ''}
+        counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(booth.counterFrontImageUrl) ?? ''}
         lighting={booth.lighting}
         placedImages={booth.placedImages ?? []}
         placingImageUrl={null}

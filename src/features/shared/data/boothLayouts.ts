@@ -95,6 +95,60 @@ export type CustomFaqQuestion = {
   options: CustomFaqOption[];
 };
 
+/** Fixed zones on the booth header fascia — logo (left), project name (center), RERA (right). */
+export type BoothHeaderBranding = {
+  /** Center fascia title — defaults to booth name */
+  projectName?: string;
+  /** Line under project name — defaults to company tagline */
+  projectSubtitle?: string;
+  /** RERA registration shown on the right of the fascia */
+  reraNumber?: string;
+  /** Header logo size on the top fascia (0.5 = small, 1 = default, 2.5 = large). */
+  logoScale?: number;
+  /** Hide center project name + subtitle on the fascia beam. */
+  hideCenterText?: boolean;
+  /** Move header logo from the left slot to the center (implies hideCenterText). */
+  centerHeaderLogo?: boolean;
+};
+
+export function resolveFasciaLayout(headerBranding?: BoothHeaderBranding): {
+  centerLogo: boolean;
+  hideCenterText: boolean;
+} {
+  const centerLogo = headerBranding?.centerHeaderLogo === true;
+  return {
+    centerLogo,
+    hideCenterText: centerLogo || headerBranding?.hideCenterText === true,
+  };
+}
+
+const HEADER_LOGO_SCALE_MIN = 0.5;
+const HEADER_LOGO_SCALE_MAX = 2.5;
+const HEADER_LOGO_SCALE_DEFAULT = 1.5;
+
+export function resolveHeaderLogoScale(headerBranding?: BoothHeaderBranding): number {
+  const raw = headerBranding?.logoScale;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return Math.min(HEADER_LOGO_SCALE_MAX, Math.max(HEADER_LOGO_SCALE_MIN, raw));
+  }
+  return HEADER_LOGO_SCALE_DEFAULT;
+}
+
+export function resolveBoothHeaderBranding(params: {
+  name: string;
+  headerBranding?: BoothHeaderBranding;
+  companyTagline?: string;
+}): { projectName: string; projectSubtitle: string; reraNumber: string } {
+  return {
+    projectName: params.headerBranding?.projectName?.trim() || params.name,
+    projectSubtitle:
+      params.headerBranding?.projectSubtitle?.trim() ||
+      params.companyTagline?.trim() ||
+      'LUXURY RESIDENCES',
+    reraNumber: params.headerBranding?.reraNumber?.trim() || '',
+  };
+}
+
 export type BoothLayoutConfig = {
   id: string;
   position: [number, number, number];
@@ -109,6 +163,22 @@ export type BoothLayoutConfig = {
   /** Main stage screen (large back-wall LED) — image or video URL */
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  /** Back-wall logos flanking the main LED screen */
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  /** Inside booth — entrance wing walls */
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  /** Outside booth — aisle-facing side walls */
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  /** When true, sideWall* = inside and exteriorWall* = outside (legacy configs omit this). */
+  wallPlacementV2?: boolean;
+  /** Per-slot shift / scale for wall poster images (exhibitor Booth Setup). */
+  wallPlacementAdjustments?: import('@/features/booths/components/boothWallMetrics').BoothWallPlacementAdjustments;
+  /** Header fascia: logo slot, project name, RERA — configured in exhibitor Booth Setup */
+  headerBranding?: BoothHeaderBranding;
   /** Per-booth media gallery */
   media: MediaItem[];
   /** Images placed on booth surfaces via the visual editor */
@@ -149,7 +219,41 @@ export type BoothLayoutConfig = {
   hostessQuickReplies?: HostessQuickReply[];
   /** Edit layout → per-display position / rotation / scale (main LED, counter, standee, …) */
   displayLayout?: BoothDisplayLayout;
+  /** Builder-8 (Eco / Eldeco): main rear wall behind the TV. */
+  backWallColor?: string;
+  /** Builder-8: panel behind / around the main LED screen. */
+  tvWallColor?: string;
+  /** Builder-8: header fascia panel background. */
+  headerFasciaColor?: string;
+  /** Builder-8: reception desk top trim bar. */
+  counterTopColor?: string;
 };
+
+/** Resolved surface colors for EcoEden / builder-8 booths. */
+export function resolveEcoBoothSurfaceColors(
+  b: Pick<
+    BoothLayoutConfig,
+    | 'color'
+    | 'accent'
+    | 'counterColor'
+    | 'backWallColor'
+    | 'tvWallColor'
+    | 'headerFasciaColor'
+    | 'counterTopColor'
+  >,
+) {
+  const accent = b.accent?.trim() || '#164e2f';
+  const backWall = b.backWallColor?.trim() || '#e4e8e5';
+  return {
+    wallColor: b.color?.trim() || '#ffffff',
+    backWallColor: backWall,
+    tvWallColor: b.tvWallColor?.trim() || backWall,
+    headerFasciaColor: b.headerFasciaColor?.trim() || '#fcfcfc',
+    counterTopColor: b.counterTopColor?.trim() || accent,
+    accent,
+    counterColor: b.counterColor?.trim() || '#ffffff',
+  };
+}
 
 /** Main back-wall LED content — prefers dedicated stage URL, falls back to videoUrl. */
 export function boothStageScreenUrl(b: Pick<BoothLayoutConfig, 'stageScreenUrl' | 'videoUrl'>): string {
@@ -228,6 +332,10 @@ export type HallLayoutConfig = {
   plantScales: number[];
   /** Sketchfab aisle standees between booth pairs — keyed by standee id. */
   aisleStandeeTransforms: Record<string, BoothDisplayTransform>;
+  /** World position where visitors enter the main hall `[x, eyeY, z]`. */
+  mainExpoSpawn?: [number, number, number];
+  /** Camera yaw (radians) at entry — 0 faces toward the center plaza (−Z). */
+  mainExpoSpawnYaw?: number;
 };
 
 /** Main expo hall footprint (meters) — width × depth × height. */
@@ -310,6 +418,8 @@ export const DEFAULT_HALL_LAYOUT: HallLayoutConfig = {
   plantPositions: [],
   plantScales: [],
   aisleStandeeTransforms: {},
+  mainExpoSpawn: [BOOTH_ROW_X_WEST, 1.7, (BOOTH_ROW_Z[0] + BOOTH_ROW_Z[1]) / 2],
+  mainExpoSpawnYaw: Math.atan2(-BOOTH_ROW_X_WEST, (BOOTH_ROW_Z[0] + BOOTH_ROW_Z[1]) / 2),
 };
 
 export function mergeHallLayout(overrides?: Partial<HallLayoutConfig>): HallLayoutConfig {
@@ -323,6 +433,8 @@ export function mergeHallLayout(overrides?: Partial<HallLayoutConfig>): HallLayo
       ...DEFAULT_HALL_LAYOUT.aisleStandeeTransforms,
       ...overrides.aisleStandeeTransforms,
     },
+    mainExpoSpawn: overrides.mainExpoSpawn ?? DEFAULT_HALL_LAYOUT.mainExpoSpawn,
+    mainExpoSpawnYaw: overrides.mainExpoSpawnYaw ?? DEFAULT_HALL_LAYOUT.mainExpoSpawnYaw,
   };
 }
 
@@ -626,11 +738,70 @@ const DEFAULT_LIGHTING: BoothLighting = {
   ambientIntensity: 0.35,
 };
 
+/** Quick-apply booth color themes (exhibitor dashboard + CMS). */
+export type BoothColorPreset = {
+  id: string;
+  label: string;
+  color: string;
+  accent: string;
+  counterColor: string;
+  backWallColor?: string;
+  tvWallColor?: string;
+  headerFasciaColor?: string;
+  counterTopColor?: string;
+};
+
+export const BOOTH_COLOR_PRESETS: BoothColorPreset[] = [
+  {
+    id: 'luxe-gold',
+    label: 'Luxe Gold',
+    color: '#fcfaf5',
+    accent: '#d4af37',
+    counterColor: '#ffffff',
+  },
+  {
+    id: 'eco-green',
+    label: 'Eco Green',
+    color: '#ffffff',
+    accent: '#164e2f',
+    counterColor: '#ffffff',
+    backWallColor: '#e4e8e5',
+    tvWallColor: '#e8ebe8',
+    headerFasciaColor: '#fcfcfc',
+    counterTopColor: '#164e2f',
+  },
+  {
+    id: 'crimson',
+    label: 'Crimson Hall',
+    color: '#fcf9f2',
+    accent: '#7a1228',
+    counterColor: '#ffffff',
+  },
+  {
+    id: 'slate',
+    label: 'Slate Premium',
+    color: '#f0f2f5',
+    accent: '#334155',
+    counterColor: '#e8eaed',
+  },
+  {
+    id: 'ocean',
+    label: 'Ocean Blue',
+    color: '#f8fafc',
+    accent: '#1e5a8a',
+    counterColor: '#ffffff',
+  },
+];
+
 /** Luxe Gardens (builder-8) — white + forest green eco palette. */
 export const BUILDER_8_GREEN_THEME = {
   color: '#ffffff',
   accent: '#164e2f',
   counterColor: '#ffffff',
+  backWallColor: '#e4e8e5',
+  tvWallColor: '#e8ebe8',
+  headerFasciaColor: '#fcfcfc',
+  counterTopColor: '#164e2f',
   lighting: {
     spotlightIntensity: 55,
     spotlightColor: '#fff8ef',
@@ -746,6 +917,10 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
       ),
       accent: BUILDER_8_GREEN_THEME.accent,
       counterColor: BUILDER_8_GREEN_THEME.counterColor,
+      backWallColor: BUILDER_8_GREEN_THEME.backWallColor,
+      tvWallColor: BUILDER_8_GREEN_THEME.tvWallColor,
+      headerFasciaColor: BUILDER_8_GREEN_THEME.headerFasciaColor,
+      counterTopColor: BUILDER_8_GREEN_THEME.counterTopColor,
       lighting: { ...BUILDER_8_GREEN_THEME.lighting },
       company: {
         ...DEFAULT_COMPANY,
@@ -766,7 +941,10 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
   ];
 }
 
-export type BoothLayoutPatch = Partial<Omit<BoothLayoutConfig, 'id'>>;
+/** `null` on a field removes it from saved overrides (revert to booth default). */
+export type BoothLayoutPatch = Partial<{
+  [K in keyof Omit<BoothLayoutConfig, 'id'>]: Omit<BoothLayoutConfig, 'id'>[K] | null;
+}>;
 
 /** Old CMS / localStorage still had “How to book a visit”; map to Ask AI so the expo updates without manual reset. */
 function migrateLegacyHostessQuickReplies(replies: HostessQuickReply[] | undefined): HostessQuickReply[] {
@@ -792,12 +970,51 @@ function migrateLegacyHostessQuickReplies(replies: HostessQuickReply[] | undefin
   });
 }
 
+/** Old configs stored aisle posters on sideWall* — move to exteriorWall* once so inside/outside stay separate. */
+export function migrateLegacyWallPlacementFields<
+  T extends Pick<
+    BoothLayoutConfig,
+    | 'sideWallLeftImageUrl'
+    | 'sideWallRightImageUrl'
+    | 'exteriorWallLeftImageUrl'
+    | 'exteriorWallRightImageUrl'
+    | 'wallPlacementV2'
+  >,
+>(config: T): T {
+  if (config.wallPlacementV2) return config;
+
+  const hasExterior = Boolean(
+    config.exteriorWallLeftImageUrl?.trim() || config.exteriorWallRightImageUrl?.trim(),
+  );
+  if (hasExterior) {
+    return { ...config, wallPlacementV2: true };
+  }
+
+  const sideL = config.sideWallLeftImageUrl?.trim();
+  const sideR = config.sideWallRightImageUrl?.trim();
+  if (!sideL && !sideR) return config;
+
+  return {
+    ...config,
+    exteriorWallLeftImageUrl: sideL || config.exteriorWallLeftImageUrl,
+    exteriorWallRightImageUrl: sideR || config.exteriorWallRightImageUrl,
+    sideWallLeftImageUrl: undefined,
+    sideWallRightImageUrl: undefined,
+    wallPlacementV2: true,
+  };
+}
+
 export function applyBoothOverrides(
   defaults: BoothLayoutConfig[],
   overrides: Record<string, BoothLayoutPatch>
 ): BoothLayoutConfig[] {
   return defaults.map((b) => {
-    const o = overrides[b.id];
+    const raw = overrides[b.id];
+    const o = raw
+      ? (Object.fromEntries(
+          Object.entries(raw).filter(([, v]) => v !== null),
+        ) as BoothLayoutPatch)
+      : undefined;
     const merged = o
       ? {
           ...b,
@@ -816,14 +1033,17 @@ export function applyBoothOverrides(
           customFaqQuestions:
             o.customFaqQuestions !== undefined ? o.customFaqQuestions : b.customFaqQuestions,
           company: o.company ? { ...b.company, ...o.company } : b.company,
+          headerBranding: o.headerBranding
+            ? { ...(b.headerBranding ?? {}), ...o.headerBranding }
+            : b.headerBranding,
           lighting: o.lighting ? { ...b.lighting, ...o.lighting } : b.lighting,
           displayLayout: mergeBoothDisplayLayout(b.displayLayout, o.displayLayout),
         }
       : b;
-    return {
+    return migrateLegacyWallPlacementFields({
       ...merged,
       position: clampBoothInsideHall(merged.position),
-    };
+    });
   });
 }
 
