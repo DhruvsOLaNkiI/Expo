@@ -16,7 +16,8 @@
     "lint": "tsc --noEmit",
     "pageindex:install": "cd pageindex && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt",
     "pageindex:run-example": "python3 scripts/pageindex_run.py --pdf_path \"examples/documents/EOE Floor Plan Deck.pdf\"",
-    "pageindex:run": "python3 scripts/pageindex_run.py"
+    "pageindex:run": "python3 scripts/pageindex_run.py",
+    "copy-booth-layout": "tsx scripts/copy-booth-layout-to-hall.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",

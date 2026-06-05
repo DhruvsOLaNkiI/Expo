@@ -4,10 +4,14 @@ import {
   buildExpoTeleportDestinations,
   REGISTRATION_LOBBY_DESTINATION,
 } from '@/features/shared/data/expoTeleportDestinations';
+import { getExpoHallMeta } from '@/features/shared/data/expoHalls';
 
 export function FastTravelHud() {
   const expoPhase = useStore((s) => s.expoPhase);
   const boothOverrides = useStore((s) => s.boothOverrides);
+  const activeHallId = useStore((s) => s.activeHallId);
+  const expoHalls = useStore((s) => s.expoHalls);
+  const setActiveHall = useStore((s) => s.setActiveHall);
   const teleportPlayer = useStore((s) => s.teleportPlayer);
   const enterMainExpo = useStore((s) => s.enterMainExpo);
   const skipToMainExpo = useStore((s) => s.skipToMainExpo);
@@ -67,11 +71,28 @@ export function FastTravelHud() {
       {open && (
         <div className="w-full rounded-xl border border-[#d4af37]/25 bg-[#1a1a22]/94 p-3 shadow-2xl backdrop-blur-md">
           <p className="text-[9px] uppercase tracking-[0.28em] text-[#8a7a5a] mb-2">
-            {inExpo ? 'Main expo' : 'Arrival lobby'}
+            {inExpo ? getExpoHallMeta(activeHallId)?.label ?? 'Expo hall' : 'Arrival lobby'}
           </p>
 
           {inExpo ? (
             <>
+              {expoHalls.length > 1 && (
+                <>
+                  <p className="text-[9px] uppercase tracking-wider text-white/40 mb-1.5">Expo halls</p>
+                  {expoHalls.map((h) => (
+                    <TravelBtn
+                      key={h.hallId}
+                      label={h.hallId === activeHallId ? `● ${h.label}` : h.label}
+                      highlight={h.hallId === activeHallId ? 'gold' : 'default'}
+                      onClick={(e) => {
+                        stopUiClick(e);
+                        void setActiveHall(h.hallId);
+                      }}
+                    />
+                  ))}
+                  <div className="my-2 border-t border-white/10" />
+                </>
+              )}
               <TravelBtn
                 label={REGISTRATION_LOBBY_DESTINATION.label}
                 highlight="gold"

@@ -78,6 +78,8 @@ export type HostessQuickReply = {
   response: string;
   /** Opens the Ask AI chat panel instead of showing / speaking a canned reply. */
   action?: 'askAi' | 'teleport' | 'helpDesk';
+  /** When {@link action} is `helpDesk`, open Smart Concierge on this pane. */
+  helpDeskPane?: 'welcome' | 'halls';
   /** When {@link action} is `teleport`, id from {@link buildExpoTeleportDestinations} or registration lobby. */
   teleportId?: string;
 };

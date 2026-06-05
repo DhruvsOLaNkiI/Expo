@@ -41,7 +41,8 @@ export function buildExpoTeleportDestinations(
   const fixed: TeleportDestination[] = [
     { id: 'main-entrance', label: 'Main entrance', position: [...REG_MAIN_EXPO_SPAWN] },
     { id: 'reception', label: 'Reception & LED', position: [0, EYE_Y, entranceZ - 4] },
-    { id: 'center', label: 'Center plaza', position: [0, EYE_Y, 0] },
+    { id: 'center', label: 'Help Desk · center', position: [0, EYE_Y, 0] },
+    { id: 'help-desk', label: 'Help Desk', position: [0, EYE_Y, 0] },
     { id: 'west-aisle', label: '← Left · West booths', position: [EXPO_AISLE_WEST_X, EYE_Y, 0] },
     { id: 'east-aisle', label: 'Right · East booths →', position: [EXPO_AISLE_EAST_X, EYE_Y, 0] },
     { id: 'both-rows', label: 'View both rows', position: [0, EYE_Y, -2] },
@@ -89,6 +90,13 @@ export function buildHelpDeskHostessReplies(): HostessQuickReply[] {
       label: 'Ask AI Assistant',
       response: '',
       action: 'askAi',
+    },
+    {
+      id: 'help-desk-halls',
+      label: 'Which Hall To Go',
+      response: '',
+      action: 'helpDesk',
+      helpDeskPane: 'halls',
     },
   ];
 }

@@ -19,6 +19,7 @@ import {
 } from '@/features/shared/data/helpDeskCatalog';
 import { computeCatalogStats, type ExpoLiveStats } from '@/features/shared/data/expoStats';
 import { buildExpoTeleportDestinations } from '@/features/shared/data/expoTeleportDestinations';
+import { getExpoHallMeta } from '@/features/shared/data/expoHalls';
 import {
   loadHelpDeskMemory,
   pushRecentDeveloper,
@@ -26,7 +27,7 @@ import {
   toggleSavedDeveloper,
 } from '@/store/persist/helpDesk';
 
-type Step = 'welcome' | 'developer_mode' | 'browse' | 'projects' | 'floor_map';
+type Step = 'welcome' | 'hall_picker' | 'developer_mode' | 'browse' | 'projects' | 'floor_map';
 
 const GOLD = '#d4af37';
 const GOLD_LIGHT = '#f5e6c8';
@@ -68,12 +69,16 @@ function GradientThumb({ gradient, label }: { gradient: string; label: string })
 
 export function HelpDeskAiPanel() {
   const helpDeskOpen = useStore((s) => s.helpDeskOpen);
+  const helpDeskOpenPane = useStore((s) => s.helpDeskOpenPane);
   const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
   const openAiChat = useStore((s) => s.openAiChat);
   const boothOverrides = useStore((s) => s.boothOverrides);
   const teleportPlayer = useStore((s) => s.teleportPlayer);
   const playerPosition = useStore((s) => s.playerPosition);
   const visitorProfile = useStore((s) => s.visitorProfile);
+  const activeHallId = useStore((s) => s.activeHallId);
+  const expoHalls = useStore((s) => s.expoHalls);
+  const setActiveHall = useStore((s) => s.setActiveHall);
 
   const [step, setStep] = useState<Step>('welcome');
   const [propertyType, setPropertyType] = useState<PropertyTypeChoice | null>(null);
@@ -121,6 +126,17 @@ export function HelpDeskAiPanel() {
     setMeetingNote(null);
   }, []);
 
+  const goToHall = useCallback(
+    (hallId: string) => {
+      const hall = expoHalls.find((h) => h.hallId === hallId) ?? getExpoHallMeta(hallId);
+      const label = hall?.label ?? hallId;
+      void setActiveHall(hallId);
+      speak(`Taking you to ${label}.`);
+      setHelpDeskOpen(false);
+    },
+    [expoHalls, setActiveHall, setHelpDeskOpen],
+  );
+
   useEffect(() => {
     if (!helpDeskOpen) {
       resetFlow();
@@ -129,11 +145,16 @@ export function HelpDeskAiPanel() {
     const mem = loadHelpDeskMemory();
     setSavedIds(mem.savedBoothIds);
     void fetchExpoLiveStats().then(setLiveStats);
+    if (helpDeskOpenPane === 'halls') {
+      setStep('hall_picker');
+      speak('Which hall would you like to visit?');
+      return;
+    }
     const greeting = visitorProfile?.displayName
       ? `Welcome ${visitorProfile.displayName} to the Virtual Property Expo. What type of property are you looking for?`
       : 'Welcome to the Virtual Property Expo. What type of property are you looking for?';
     speak(greeting);
-  }, [helpDeskOpen, resetFlow, visitorProfile?.displayName]);
+  }, [helpDeskOpen, helpDeskOpenPane, resetFlow, visitorProfile?.displayName]);
 
   if (!helpDeskOpen) return null;
 
@@ -233,10 +254,14 @@ export function HelpDeskAiPanel() {
             {step !== 'welcome' && step !== 'floor_map' && (
               <button
                 type="button"
-                onClick={() => (step === 'projects' ? setStep('browse') : resetFlow())}
+                onClick={() => {
+                  if (step === 'projects') setStep('browse');
+                  else if (step === 'hall_picker') setStep('welcome');
+                  else resetFlow();
+                }}
                 className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/15 text-white/70 hover:bg-white/5"
               >
-                {step === 'projects' ? 'Back' : 'Restart'}
+                {step === 'projects' ? 'Back' : step === 'hall_picker' ? 'Back' : 'Restart'}
               </button>
             )}
             <button
@@ -263,6 +288,18 @@ export function HelpDeskAiPanel() {
                   setHelpDeskOpen(false);
                   openAiChat('expo-concierge');
                 }}
+                halls={expoHalls}
+                activeHallId={activeHallId}
+                onGoToHall={goToHall}
+                onBrowseHalls={() => setStep('hall_picker')}
+              />
+            )}
+
+            {step === 'hall_picker' && (
+              <WhichHallToGoStep
+                halls={expoHalls}
+                activeHallId={activeHallId}
+                onGoToHall={goToHall}
               />
             )}
 
@@ -362,6 +399,7 @@ export function HelpDeskAiPanel() {
           className="shrink-0 flex flex-wrap gap-2 px-5 py-3 border-t"
           style={{ borderColor: 'rgba(212,175,55,0.15)' }}
         >
+          <FooterBtn label="Which Hall" onClick={() => setStep('hall_picker')} />
           <FooterBtn label="Floor Map" onClick={() => setStep('floor_map')} />
           <FooterBtn
             label="Voice Guide"
@@ -428,12 +466,20 @@ function WelcomeStep({
   stats,
   mongoConnected,
   onAskAi,
+  halls,
+  activeHallId,
+  onGoToHall,
+  onBrowseHalls,
 }: {
   onPick: (t: PropertyTypeChoice) => void;
   visitorName?: string;
   stats: { developerCount: number; totalProjects: number; visitorsRegisteredToday?: number | null };
   mongoConnected: boolean;
   onAskAi: () => void;
+  halls: { hallId: string; label: string; enabled: boolean }[];
+  activeHallId: string;
+  onGoToHall: (hallId: string) => void;
+  onBrowseHalls: () => void;
 }) {
   return (
     <div className="animate-fade-in">
@@ -464,6 +510,14 @@ function WelcomeStep({
           Ask AI about developers & registrations →
         </button>
       </div>
+      <WhichHallToGoSection
+        compact
+        halls={halls}
+        activeHallId={activeHallId}
+        onGoToHall={onGoToHall}
+        onBrowseAll={onBrowseHalls}
+      />
+      <p className="text-[10px] uppercase tracking-[0.2em] text-[#8a7a5a] mt-6 mb-3">Property type</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <PropertyCard
           title="Residential Properties"
@@ -477,6 +531,96 @@ function WelcomeStep({
           gradient="linear-gradient(135deg,#0f172a 0%,#312e81 50%,#818cf8 100%)"
           onClick={() => onPick('commercial')}
         />
+      </div>
+    </div>
+  );
+}
+
+function WhichHallToGoStep({
+  halls,
+  activeHallId,
+  onGoToHall,
+}: {
+  halls: { hallId: string; label: string; enabled: boolean }[];
+  activeHallId: string;
+  onGoToHall: (hallId: string) => void;
+}) {
+  return (
+    <div>
+      <WhichHallToGoSection
+        halls={halls}
+        activeHallId={activeHallId}
+        onGoToHall={onGoToHall}
+      />
+      <p className="text-[11px] text-[#8a7a5a] mt-5 leading-relaxed">
+        Each hall uses the same floor plan with its own developer booths. Switch halls anytime from Fast Travel or
+        return here at the Help Desk.
+      </p>
+    </div>
+  );
+}
+
+function WhichHallToGoSection({
+  halls,
+  activeHallId,
+  onGoToHall,
+  compact,
+  onBrowseAll,
+}: {
+  halls: { hallId: string; label: string; enabled: boolean }[];
+  activeHallId: string;
+  onGoToHall: (hallId: string) => void;
+  compact?: boolean;
+  onBrowseAll?: () => void;
+}) {
+  const enabledHalls = halls.filter((h) => h.enabled);
+  const activeLabel = getExpoHallMeta(activeHallId)?.label ?? activeHallId;
+
+  return (
+    <div
+      className={`rounded-xl border px-4 py-3 ${compact ? 'mb-5' : ''}`}
+      style={{ borderColor: 'rgba(212,175,55,0.28)', background: 'rgba(0,0,0,0.22)' }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <p className="font-semibold text-[#d4af37] text-[10px] uppercase tracking-wider">Which Hall To Go</p>
+        {compact && onBrowseAll && enabledHalls.length > 3 ? (
+          <button
+            type="button"
+            onClick={onBrowseAll}
+            className="text-[9px] uppercase tracking-wider text-[#c9b896] hover:text-[#d4af37]"
+          >
+            View all →
+          </button>
+        ) : null}
+      </div>
+      <p className="text-[11px] text-[#a89878] mb-3 leading-relaxed">
+        {compact
+          ? `You are in ${activeLabel}. Pick another hall to explore more developers.`
+          : 'Choose an expo hall — you will be taken to the main entrance of that hall.'}
+      </p>
+      <div className={`grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+        {(compact ? enabledHalls.slice(0, 6) : enabledHalls).map((h) => {
+          const isActive = h.hallId === activeHallId;
+          return (
+            <button
+              key={h.hallId}
+              type="button"
+              onClick={() => onGoToHall(h.hallId)}
+              className="text-left rounded-lg border px-3 py-2.5 transition-all hover:border-[#d4af37]/55 hover:bg-[#d4af37]/8"
+              style={{
+                borderColor: isActive ? 'rgba(212,175,55,0.65)' : 'rgba(212,175,55,0.22)',
+                background: isActive ? 'rgba(212,175,55,0.14)' : 'rgba(255,255,255,0.03)',
+              }}
+            >
+              <p className="text-sm font-semibold text-[#f5e6c8]">
+                {isActive ? `● ${h.label}` : h.label}
+              </p>
+              <p className="text-[10px] text-[#8a7a5a] mt-0.5">
+                {isActive ? 'Current hall · tap to respawn here' : 'Go to hall entrance'}
+              </p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

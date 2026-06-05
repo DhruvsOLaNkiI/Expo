@@ -14,8 +14,8 @@ function resolvePlatformZone(state: ReturnType<typeof useStore.getState>): strin
   if (state.aiChatOpen) return 'ai_chat';
   if (state.ctaResourcePopup) return 'viewing_document';
   const boothId = resolveCurrentBoothId(state);
-  if (boothId) return `booth:${boothId}`;
-  return 'expo_hall';
+  if (boothId) return `booth:${state.activeHallId}:${boothId}`;
+  return `expo_hall:${state.activeHallId}`;
 }
 
 /** Tracks where visitors stay, booth visits, document opens, and PDF read duration. */

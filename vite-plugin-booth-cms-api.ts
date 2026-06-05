@@ -1,11 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
+import { DEFAULT_EXPO_HALL_ID, normalizeHallId } from './src/features/shared/data/expoHalls';
 import {
   getFullExpoConfig,
-  patchBoothOverride,
-  deleteBoothOverride as deleteBoothOverrideMongo,
-  saveAllBoothOverrides,
-  patchSceneSettings,
+  getCmsExpoOverview,
+  listExpoHalls,
+  patchBoothOverrideForHall,
+  copyBoothLayoutToHall,
+  deleteBoothOverrideForHall,
+  saveAllBoothOverridesForHall,
+  patchSceneSettingsForHall,
   resetSceneSettings as resetSceneSettingsMongo,
 } from './src/server/mongodb';
 
@@ -47,14 +51,69 @@ function attachBoothCmsApi(server: ApiConnectServer) {
   server.middlewares.use((req, res, next) => {
     const url = req.url?.split('?')[0] ?? '';
 
-    // ── GET /api/expo/config — full config for frontend hydration ──
+    // ── GET /api/expo/halls — hall list for CMS + Fast Travel ──
+    if (url === '/api/expo/halls' && req.method === 'GET') {
+      void (async () => {
+        try {
+          const halls = await listExpoHalls();
+          sendJson(res, 200, { ok: true, halls });
+        } catch (e) {
+          sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Failed to load halls' });
+        }
+      })();
+      return;
+    }
+
+    // ── GET /api/expo/cms-overview — all halls for CMS grid ──
+    if (url === '/api/expo/cms-overview' && req.method === 'GET') {
+      void (async () => {
+        try {
+          const overview = await getCmsExpoOverview();
+          sendJson(res, 200, { ok: true, ...overview });
+        } catch (e) {
+          sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Failed to load overview' });
+        }
+      })();
+      return;
+    }
+
+    // ── GET /api/expo/config?hallId= — full config for one hall ──
     if (url === '/api/expo/config' && req.method === 'GET') {
       void (async () => {
         try {
-          const config = await getFullExpoConfig();
+          const q = new URL(req.url ?? '', 'http://local').searchParams;
+          const hallId = normalizeHallId(q.get('hallId') ?? DEFAULT_EXPO_HALL_ID);
+          const config = await getFullExpoConfig(hallId);
           sendJson(res, 200, { ok: true, ...config });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Failed to load config' });
+        }
+      })();
+      return;
+    }
+
+    // ── POST /api/booth-cms/copy-booth-layout — copy layout fields one slot hall → hall ──
+    if (url === '/api/booth-cms/copy-booth-layout' && req.method === 'POST') {
+      void (async () => {
+        try {
+          const raw = await readBody(req);
+          const body = JSON.parse(raw) as {
+            sourceHallId?: string;
+            targetHallId?: string;
+            slotId?: string;
+            boothId?: string;
+          };
+          const sourceHallId = normalizeHallId(body.sourceHallId ?? DEFAULT_EXPO_HALL_ID);
+          const targetHallId = normalizeHallId(body.targetHallId ?? '');
+          const slotId = (body.slotId ?? body.boothId)?.trim();
+          if (!targetHallId || !slotId) {
+            sendJson(res, 400, { ok: false, error: 'Expected { sourceHallId?, targetHallId, slotId }' });
+            return;
+          }
+          const result = await copyBoothLayoutToHall(sourceHallId, targetHallId, slotId);
+          sendJson(res, result.ok ? 200 : 500, result);
+        } catch (e) {
+          sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Copy failed' });
         }
       })();
       return;
@@ -66,24 +125,27 @@ function attachBoothCmsApi(server: ApiConnectServer) {
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
+            hallId?: string;
             boothId?: string;
+            slotId?: string;
             patch?: Record<string, unknown>;
           };
-          const boothId = body.boothId?.trim();
+          const hallId = normalizeHallId(body.hallId ?? DEFAULT_EXPO_HALL_ID);
+          const slotId = (body.slotId ?? body.boothId)?.trim();
           const patch = body.patch;
-          if (!boothId || !patch || typeof patch !== 'object') {
-            sendJson(res, 400, { ok: false, error: 'Expected { boothId, patch }' });
+          if (!slotId || !patch || typeof patch !== 'object') {
+            sendJson(res, 400, { ok: false, error: 'Expected { hallId?, slotId|boothId, patch }' });
             return;
           }
 
-          const ok = await patchBoothOverride(boothId, patch);
+          const ok = await patchBoothOverrideForHall(hallId, slotId, patch);
           if (!ok) {
             sendJson(res, 500, { ok: false, error: 'MongoDB write failed' });
             return;
           }
 
-          console.log(`✓ booth-cms patch (MongoDB): ${boothId}`, Object.keys(patch).join(', '));
-          sendJson(res, 200, { ok: true, boothId });
+          console.log(`✓ booth-cms patch (MongoDB): ${hallId}/${slotId}`, Object.keys(patch).join(', '));
+          sendJson(res, 200, { ok: true, hallId, slotId, boothId: slotId });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Patch failed' });
         }
@@ -97,19 +159,21 @@ function attachBoothCmsApi(server: ApiConnectServer) {
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
+            hallId?: string;
             booths?: Record<string, Record<string, unknown>>;
             scene?: Record<string, unknown>;
             r2PublicBase?: string;
           };
           if (!body?.booths || typeof body.booths !== 'object') {
-            sendJson(res, 400, { ok: false, error: 'Expected { booths, scene }' });
+            sendJson(res, 400, { ok: false, error: 'Expected { booths, scene, hallId? }' });
             return;
           }
 
-          const boothOk = await saveAllBoothOverrides(body.booths);
+          const hallId = normalizeHallId(body.hallId ?? DEFAULT_EXPO_HALL_ID);
+          const boothOk = await saveAllBoothOverridesForHall(hallId, body.booths);
           let sceneOk = true;
           if (body.scene && typeof body.scene === 'object') {
-            sceneOk = await patchSceneSettings(body.scene, body.r2PublicBase);
+            sceneOk = await patchSceneSettingsForHall(hallId, body.scene, body.r2PublicBase);
           }
           sendJson(res, 200, { ok: boothOk && sceneOk });
         } catch (e) {
@@ -121,12 +185,15 @@ function attachBoothCmsApi(server: ApiConnectServer) {
 
     // ── DELETE /api/booth-cms/:boothId — delete a single booth override ──
     if (url.startsWith('/api/booth-cms/') && req.method === 'DELETE') {
-      const boothId = url.replace('/api/booth-cms/', '').trim();
-      if (!boothId) { sendJson(res, 400, { ok: false, error: 'Missing boothId' }); return; }
+      const rest = url.replace('/api/booth-cms/', '').trim();
+      const parts = rest.split('/').filter(Boolean);
+      const hallId = normalizeHallId(parts.length >= 2 ? parts[0] : DEFAULT_EXPO_HALL_ID);
+      const slotId = (parts.length >= 2 ? parts[1] : parts[0])?.trim();
+      if (!slotId) { sendJson(res, 400, { ok: false, error: 'Missing slotId' }); return; }
       void (async () => {
         try {
-          await deleteBoothOverrideMongo(boothId);
-          sendJson(res, 200, { ok: true, boothId });
+          await deleteBoothOverrideForHall(hallId, slotId);
+          sendJson(res, 200, { ok: true, hallId, slotId });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Delete failed' });
         }
@@ -140,14 +207,16 @@ function attachBoothCmsApi(server: ApiConnectServer) {
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
+            hallId?: string;
             patch?: Record<string, unknown>;
             r2PublicBase?: string;
           };
           if (!body?.patch || typeof body.patch !== 'object') {
-            sendJson(res, 400, { ok: false, error: 'Expected { patch }' });
+            sendJson(res, 400, { ok: false, error: 'Expected { patch, hallId? }' });
             return;
           }
-          const ok = await patchSceneSettings(body.patch, body.r2PublicBase);
+          const hallId = normalizeHallId(body.hallId ?? DEFAULT_EXPO_HALL_ID);
+          const ok = await patchSceneSettingsForHall(hallId, body.patch, body.r2PublicBase);
           sendJson(res, ok ? 200 : 500, { ok });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Scene patch failed' });

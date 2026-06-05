@@ -10,6 +10,13 @@ import type {
   UnitLayoutItem,
 } from '@/features/shared/data/boothLayouts';
 import { mergeSceneConfig, mergeSceneOverridesInput } from '@/features/shared/data/boothLayouts';
+import {
+  extractBoothLayoutPatchesFromOverrides,
+  extractHallSceneLayoutPatch,
+  extractSingleBoothLayoutPatch,
+  mergeLayoutIntoBoothOverrides,
+  type BoothLayoutOnlyPatch,
+} from '@/features/shared/data/expoHallLayout';
 import { getBootstrapSceneForDevice } from '@/utils/devicePerformance';
 import { setR2PublicBase, getR2PublicBase } from '@/config/r2Public';
 import { commitHallLayoutTransform } from '@/store/persist/hallLayout';
@@ -20,6 +27,14 @@ import {
 } from '@/store/persist/boothCms';
 import { mergeHallLayout } from '@/features/shared/data/boothLayouts';
 import { REG_SPAWN, resolveMainExpoSpawn } from '@/features/shared/data/registrationHall';
+import {
+  DEFAULT_EXPO_HALL_ID,
+  DEFAULT_EXPO_HALLS,
+  dedupeExpoHalls,
+  getExpoHallMeta,
+  normalizeHallId,
+  type ExpoHallMeta,
+} from '@/features/shared/data/expoHalls';
 import {
   CAMERA_MODE_ORDER,
   type CameraMode,
@@ -68,6 +83,54 @@ function readIntroDismissed(): boolean {
   } catch {
     return false;
   }
+}
+
+function mergeHallBoothPatches(
+  apiBooths: Record<string, BoothLayoutPatch>,
+  localBooths: Record<string, BoothLayoutPatch>,
+): Record<string, BoothLayoutPatch> {
+  const booths: Record<string, BoothLayoutPatch> = { ...apiBooths };
+  for (const id of REMOVED_BOOTH_IDS) delete booths[id];
+  for (const id of new Set([...Object.keys(booths), ...Object.keys(localBooths)])) {
+    booths[id] = mergeBoothLayoutPatch(booths[id], localBooths[id]);
+  }
+  return booths;
+}
+
+/** Latest saved + in-memory overrides for a hall (used before copying layout). */
+async function resolveHallOverridesForLayoutCopy(
+  hallId: string,
+  get: () => AppState,
+): Promise<Record<string, BoothLayoutPatch>> {
+  const hid = normalizeHallId(hallId);
+  const fromLocal = await readPersistedBoothOverrides(hid);
+  const fromCache = get().overridesByHall[hid] ?? {};
+  let merged = mergeHallBoothPatches(fromCache, fromLocal);
+  if (normalizeHallId(get().activeHallId) === hid) {
+    merged = mergeHallBoothPatches(merged, get().boothOverrides);
+  }
+  return merged;
+}
+
+function mergeHallSceneConfig(
+  sceneFromApi: SceneOverridesInput,
+  sceneFromLs: SceneOverridesInput,
+): SceneOverridesInput {
+  let sceneMerged = mergeSceneOverridesInput(
+    getBootstrapSceneForDevice(),
+    sceneFromApi,
+    sceneFromLs,
+  );
+  const boolSceneKeys = [
+    'showVideos', 'showBallroom', 'showStandardBooths',
+    'showHallAisleStandees', 'showBoothHostess',
+  ] as const;
+  for (const k of boolSceneKeys) {
+    if (sceneFromApi[k] === true && sceneMerged[k] !== true) {
+      sceneMerged = { ...sceneMerged, [k]: true };
+    }
+  }
+  return sceneMerged;
 }
 
 function readRegistrationPass(): boolean {
@@ -148,7 +211,8 @@ interface AppState {
   openAiChat: (context?: 'expo-concierge', boothId?: string | null) => void;
   /** Smart Help Desk concierge panel (center lobby). */
   helpDeskOpen: boolean;
-  setHelpDeskOpen: (open: boolean) => void;
+  helpDeskOpenPane: 'welcome' | 'halls';
+  setHelpDeskOpen: (open: boolean, options?: { pane?: 'welcome' | 'halls' }) => void;
   /** 0–1 fade for Vertex Elite screen HUD (driven by distance to booth entrance). */
   vertexEliteHudAlpha: number;
   setVertexEliteHudAlpha: (alpha: number) => void;
@@ -172,11 +236,35 @@ interface AppState {
   cmsPage: 'expo' | 'cms' | 'pageindex' | 'analytics';
   setCmsPage: (page: 'expo' | 'cms' | 'pageindex' | 'analytics') => void;
 
+  activeHallId: string;
+  expoHalls: ExpoHallMeta[];
+  /** CMS cache: booth overrides per hall (slotId → patch). */
+  overridesByHall: Record<string, Record<string, BoothLayoutPatch>>;
+  sceneOverridesByHall: Record<string, SceneOverridesInput>;
   boothOverrides: Record<string, BoothLayoutPatch>;
   sceneOverrides: SceneOverridesInput;
   _boothCmsHydrated: boolean;
   initBoothCms: () => Promise<void>;
-  patchBoothOverride: (id: string, patch: BoothLayoutPatch) => Promise<boolean>;
+  loadCmsExpoOverview: () => Promise<void>;
+  /** Copy booth positions/rotation/scale (+ hall entry spawn) from source hall to other halls. */
+  applyExpoHallLayoutFrom: (
+    sourceHallId: string,
+    targetHallIds?: string[],
+  ) => Promise<{ ok: boolean; applied: string[] }>;
+  /** Copy one booth slot layout from a source hall to target hall(s). */
+  applyBoothSlotLayoutFromHall: (
+    slotId: string,
+    sourceHallId: string,
+    targetHallIds?: string[],
+  ) => Promise<{ ok: boolean; applied: string[] }>;
+  /** Copy multiple booth slots from a source hall to target hall(s). */
+  applyBoothSlotsLayoutFromHall: (
+    slotIds: string[],
+    sourceHallId: string,
+    targetHallIds?: string[],
+  ) => Promise<{ ok: boolean; applied: string[] }>;
+  setActiveHall: (hallId: string, options?: { teleport?: boolean }) => Promise<void>;
+  patchBoothOverride: (id: string, patch: BoothLayoutPatch, hallId?: string) => Promise<boolean>;
   resetBoothOverride: (id: string) => Promise<void>;
   resetAllBoothOverrides: () => Promise<void>;
   deleteBoothOverride: (id: string) => Promise<void>;
@@ -273,11 +361,15 @@ export const useStore = create<AppState>((set, get) => ({
       aiChatContext: context === 'expo-concierge' ? 'expo-concierge' : null,
     }),
   helpDeskOpen: false,
-  setHelpDeskOpen: (open) => {
+  helpDeskOpenPane: 'welcome',
+  setHelpDeskOpen: (open, options) => {
     if (open && typeof document !== 'undefined' && document.pointerLockElement) {
       document.exitPointerLock();
     }
-    set({ helpDeskOpen: open });
+    set({
+      helpDeskOpen: open,
+      helpDeskOpenPane: open ? (options?.pane ?? 'welcome') : 'welcome',
+    });
   },
   vertexEliteHudAlpha: 0,
   setVertexEliteHudAlpha: (alpha) => {
@@ -342,6 +434,10 @@ export const useStore = create<AppState>((set, get) => ({
   cmsPage: 'expo',
   setCmsPage: (page) => set({ cmsPage: page }),
 
+  activeHallId: DEFAULT_EXPO_HALL_ID,
+  expoHalls: [...DEFAULT_EXPO_HALLS],
+  overridesByHall: {},
+  sceneOverridesByHall: {},
   boothOverrides: {},
   sceneOverrides: {},
   _boothCmsHydrated: false,
@@ -502,35 +598,35 @@ export const useStore = create<AppState>((set, get) => ({
   initBoothCms: async () => {
     if (get()._boothCmsHydrated) return;
 
-    // Local-first: apply saved overrides (colors, logos, images) from this browser
-    // IMMEDIATELY so the booth renders the user's theme without waiting on the network.
-    // The MongoDB API can be slow/unreachable; we must not block the visible scene on it.
-    const localBooths = await readPersistedBoothOverrides();
+    const hallId = normalizeHallId(get().activeHallId);
+    const localBooths = await readPersistedBoothOverrides(hallId);
     if (Object.keys(localBooths).length > 0) {
-      const current = get().boothOverrides;
-      const seeded: Record<string, BoothLayoutPatch> = { ...current };
-      for (const id of new Set([...Object.keys(current), ...Object.keys(localBooths)])) {
-        seeded[id] = mergeBoothLayoutPatch(current[id], localBooths[id]);
-      }
-      set({ boothOverrides: seeded });
+      set({ boothOverrides: mergeHallBoothPatches(get().boothOverrides, localBooths) });
     }
+
+    let halls = [...DEFAULT_EXPO_HALLS];
+    try {
+      const hres = await fetch('/api/expo/halls', { cache: 'no-store' });
+      if (hres.ok) {
+        const hj = await hres.json();
+        if (Array.isArray(hj?.halls) && hj.halls.length > 0) halls = dedupeExpoHalls(hj.halls);
+      }
+    } catch { /* */ }
 
     let booths: Record<string, BoothLayoutPatch> = {};
     let sceneFromApi: SceneOverridesInput = {};
     let r2PublicBase = '';
 
-    // Primary: fetch from MongoDB API
     try {
-      const res = await fetch('/api/expo/config', { cache: 'no-store' });
+      const res = await fetch(`/api/expo/config?hallId=${encodeURIComponent(hallId)}`, { cache: 'no-store' });
       if (res.ok) {
         const j = await res.json();
         if (j?.booths && typeof j.booths === 'object') booths = j.booths;
         if (j?.scene && typeof j.scene === 'object') sceneFromApi = j.scene;
         if (typeof j?.r2PublicBase === 'string' && j.r2PublicBase) r2PublicBase = j.r2PublicBase;
       }
-    } catch { /* API unavailable — try fallback */ }
+    } catch { /* */ }
 
-    // Fallback: read-only seed from booth-cms.json if API returned nothing
     if (Object.keys(booths).length === 0) {
       try {
         const res = await fetch('/booth-cms.json', { cache: 'no-store' });
@@ -547,14 +643,6 @@ export const useStore = create<AppState>((set, get) => ({
     if (!r2PublicBase) r2PublicBase = getR2PublicBase();
     if (r2PublicBase) setR2PublicBase(r2PublicBase);
 
-    for (const id of REMOVED_BOOTH_IDS) delete booths[id];
-
-    // Server data is the base; local overrides (latest user edits) always win per field.
-    for (const id of new Set([...Object.keys(booths), ...Object.keys(localBooths)])) {
-      booths[id] = mergeBoothLayoutPatch(booths[id], localBooths[id]);
-    }
-
-    // Device-specific scene baseline, then layer API scene on top
     const sceneFromLs: SceneOverridesInput = (() => {
       try {
         const raw = localStorage.getItem(SCENE_CMS_LS_KEY);
@@ -562,26 +650,304 @@ export const useStore = create<AppState>((set, get) => ({
       } catch { return {}; }
     })();
 
-    let sceneMerged = mergeSceneOverridesInput(
-      getBootstrapSceneForDevice(),
-      sceneFromApi,
-      sceneFromLs,
-    );
-    const boolSceneKeys = [
-      'showVideos', 'showBallroom', 'showStandardBooths',
-      'showHallAisleStandees', 'showBoothHostess',
-    ] as const;
-    for (const k of boolSceneKeys) {
-      if (sceneFromApi[k] === true && sceneMerged[k] !== true) {
-        sceneMerged = { ...sceneMerged, [k]: true };
+    const mergedBooths = mergeHallBoothPatches(booths, localBooths);
+    const sceneMerged = mergeHallSceneConfig(sceneFromApi, sceneFromLs);
+
+    set({
+      expoHalls: halls,
+      activeHallId: hallId,
+      boothOverrides: mergedBooths,
+      sceneOverrides: sceneMerged,
+      overridesByHall: { ...get().overridesByHall, [hallId]: mergedBooths },
+      sceneOverridesByHall: { ...get().sceneOverridesByHall, [hallId]: sceneMerged },
+      _boothCmsHydrated: true,
+    });
+  },
+
+  loadCmsExpoOverview: async () => {
+    const localByHall: Record<string, Record<string, BoothLayoutPatch>> = {};
+    for (const h of get().expoHalls) {
+      localByHall[h.hallId] = await readPersistedBoothOverrides(h.hallId);
+    }
+
+    let halls = get().expoHalls;
+    let r2PublicBase = '';
+    const overridesByHall: Record<string, Record<string, BoothLayoutPatch>> = { ...get().overridesByHall };
+    const sceneOverridesByHall: Record<string, SceneOverridesInput> = { ...get().sceneOverridesByHall };
+
+    try {
+      const res = await fetch('/api/expo/cms-overview', { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        if (Array.isArray(j?.halls) && j.halls.length > 0) halls = dedupeExpoHalls(j.halls);
+        if (typeof j?.r2PublicBase === 'string' && j.r2PublicBase) r2PublicBase = j.r2PublicBase;
+        const byHall = j?.byHall as Record<string, { booths?: Record<string, BoothLayoutPatch>; scene?: SceneOverridesInput }> | undefined;
+        if (byHall && typeof byHall === 'object') {
+          for (const [hid, cfg] of Object.entries(byHall)) {
+            const apiBooths = cfg?.booths ?? {};
+            overridesByHall[hid] = mergeHallBoothPatches(apiBooths, localByHall[hid] ?? {});
+            if (cfg?.scene) sceneOverridesByHall[hid] = mergeHallSceneConfig(cfg.scene, {});
+          }
+        }
+      }
+    } catch { /* */ }
+
+    if (!r2PublicBase) r2PublicBase = getR2PublicBase();
+    if (r2PublicBase) setR2PublicBase(r2PublicBase);
+
+    for (const h of halls) {
+      if (!overridesByHall[h.hallId]) {
+        overridesByHall[h.hallId] = mergeHallBoothPatches({}, localByHall[h.hallId] ?? {});
       }
     }
 
-    set({ boothOverrides: booths, sceneOverrides: sceneMerged, _boothCmsHydrated: true });
+    const activeHallId = normalizeHallId(get().activeHallId);
+    set({
+      expoHalls: halls,
+      overridesByHall,
+      sceneOverridesByHall,
+      boothOverrides: overridesByHall[activeHallId] ?? get().boothOverrides,
+      sceneOverrides: sceneOverridesByHall[activeHallId] ?? get().sceneOverrides,
+    });
+  },
+
+  applyExpoHallLayoutFrom: async (sourceHallId, targetHallIds) => {
+    const source = normalizeHallId(sourceHallId);
+    const sourceOverrides = await resolveHallOverridesForLayoutCopy(source, get);
+    const layoutBySlot = extractBoothLayoutPatchesFromOverrides(sourceOverrides);
+    const sourceScene = get().sceneOverridesByHall[source] ?? get().sceneOverrides;
+    const hallLayoutScenePatch = extractHallSceneLayoutPatch(sourceScene);
+
+    const targets = (targetHallIds?.length
+      ? targetHallIds.map(normalizeHallId)
+      : get().expoHalls.map((h) => h.hallId).filter((id) => id !== source)
+    ).filter((id) => id !== source);
+
+    if (targets.length === 0) return { ok: false, applied: [] };
+
+    const overridesByHall = { ...get().overridesByHall };
+    const sceneOverridesByHall = { ...get().sceneOverridesByHall };
+    let remoteOk = true;
+
+    for (const target of targets) {
+      const existing = overridesByHall[target] ?? {};
+      const nextBooths = mergeLayoutIntoBoothOverrides(existing, layoutBySlot);
+      overridesByHall[target] = nextBooths;
+
+      const prevScene = sceneOverridesByHall[target] ?? {};
+      const nextScene: SceneOverridesInput = hallLayoutScenePatch
+        ? {
+            ...prevScene,
+            hallLayout: {
+              ...(prevScene.hallLayout ?? {}),
+              ...hallLayoutScenePatch.hallLayout,
+            },
+          }
+        : prevScene;
+      sceneOverridesByHall[target] = nextScene;
+
+      const localOk = await persistBoothOverridesWithFallback(nextBooths, target);
+      if (!localOk) remoteOk = false;
+
+      try {
+        const res = await fetch('/api/booth-cms/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hallId: target, booths: nextBooths, scene: nextScene }),
+        });
+        const data = await res.json();
+        if (!data?.ok) remoteOk = false;
+      } catch {
+        remoteOk = false;
+      }
+    }
+
+    const activeHallId = normalizeHallId(get().activeHallId);
+    const patchState: Partial<AppState> = { overridesByHall, sceneOverridesByHall };
+    if (targets.includes(activeHallId)) {
+      patchState.boothOverrides = overridesByHall[activeHallId];
+      patchState.sceneOverrides = sceneOverridesByHall[activeHallId] ?? get().sceneOverrides;
+    }
+    set(patchState);
+
+    return { ok: remoteOk, applied: targets };
+  },
+
+  applyBoothSlotLayoutFromHall: async (slotId, sourceHallIdArg, targetHallIds) => {
+    const source = normalizeHallId(sourceHallIdArg);
+    const slot = slotId.trim();
+    if (!slot) return { ok: false, applied: [] };
+
+    const sourceOverrides = await resolveHallOverridesForLayoutCopy(source, get);
+    const layout = extractSingleBoothLayoutPatch(slot, sourceOverrides);
+    if (!layout) return { ok: false, applied: [] };
+
+    const targets = (targetHallIds?.length
+      ? targetHallIds.map(normalizeHallId)
+      : get().expoHalls.map((h) => h.hallId).filter((id) => id !== source)
+    ).filter((id) => id !== source);
+
+    const uniqueTargets = [...new Set(targets)];
+    if (uniqueTargets.length === 0) return { ok: false, applied: [] };
+
+    const overridesByHall = { ...get().overridesByHall };
+    let remoteOk = true;
+
+    for (const target of uniqueTargets) {
+      const existing = overridesByHall[target] ?? {};
+      const nextBooths = mergeLayoutIntoBoothOverrides(existing, { [slot]: layout });
+      overridesByHall[target] = nextBooths;
+
+      const localOk = await persistBoothOverridesWithFallback(nextBooths, target);
+      if (!localOk) remoteOk = false;
+
+      try {
+        const res = await fetch('/api/booth-cms/copy-booth-layout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceHallId: source,
+            targetHallId: target,
+            slotId: slot,
+          }),
+        });
+        const data = (await res.json()) as { ok?: boolean };
+        if (!data?.ok) remoteOk = false;
+      } catch {
+        remoteOk = false;
+      }
+    }
+
+    const activeHallId = normalizeHallId(get().activeHallId);
+    const patchState: Partial<AppState> = { overridesByHall };
+    if (uniqueTargets.includes(activeHallId)) {
+      patchState.boothOverrides = overridesByHall[activeHallId];
+    }
+    set(patchState);
+
+    return { ok: remoteOk, applied: uniqueTargets };
+  },
+
+  applyBoothSlotsLayoutFromHall: async (slotIdsArg, sourceHallIdArg, targetHallIds) => {
+    const slots = [...new Set(slotIdsArg.map((s) => s.trim()).filter(Boolean))];
+    if (slots.length === 0) return { ok: false, applied: [] };
+
+    const source = normalizeHallId(sourceHallIdArg);
+    const sourceOverrides = await resolveHallOverridesForLayoutCopy(source, get);
+    const layoutBySlot: Record<string, BoothLayoutOnlyPatch> = {};
+    for (const slot of slots) {
+      const layout = extractSingleBoothLayoutPatch(slot, sourceOverrides);
+      if (layout) layoutBySlot[slot] = layout;
+    }
+    if (Object.keys(layoutBySlot).length === 0) return { ok: false, applied: [] };
+
+    const targets = (targetHallIds?.length
+      ? targetHallIds.map(normalizeHallId)
+      : get().expoHalls.map((h) => h.hallId).filter((id) => id !== source)
+    ).filter((id) => id !== source);
+
+    const uniqueTargets = [...new Set(targets)];
+    if (uniqueTargets.length === 0) return { ok: false, applied: [] };
+
+    const overridesByHall = { ...get().overridesByHall };
+    let remoteOk = true;
+
+    for (const target of uniqueTargets) {
+      const existing = overridesByHall[target] ?? {};
+      const nextBooths = mergeLayoutIntoBoothOverrides(existing, layoutBySlot);
+      overridesByHall[target] = nextBooths;
+
+      const localOk = await persistBoothOverridesWithFallback(nextBooths, target);
+      if (!localOk) remoteOk = false;
+
+      for (const slot of Object.keys(layoutBySlot)) {
+        const layout = layoutBySlot[slot];
+        if (!layout) continue;
+        try {
+          const res = await fetch('/api/booth-cms/copy-booth-layout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sourceHallId: source,
+              targetHallId: target,
+              slotId: slot,
+            }),
+          });
+          const data = (await res.json()) as { ok?: boolean };
+          if (!data?.ok) remoteOk = false;
+        } catch {
+          remoteOk = false;
+        }
+      }
+    }
+
+    const activeHallId = normalizeHallId(get().activeHallId);
+    const patchState: Partial<AppState> = { overridesByHall };
+    if (uniqueTargets.includes(activeHallId)) {
+      patchState.boothOverrides = overridesByHall[activeHallId];
+    }
+    set(patchState);
+
+    return { ok: remoteOk, applied: uniqueTargets };
+  },
+
+  setActiveHall: async (hallId, options) => {
+    const nextHall = normalizeHallId(hallId);
+    const prevHall = normalizeHallId(get().activeHallId);
+
+    if (prevHall !== nextHall) {
+      const overridesByHall = {
+        ...get().overridesByHall,
+        [prevHall]: { ...get().boothOverrides },
+      };
+      const sceneOverridesByHall = {
+        ...get().sceneOverridesByHall,
+        [prevHall]: { ...get().sceneOverrides },
+      };
+      await persistBoothOverridesWithFallback(overridesByHall[prevHall], prevHall);
+
+      let booths = overridesByHall[nextHall];
+      let scene = sceneOverridesByHall[nextHall];
+
+      if (!booths) {
+        const local = await readPersistedBoothOverrides(nextHall);
+        let apiBooths: Record<string, BoothLayoutPatch> = {};
+        let sceneFromApi: SceneOverridesInput = {};
+        try {
+          const res = await fetch(`/api/expo/config?hallId=${encodeURIComponent(nextHall)}`, { cache: 'no-store' });
+          if (res.ok) {
+            const j = await res.json();
+            if (j?.booths && typeof j.booths === 'object') apiBooths = j.booths;
+            if (j?.scene && typeof j.scene === 'object') sceneFromApi = j.scene;
+          }
+        } catch { /* */ }
+        booths = mergeHallBoothPatches(apiBooths, local);
+        scene = mergeHallSceneConfig(sceneFromApi, {});
+        overridesByHall[nextHall] = booths;
+        sceneOverridesByHall[nextHall] = scene;
+      }
+
+      set({
+        activeHallId: nextHall,
+        overridesByHall,
+        sceneOverridesByHall,
+        boothOverrides: booths,
+        sceneOverrides: scene ?? {},
+      });
+    } else {
+      set({ activeHallId: nextHall });
+    }
+
+    if (options?.teleport !== false && get().expoPhase === 'expo') {
+      const meta = getExpoHallMeta(nextHall) ?? get().expoHalls.find((h) => h.hallId === nextHall);
+      const spawn = meta?.spawn ?? resolveMainExpoSpawn(mergeHallLayout(get().sceneOverrides.hallLayout));
+      get().teleportPlayer(spawn);
+    }
   },
 
   syncBoothOverridesFromPersistence: async () => {
-    const local = await readPersistedBoothOverrides();
+    const hallId = normalizeHallId(get().activeHallId);
+    const local = await readPersistedBoothOverrides(hallId);
     const current = get().boothOverrides;
     const ids = new Set([...Object.keys(current), ...Object.keys(local)]);
     if (ids.size === 0) return;
@@ -589,7 +955,10 @@ export const useStore = create<AppState>((set, get) => ({
     for (const id of ids) {
       merged[id] = mergeBoothLayoutPatch(current[id], local[id]);
     }
-    set({ boothOverrides: merged });
+    set({
+      boothOverrides: merged,
+      overridesByHall: { ...get().overridesByHall, [hallId]: merged },
+    });
   },
 
   syncSceneOverridesFromPersistence: () => {
@@ -599,7 +968,8 @@ export const useStore = create<AppState>((set, get) => ({
     set({ sceneOverrides: merged });
   },
 
-  patchBoothOverride: async (id, patch) => {
+  patchBoothOverride: async (id, patch, hallIdArg) => {
+    const hallId = normalizeHallId(hallIdArg ?? get().activeHallId);
     const prev = get().boothOverrides[id] || {};
     const nextEntry = { ...prev } as BoothLayoutPatch;
     const definedPatch: BoothLayoutPatch = {};
@@ -626,15 +996,18 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }
     const nextAll = { ...get().boothOverrides, [id]: nextEntry };
-    set({ boothOverrides: nextAll });
-    const localOk = await persistBoothOverridesWithFallback(nextAll);
+    set({
+      boothOverrides: nextAll,
+      overridesByHall: { ...get().overridesByHall, [hallId]: nextAll },
+    });
+    const localOk = await persistBoothOverridesWithFallback(nextAll, hallId);
 
     let remoteOk = false;
     try {
       const res = await fetch('/api/booth-cms/patch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boothId: id, patch: definedPatch }),
+        body: JSON.stringify({ hallId, slotId: id, boothId: id, patch: definedPatch }),
       });
       const data = await res.json();
       remoteOk = !!data?.ok;
@@ -646,45 +1019,57 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   resetBoothOverride: async (id) => {
+    const hallId = normalizeHallId(get().activeHallId);
     const { [id]: _, ...rest } = get().boothOverrides;
-    set({ boothOverrides: rest });
-    try { await fetch(`/api/booth-cms/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch { /* */ }
+    set({ boothOverrides: rest, overridesByHall: { ...get().overridesByHall, [hallId]: rest } });
+    try {
+      await fetch(`/api/booth-cms/${encodeURIComponent(hallId)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch { /* */ }
   },
 
   deleteBoothOverride: async (id) => {
+    const hallId = normalizeHallId(get().activeHallId);
     const { [id]: _, ...rest } = get().boothOverrides;
-    set({ boothOverrides: rest });
-    try { await fetch(`/api/booth-cms/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch { /* */ }
+    set({ boothOverrides: rest, overridesByHall: { ...get().overridesByHall, [hallId]: rest } });
+    try {
+      await fetch(`/api/booth-cms/${encodeURIComponent(hallId)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch { /* */ }
   },
 
   duplicateBoothOverride: async (fromId, newId) => {
+    const hallId = normalizeHallId(get().activeHallId);
     const source = get().boothOverrides[fromId];
     if (!source) return;
     const clone = JSON.parse(JSON.stringify(source)) as BoothLayoutPatch;
     if (clone.position) clone.position = [clone.position[0] + 5, clone.position[1], clone.position[2]];
     const nextAll = { ...get().boothOverrides, [newId]: clone };
-    set({ boothOverrides: nextAll });
+    set({ boothOverrides: nextAll, overridesByHall: { ...get().overridesByHall, [hallId]: nextAll } });
     try {
       await fetch('/api/booth-cms/patch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boothId: newId, patch: clone }),
+        body: JSON.stringify({ hallId, slotId: newId, boothId: newId, patch: clone }),
       });
     } catch { /* */ }
   },
 
   resetAllBoothOverrides: async () => {
-    set({ boothOverrides: {} });
+    const hallId = normalizeHallId(get().activeHallId);
+    set({
+      boothOverrides: {},
+      overridesByHall: { ...get().overridesByHall, [hallId]: {} },
+    });
     try {
       await fetch('/api/booth-cms/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ booths: {}, scene: {} }),
+        body: JSON.stringify({ hallId, booths: {}, scene: {} }),
       });
     } catch { /* */ }
   },
 
   patchSceneOverride: (patch) => {
+    const hallId = normalizeHallId(get().activeHallId);
     const cur = get().sceneOverrides;
     const next: SceneOverridesInput = { ...cur, ...patch };
 
@@ -708,13 +1093,15 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     persistSceneConfig(next);
-    set({ sceneOverrides: next });
+    set({
+      sceneOverrides: next,
+      sceneOverridesByHall: { ...get().sceneOverridesByHall, [hallId]: next },
+    });
 
-    // Fire-and-forget: persist to MongoDB so all visitors see updated scene
     void fetch('/api/scene/patch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patch: next }),
+      body: JSON.stringify({ hallId, patch: next }),
     }).catch(() => { /* API may be unavailable */ });
   },
 

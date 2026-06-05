@@ -282,7 +282,7 @@ function HostessGreetingBubble({
                       return;
                     }
                     if (opt.action === 'helpDesk') {
-                      setHelpDeskOpen(true);
+                      setHelpDeskOpen(true, { pane: opt.helpDeskPane ?? 'welcome' });
                       setActiveReplyId(null);
                       return;
                     }
@@ -2224,7 +2224,22 @@ const CONCIERGE_HOSTESS_BUBBLE_Y = HELP_DESK_COUNTER_HEIGHT + 0.95;
 
 function HelpDeskCustomGirl() {
   const showHostess = useStore((s) => mergeSceneConfig(s.sceneOverrides).showBoothHostess);
-  const hostessReplies = useMemo(() => buildHelpDeskHostessReplies(), []);
+  const boothOverrides = useStore((s) => s.boothOverrides);
+  const hostessReplies = useMemo(() => {
+    const base = buildHelpDeskHostessReplies();
+    const dests = buildExpoTeleportDestinations(boothOverrides);
+    const boothTeleports: HostessQuickReply[] = dests
+      .filter((d) => d.id !== 'help-desk' && d.id !== 'center' && d.id !== 'registration-lobby')
+      .filter((d) => d.id.startsWith('builder-') || d.id === 'vertex-elite')
+      .map((d) => ({
+        id: `help-desk-tp-${d.id}`,
+        label: `Go to ${d.label}`,
+        response: '',
+        action: 'teleport' as const,
+        teleportId: d.id,
+      }));
+    return [...base, ...boothTeleports];
+  }, [boothOverrides]);
   if (!showHostess) return null;
   const [px, , pz] = CONCIERGE_HOSTESS_POS;
   const bubblePos: [number, number, number] = [px, CONCIERGE_HOSTESS_BUBBLE_Y, pz];

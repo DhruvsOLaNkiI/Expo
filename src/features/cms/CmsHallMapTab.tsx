@@ -15,14 +15,43 @@ import {
   type BoothLayoutPatch,
 } from '@/features/shared/data/boothLayouts';
 import { DEFAULT_MAIN_EXPO_SPAWN } from '@/features/shared/data/registrationHall';
+import { DEFAULT_EXPO_HALL_ID, type ExpoHallMeta } from '@/features/shared/data/expoHalls';
+import { CmsApplyHallLayoutControls } from './CmsApplyHallLayoutControls';
+import { CmsApplySelectedBoothLayout } from './CmsApplySelectedBoothLayout';
+import { CmsApplyMultiBoothLayout } from './CmsApplyMultiBoothLayout';
 
 export type CmsHallMapTabProps = {
   booths: BoothLayoutConfig[];
-  selectedId: string;
-  onSelectBooth: (id: string) => void;
+  /** All selected booth ids (multi-select). */
+  selectedIds: string[];
+  /** Last clicked booth — drives single-booth sidebar when one selected. */
+  primarySelectedId: string;
+  onSelectBooth: (id: string, opts?: { additive?: boolean }) => void;
+  onClearSelection?: () => void;
   onPatchBooth: (id: string, patch: BoothLayoutPatch) => Promise<boolean>;
   hallLayout?: Partial<Pick<HallLayoutConfig, 'mainExpoSpawn' | 'mainExpoSpawnYaw'>>;
   onPatchHallLayout: (patch: Partial<Pick<HallLayoutConfig, 'mainExpoSpawn' | 'mainExpoSpawnYaw'>>) => void;
+  /** Mini map in All Halls grid — hides toolbar and drag. */
+  compact?: boolean;
+  interactive?: boolean;
+  /** When set, shows “Apply layout to other halls” in the map toolbar. */
+  layoutCopy?: {
+    halls: ExpoHallMeta[];
+    activeHallId: string;
+    onApplyLayoutFrom: (sourceHallId: string) => Promise<{ ok: boolean; applied: string[] }>;
+  };
+  /** Selected booth — apply this booth's placement to other halls. */
+  selectedBoothLayout?: {
+    slotIds: string[];
+    boothNames: string[];
+    halls: ExpoHallMeta[];
+    activeHallId: string;
+    onApplyFromHall: (
+      slotIds: string[],
+      sourceHallId: string,
+      targetHallIds: string[],
+    ) => Promise<{ ok: boolean; applied: string[] }>;
+  };
 };
 
 const PAD = 4;
@@ -55,6 +84,8 @@ type DragState = {
   offsetY: number;
   startWorldX: number;
   startWorldZ: number;
+  /** Multi-select drag: start X/Z per booth id. */
+  groupStarts?: Record<string, { x: number; z: number }>;
 };
 
 type EntryDragState = {
@@ -101,15 +132,19 @@ function GridLines({ step }: { step: number }) {
 function BoothRect({
   booth,
   isSelected,
+  isPrimary,
   isDragging,
   dragPos,
   onPointerDown,
+  interactive = true,
 }: {
   booth: BoothLayoutConfig;
   isSelected: boolean;
+  isPrimary: boolean;
   isDragging: boolean;
   dragPos: { x: number; y: number } | null;
   onPointerDown: (e: RPointerEvent<SVGGElement>, id: string) => void;
+  interactive?: boolean;
 }) {
   const pos = isDragging && dragPos
     ? dragPos
@@ -119,7 +154,7 @@ function BoothRect({
   const bd = BASE_BOOTH_D * booth.scale[2];
 
   const fill = booth.color || '#1a1a2e';
-  const stroke = isSelected ? '#d4af37' : (booth.accent || '#555');
+  const stroke = isPrimary ? '#d4af37' : isSelected ? '#a78bfa' : (booth.accent || '#555');
   const strokeW = isSelected ? 0.25 : 0.12;
   const opacity = isDragging ? 0.85 : 1;
 
@@ -158,12 +193,12 @@ function BoothRect({
         fill={fill}
         stroke={stroke}
         strokeWidth={strokeW}
-        style={{ cursor: 'grab' }}
+        style={{ cursor: interactive ? 'grab' : 'pointer' }}
         onPointerDown={(e) => onPointerDown(e as unknown as RPointerEvent<SVGGElement>, booth.id)}
       />
       <polygon
         points={arrowPts}
-        fill={isSelected ? '#d4af37' : 'rgba(255,255,255,0.25)'}
+        fill={isPrimary ? '#d4af37' : isSelected ? '#a78bfa' : 'rgba(255,255,255,0.25)'}
         style={{ pointerEvents: 'none' }}
       />
       {isSelected && (
@@ -172,7 +207,7 @@ function BoothRect({
           width={bw + 0.3} height={bd + 0.3}
           rx={0.4}
           fill="none"
-          stroke="#d4af37"
+          stroke={isPrimary ? '#d4af37' : '#a78bfa'}
           strokeWidth={0.08}
           strokeDasharray="0.4 0.3"
           opacity={0.5}
@@ -218,11 +253,17 @@ function SnapCrosshair({ pos }: { pos: { x: number; y: number } }) {
 
 export function CmsHallMapTab({
   booths,
-  selectedId,
+  selectedIds,
+  primarySelectedId,
   onSelectBooth,
+  onClearSelection,
   onPatchBooth,
   hallLayout,
   onPatchHallLayout,
+  compact = false,
+  interactive = true,
+  layoutCopy,
+  selectedBoothLayout,
 }: CmsHallMapTabProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -255,10 +296,32 @@ export function CmsHallMapTab({
     e.stopPropagation();
     e.preventDefault();
     (e.target as SVGElement).setPointerCapture?.(e.pointerId);
-    onSelectBooth(boothId);
-
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey;
     const booth = booths.find((b) => b.id === boothId);
     if (!booth) return;
+
+    let dragGroup: string[];
+    if (additive) {
+      onSelectBooth(boothId, { additive: true });
+      const toggled = selectedIds.includes(boothId)
+        ? selectedIds.filter((x) => x !== boothId)
+        : [...selectedIds, boothId];
+      dragGroup = toggled.length > 0 ? toggled : [boothId];
+    } else if (selectedIds.includes(boothId) && selectedIds.length > 1) {
+      dragGroup = selectedIds;
+    } else {
+      onSelectBooth(boothId);
+      dragGroup = [boothId];
+    }
+    if (!(dragGroup.length > 1 && dragGroup.includes(boothId))) {
+      dragGroup = [boothId];
+    }
+
+    const groupStarts: Record<string, { x: number; z: number }> = {};
+    for (const id of dragGroup) {
+      const b = booths.find((x) => x.id === id);
+      if (b) groupStarts[id] = { x: b.position[0], z: b.position[2] };
+    }
 
     const { x: sx, y: sy } = svgPoint(e.clientX, e.clientY);
     const bpos = worldToSvg(booth.position[0], booth.position[2]);
@@ -269,9 +332,10 @@ export function CmsHallMapTab({
       offsetY: sy - bpos.y,
       startWorldX: booth.position[0],
       startWorldZ: booth.position[2],
+      groupStarts: dragGroup.length > 1 ? groupStarts : undefined,
     });
     setDragSvgPos(bpos);
-  }, [booths, onSelectBooth, svgPoint]);
+  }, [booths, onSelectBooth, selectedIds, svgPoint]);
 
   const handleEntryDown = useCallback((e: RPointerEvent<SVGGElement>) => {
     if (drag) return;
@@ -344,13 +408,24 @@ export function CmsHallMapTab({
 
     if (!drag || !dragSvgPos) { setDrag(null); setDragSvgPos(null); return; }
     const world = svgToWorld(dragSvgPos.x, dragSvgPos.y);
-    const booth = booths.find((b) => b.id === drag.boothId);
-    if (!booth) { setDrag(null); setDragSvgPos(null); return; }
+    const dx = world.x - drag.startWorldX;
+    const dz = world.z - drag.startWorldZ;
 
-    if (Math.abs(world.x - drag.startWorldX) > 0.01 || Math.abs(world.z - drag.startWorldZ) > 0.01) {
-      void onPatchBooth(drag.boothId, {
-        position: [world.x, booth.position[1], world.z],
-      });
+    if (drag.groupStarts && (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01)) {
+      for (const [id, start] of Object.entries(drag.groupStarts)) {
+        const b = booths.find((x) => x.id === id);
+        if (!b) continue;
+        void onPatchBooth(id, {
+          position: [start.x + dx, b.position[1], start.z + dz],
+        });
+      }
+    } else {
+      const booth = booths.find((b) => b.id === drag.boothId);
+      if (booth && (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01)) {
+        void onPatchBooth(drag.boothId, {
+          position: [world.x, booth.position[1], world.z],
+        });
+      }
     }
     setDrag(null);
     setDragSvgPos(null);
@@ -388,10 +463,13 @@ export function CmsHallMapTab({
   const hw = HALL_WIDTH / 2;
   const hd = HALL_DEPTH / 2;
 
+  const canEdit = interactive && !compact;
+
   return (
-    <div className="flex h-full flex-col">
+    <div className={`flex flex-col ${compact ? 'h-full min-h-0' : 'h-full'}`}>
       {/* Toolbar */}
-      <div className="flex items-center gap-3 border-b border-white/10 bg-[#0d0d14] px-4 py-2">
+      {canEdit && (
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#0d0d14] px-4 py-2">
         {/* Snap controls */}
         <label className="flex items-center gap-1.5 text-[11px] text-white/60">
           <input
@@ -455,24 +533,56 @@ export function CmsHallMapTab({
           East Z
         </button>
 
+        {selectedBoothLayout && selectedBoothLayout.halls.length > 1 ? (
+          selectedBoothLayout.slotIds.length > 1 ? (
+            <CmsApplyMultiBoothLayout
+              slotIds={selectedBoothLayout.slotIds}
+              boothLabels={selectedBoothLayout.boothNames}
+              activeHallId={selectedBoothLayout.activeHallId}
+              halls={selectedBoothLayout.halls}
+              onApplyFromHall={selectedBoothLayout.onApplyFromHall}
+              variant="toolbar"
+            />
+          ) : (
+            <CmsApplySelectedBoothLayout
+              slotId={selectedBoothLayout.slotIds[0] ?? ''}
+              boothName={selectedBoothLayout.boothNames[0] ?? ''}
+              activeHallId={selectedBoothLayout.activeHallId}
+              halls={selectedBoothLayout.halls}
+              onApplyFromHall={(slotId, source, targets) =>
+                selectedBoothLayout.onApplyFromHall([slotId], source, targets)
+              }
+              variant="toolbar"
+            />
+          )
+        ) : layoutCopy && layoutCopy.halls.length > 1 ? (
+          <CmsApplyHallLayoutControls
+            halls={layoutCopy.halls}
+            defaultSourceHallId={DEFAULT_EXPO_HALL_ID}
+            onApplyLayoutFrom={layoutCopy.onApplyLayoutFrom}
+            variant="toolbar"
+          />
+        ) : null}
+
         {/* Status */}
-        <div className="ml-auto text-[10px] text-white/30">
+        <div className="ml-auto text-[10px] text-white/30 shrink-0">
           {drag
-            ? `Moving ${drag.boothId}${dragSvgPos ? ` \u2192 (${svgToWorld(dragSvgPos.x, dragSvgPos.y).x.toFixed(1)}, ${svgToWorld(dragSvgPos.x, dragSvgPos.y).z.toFixed(1)})` : ''}`
-            : `${booths.length} booths \u00b7 ${HALL_WIDTH}\u00d7${HALL_DEPTH}m hall`}
+            ? `Moving ${drag.groupStarts ? `${Object.keys(drag.groupStarts).length} booths` : drag.boothId}${dragSvgPos ? ` \u2192 (${svgToWorld(dragSvgPos.x, dragSvgPos.y).x.toFixed(1)}, ${svgToWorld(dragSvgPos.x, dragSvgPos.y).z.toFixed(1)})` : ''}`
+            : `${booths.length} booths \u00b7 ${selectedIds.length} selected \u00b7 ${HALL_WIDTH}\u00d7${HALL_DEPTH}m hall`}
         </div>
       </div>
+      )}
 
       {/* SVG Canvas */}
-      <div className="flex-1 relative bg-[#08080e] overflow-hidden">
+      <div className={`relative bg-[#08080e] overflow-hidden ${compact ? 'flex-1 min-h-0' : 'flex-1'}`}>
         <svg
           ref={svgRef}
           viewBox={`${VB_X} ${VB_Y} ${VB_W} ${VB_H}`}
           className="absolute inset-0 w-full h-full"
-          style={{ touchAction: 'none' }}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          style={{ touchAction: canEdit ? 'none' : 'auto' }}
+          onPointerMove={canEdit ? handlePointerMove : undefined}
+          onPointerUp={canEdit ? handlePointerUp : undefined}
+          onPointerLeave={canEdit ? handlePointerUp : undefined}
         >
           {/* Grid */}
           <GridLines step={gridStep} />
@@ -547,8 +657,8 @@ export function CmsHallMapTab({
             const entryD = 3.2;
             return (
               <g
-                onPointerDown={handleEntryDown}
-                style={{ cursor: 'grab' }}
+                onPointerDown={canEdit ? handleEntryDown : undefined}
+                style={{ cursor: canEdit ? 'grab' : 'default' }}
               >
                 <rect
                   x={entryPos.x - entryW / 2}
@@ -658,20 +768,36 @@ export function CmsHallMapTab({
             <BoothRect
               key={b.id}
               booth={b}
-              isSelected={b.id === selectedId}
-              isDragging={drag?.boothId === b.id}
+              isSelected={selectedIds.includes(b.id)}
+              isPrimary={b.id === primarySelectedId}
+              isDragging={drag?.boothId === b.id || (drag?.groupStarts != null && b.id in drag.groupStarts && drag.boothId !== b.id && dragSvgPos != null)}
               dragPos={drag?.boothId === b.id ? dragSvgPos : null}
-              onPointerDown={handlePointerDown}
+              interactive={canEdit}
+              onPointerDown={canEdit ? handlePointerDown : (e) => {
+                e.stopPropagation();
+                onSelectBooth(b.id, { additive: e.shiftKey || e.metaKey || e.ctrlKey });
+              }}
             />
           ))}
         </svg>
 
         {/* Legend overlay */}
+        {canEdit && (
         <div className="absolute bottom-3 left-3 rounded-lg bg-black/60 px-3 py-2 text-[10px] text-white/40 backdrop-blur-sm border border-white/5">
           <div className="font-semibold text-white/50 mb-1">2D Hall Map</div>
-          <div>Drag booths to reposition</div>
-          <div>Click to select &middot; Snap: {snapEnabled ? `${snapSize}m` : 'free'}</div>
+          <div>Drag booths to reposition (multi-select: drag moves all)</div>
+          <div>Click to select · Shift+click to add/remove · Snap: {snapEnabled ? `${snapSize}m` : 'free'}</div>
+          {selectedIds.length > 1 && onClearSelection ? (
+            <button
+              type="button"
+              className="mt-1 text-violet-300/80 hover:text-violet-200 underline"
+              onClick={onClearSelection}
+            >
+              Clear selection ({selectedIds.length})
+            </button>
+          ) : null}
         </div>
+        )}
       </div>
     </div>
   );

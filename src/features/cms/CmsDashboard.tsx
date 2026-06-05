@@ -20,6 +20,11 @@ import {
 import { CmsPreview3D } from './CmsPreview3D';
 import { CmsHallDisplayPreview } from './CmsHallDisplayPreview';
 import { CmsHallMapTab } from './CmsHallMapTab';
+import { CmsAllHallsOverview } from './CmsAllHallsOverview';
+import { CmsApplyHallLayoutControls } from './CmsApplyHallLayoutControls';
+import { CmsApplySelectedBoothLayout } from './CmsApplySelectedBoothLayout';
+import { CmsApplyMultiBoothLayout } from './CmsApplyMultiBoothLayout';
+import { getExpoHallMeta } from '@/features/shared/data/expoHalls';
 import { CmsScenePanel, HallLedMediaField } from './CmsScenePanel';
 import { getDashboardPublicUrl } from '@/dashboard';
 import { CtaResourcePopupView } from '@/features/media/components/CtaResourcePopup';
@@ -283,9 +288,10 @@ function readFile(file: File): Promise<string> {
   });
 }
 
-type Tab = 'layout' | 'branding' | 'displays' | 'images' | 'media' | 'company' | 'lighting' | 'scene' | 'hallMap';
+type Tab = 'allHalls' | 'layout' | 'branding' | 'displays' | 'images' | 'media' | 'company' | 'lighting' | 'scene' | 'hallMap';
 
 const BOOTH_TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'allHalls', label: 'All Halls', icon: '▦' },
   { id: 'layout', label: 'Layout', icon: '⊞' },
   { id: 'branding', label: 'Branding', icon: '◈' },
   { id: 'displays', label: 'Displays', icon: '▣' },
@@ -305,27 +311,70 @@ export const ALL_DISPLAYS_ID = '__all-displays__';
 export function CmsDashboard() {
   const overrides = useStore((s) => s.boothOverrides);
   const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const activeHallId = useStore((s) => s.activeHallId);
+  const expoHalls = useStore((s) => s.expoHalls);
+  const overridesByHall = useStore((s) => s.overridesByHall);
+  const sceneOverridesByHall = useStore((s) => s.sceneOverridesByHall);
   const patch = useStore((s) => s.patchBoothOverride);
   const patchScene = useStore((s) => s.patchSceneOverride);
   const resetBooth = useStore((s) => s.resetBoothOverride);
   const resetAll = useStore((s) => s.resetAllBoothOverrides);
   const initCms = useStore((s) => s.initBoothCms);
+  const loadCmsExpoOverview = useStore((s) => s.loadCmsExpoOverview);
+  const setActiveHall = useStore((s) => s.setActiveHall);
+  const applyExpoHallLayoutFrom = useStore((s) => s.applyExpoHallLayoutFrom);
+  const applyBoothSlotLayoutFromHall = useStore((s) => s.applyBoothSlotLayoutFromHall);
+  const applyBoothSlotsLayoutFromHall = useStore((s) => s.applyBoothSlotsLayoutFromHall);
   const setCmsPage = useStore((s) => s.setCmsPage);
   const boothCmsHydrated = useStore((s) => s._boothCmsHydrated);
+  const activeHallLabel = getExpoHallMeta(activeHallId)?.label ?? activeHallId;
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
 
-  useEffect(() => { void initCms(); }, [initCms]);
+  useEffect(() => {
+    void (async () => {
+      await initCms();
+      await loadCmsExpoOverview();
+    })();
+  }, [initCms, loadCmsExpoOverview]);
 
   const defaults = useMemo(() => buildDefaultBoothLayoutList(), []);
   const mergedList = useMemo(() => applyBoothOverrides(defaults, overrides), [defaults, overrides]);
 
-  const [selectedId, setSelectedId] = useState(defaults[0]?.id ?? 'vertex-elite');
-  const [tab, setTab] = useState<Tab>('layout');
+  const [selectedIds, setSelectedIds] = useState<string[]>([defaults[0]?.id ?? 'vertex-elite']);
+  const selectedId = selectedIds[selectedIds.length - 1] ?? defaults[0]?.id ?? 'vertex-elite';
+  const multiSelect = selectedIds.length > 1;
+  const [tab, setTab] = useState<Tab>('allHalls');
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState('');
 
+  const handleBoothSelect = useCallback((id: string, opts?: { additive?: boolean }) => {
+    if (opts?.additive) {
+      setSelectedIds((prev) => {
+        if (prev.includes(id)) {
+          const next = prev.filter((x) => x !== id);
+          return next.length > 0 ? next : [id];
+        }
+        return [...prev, id];
+      });
+    } else {
+      setSelectedIds([id]);
+    }
+  }, []);
+
+  useEffect(() => {
+    setSelectedIds([defaults[0]?.id ?? 'vertex-elite']);
+  }, [activeHallId, defaults]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds([selectedId]);
+  }, [selectedId]);
+
   const selected = useMemo(() => mergedList.find((b) => b.id === selectedId), [mergedList, selectedId]);
+  const selectedBooths = useMemo(
+    () => mergedList.filter((b) => selectedIds.includes(b.id)),
+    [mergedList, selectedIds],
+  );
   const isHallDisplay = selectedId === HALL_BIG_DISPLAY_ID;
   const isAllDisplays = selectedId === ALL_DISPLAYS_ID;
   const isSpecialView = isHallDisplay || isAllDisplays;
@@ -562,8 +611,44 @@ export function CmsDashboard() {
     } else showToast('Could not persist booth data (localStorage and IndexedDB). Export JSON or use /maps/… paths.');
   };
 
+  const handleSelectHall = useCallback((hallId: string) => {
+    void setActiveHall(hallId, { teleport: false });
+    setTab('hallMap');
+  }, [setActiveHall]);
+
+  const handleApplyLayoutFrom = useCallback(
+    async (sourceHallId: string) => {
+      const result = await applyExpoHallLayoutFrom(sourceHallId);
+      await loadCmsExpoOverview();
+      return result;
+    },
+    [applyExpoHallLayoutFrom, loadCmsExpoOverview],
+  );
+
+  const handleApplyBoothSlotsFromHall = useCallback(
+    async (slotIds: string[], sourceHallId: string, targetHallIds: string[]) => {
+      const result = await applyBoothSlotsLayoutFromHall(slotIds, sourceHallId, targetHallIds);
+      await loadCmsExpoOverview();
+      return result;
+    },
+    [applyBoothSlotsLayoutFromHall, loadCmsExpoOverview],
+  );
+
+  const handleApplyBoothSlotFromHall = useCallback(
+    async (slotId: string, sourceHallId: string, targetHallIds: string[]) =>
+      handleApplyBoothSlotsFromHall([slotId], sourceHallId, targetHallIds),
+    [handleApplyBoothSlotsFromHall],
+  );
+
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify({ booths: overrides, scene: useStore.getState().sceneOverrides }, null, 2)], { type: 'application/json' });
+    const st = useStore.getState();
+    const blob = new Blob([JSON.stringify({
+      hallId: st.activeHallId,
+      halls: st.overridesByHall,
+      scenes: st.sceneOverridesByHall,
+      booths: overrides,
+      scene: st.sceneOverrides,
+    }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'booth-cms-export.json'; a.click();
     URL.revokeObjectURL(a.href);
     showToast('Exported JSON');
@@ -698,14 +783,44 @@ export function CmsDashboard() {
           />
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-          <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-white/25">Booths</p>
+          <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-white/25">Expo halls</p>
+          {expoHalls.map((h) => (
+            <button
+              key={h.hallId}
+              type="button"
+              className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-all ${
+                h.hallId === activeHallId
+                  ? 'bg-violet-500/15 text-violet-200'
+                  : 'text-white/55 hover:bg-white/[0.04] hover:text-white/75'
+              }`}
+              onClick={() => handleSelectHall(h.hallId)}
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${h.hallId === activeHallId ? 'bg-violet-400' : 'bg-white/20'}`} />
+              <span className="truncate text-xs font-semibold">{h.label}</span>
+            </button>
+          ))}
+          <div className="my-2 border-t border-white/[0.06]" />
+          <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-white/25">
+            Booths · {activeHallLabel}
+          </p>
           {filteredBooths.map((b) => (
             <button
               key={b.id}
-              className={`group w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all ${b.id === selectedId ? 'bg-[#d4af37]/15 text-[#d4af37]' : 'text-white/60 hover:bg-white/[0.04] hover:text-white/80'}`}
-              onClick={() => setSelectedId(b.id)}
+              className={`group w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all ${
+                b.id === selectedId
+                  ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                  : selectedIds.includes(b.id)
+                    ? 'bg-violet-500/12 text-violet-200'
+                    : 'text-white/60 hover:bg-white/[0.04] hover:text-white/80'
+              }`}
+              onClick={(e) => handleBoothSelect(b.id, { additive: e.shiftKey || e.metaKey || e.ctrlKey })}
             >
-              <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${b.id === selectedId ? 'bg-[#d4af37]' : 'bg-white/20'}`} style={{ backgroundColor: b.id === selectedId ? b.accent : undefined }} />
+              <div
+                className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                  b.id === selectedId ? 'bg-[#d4af37]' : selectedIds.includes(b.id) ? 'bg-violet-400' : 'bg-white/20'
+                }`}
+                style={{ backgroundColor: b.id === selectedId ? b.accent : undefined }}
+              />
               <div className="min-w-0">
                 <div className="truncate text-xs font-semibold">{b.name}</div>
                 <div className="truncate text-[10px] text-white/30">{b.id}</div>
@@ -717,7 +832,7 @@ export function CmsDashboard() {
           <button
             type="button"
             className={`group w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all ${isHallDisplay ? 'bg-cyan-500/15 text-cyan-200' : 'text-white/60 hover:bg-white/[0.04] hover:text-white/80'}`}
-            onClick={() => setSelectedId(HALL_BIG_DISPLAY_ID)}
+            onClick={() => setSelectedIds([HALL_BIG_DISPLAY_ID])}
           >
             <div className={`flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-sm text-[8px] font-bold ${isHallDisplay ? 'bg-cyan-400 text-black' : 'bg-white/20 text-white/50'}`}>▶</div>
             <div className="min-w-0">
@@ -763,10 +878,16 @@ export function CmsDashboard() {
         <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0d0d14]/80 px-6 py-3 backdrop-blur-lg">
           <div className="flex items-center gap-4">
             <h2 className="text-base font-bold tracking-wider">
-              {isHallDisplay ? 'Hall Big Display' : isAllDisplays ? 'All Displays' : (name || 'Select a booth')}
+              {tab === 'allHalls'
+                ? 'All Expo Halls'
+                : isHallDisplay
+                  ? 'Hall Big Display'
+                  : isAllDisplays
+                    ? 'All Displays'
+                    : (name || 'Select a booth')}
             </h2>
             <span className="rounded bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40 font-mono">
-              {isHallDisplay ? 'hall-led' : isAllDisplays ? 'all-displays' : selectedId}
+              {tab === 'allHalls' ? '6 halls' : isHallDisplay ? 'hall-led' : isAllDisplays ? 'all-displays' : `${activeHallId} · ${selectedId}`}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -789,7 +910,7 @@ export function CmsDashboard() {
               Reset Hall LEDs
             </button>
             )}
-            {!isAllDisplays && (
+            {!isAllDisplays && tab !== 'allHalls' && (
             <button type="button" className="rounded-lg bg-gradient-to-r from-[#d4af37] to-[#b08d29] px-5 py-1.5 text-xs font-bold text-black hover:brightness-110 transition-all shadow-lg shadow-[#d4af37]/20" onClick={() => void handleApply()}>
               Apply Changes
             </button>
@@ -816,14 +937,46 @@ export function CmsDashboard() {
         <div className="flex flex-1 overflow-hidden">
           {!isAllDisplays && (
           <div className="flex-1 min-w-0 relative">
-            {tab === 'hallMap' ? (
+            {tab === 'allHalls' ? (
+              <CmsAllHallsOverview
+                halls={expoHalls}
+                activeHallId={activeHallId}
+                overridesByHall={overridesByHall}
+                sceneOverridesByHall={sceneOverridesByHall}
+                onSelectHall={handleSelectHall}
+                onPatchBooth={(id, p, hallId) => patch(id, p, hallId)}
+                onApplyLayoutFrom={handleApplyLayoutFrom}
+              />
+            ) : tab === 'hallMap' ? (
               <CmsHallMapTab
                 booths={mergedList}
-                selectedId={selectedId}
-                onSelectBooth={setSelectedId}
+                selectedIds={selectedIds}
+                primarySelectedId={selectedId}
+                onSelectBooth={handleBoothSelect}
+                onClearSelection={handleClearSelection}
                 onPatchBooth={patch}
                 hallLayout={sceneConfig.hallLayout}
                 onPatchHallLayout={(hallLayoutPatch) => patchScene({ hallLayout: hallLayoutPatch })}
+                layoutCopy={
+                  !selected || isSpecialView
+                    ? {
+                        halls: expoHalls,
+                        activeHallId,
+                        onApplyLayoutFrom: handleApplyLayoutFrom,
+                      }
+                    : undefined
+                }
+                selectedBoothLayout={
+                  selected && !isSpecialView
+                    ? {
+                        slotIds: selectedIds,
+                        boothNames: selectedBooths.map((b) => b.name),
+                        halls: expoHalls,
+                        activeHallId,
+                        onApplyFromHall: handleApplyBoothSlotsFromHall,
+                      }
+                    : undefined
+                }
               />
             ) : isHallDisplay ? (
               <CmsHallDisplayPreview stageScreenUrl={hallBallroomUrl} />
@@ -855,6 +1008,7 @@ export function CmsDashboard() {
           )}
 
           {/* Properties panel */}
+          {tab !== 'allHalls' && (
           <div className={`${isAllDisplays ? 'flex-1' : 'w-80 shrink-0'} border-l border-white/[0.06] bg-[#0d0d14] overflow-y-auto`}>
             <div className={`${isAllDisplays ? 'p-6 max-w-4xl mx-auto' : 'p-5'} space-y-4`}>
               {isAllDisplays ? (
@@ -866,7 +1020,7 @@ export function CmsDashboard() {
                   toastUploadResult={toastUploadResult}
                   showUploadError={showUploadError}
                   onOpenBooth={(boothId) => {
-                    setSelectedId(boothId);
+                    handleBoothSelect(boothId);
                     setTab('displays');
                   }}
                 />
@@ -975,9 +1129,50 @@ export function CmsDashboard() {
               {tab === 'company' && <CompanyTab company={company} setCompany={setCompany} />}
               {tab === 'lighting' && <LightingTab lighting={lighting} setLighting={setLighting} />}
               {tab === 'scene' && <CmsScenePanel />}
-              {tab === 'hallMap' && selected && (
+              {tab === 'hallMap' && (
                 <div className="space-y-3">
-                  <div className="text-xs font-semibold text-white/60 uppercase tracking-wider">Selected Booth</div>
+                  {selected ? (
+                  <>
+                  {multiSelect ? (
+                    <CmsApplyMultiBoothLayout
+                      slotIds={selectedIds}
+                      boothLabels={selectedBooths.map((b) => b.name)}
+                      activeHallId={activeHallId}
+                      halls={expoHalls}
+                      onApplyFromHall={handleApplyBoothSlotsFromHall}
+                    />
+                  ) : (
+                    <CmsApplySelectedBoothLayout
+                      slotId={selectedId}
+                      boothName={selected.name}
+                      activeHallId={activeHallId}
+                      halls={expoHalls}
+                      onApplyFromHall={handleApplyBoothSlotFromHall}
+                      variant="panel"
+                    />
+                  )}
+                  <div className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+                    {multiSelect ? `${selectedIds.length} booths selected` : 'Selected Booth'}
+                  </div>
+                  {multiSelect ? (
+                    <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2 max-h-40 overflow-y-auto">
+                      {selectedBooths.map((b) => (
+                        <div key={b.id} className="flex justify-between gap-2 text-[10px] font-mono text-white/55 border-b border-white/[0.04] pb-1 last:border-0">
+                          <span className="truncate text-white/75">{b.name}</span>
+                          <span className="shrink-0">
+                            {b.position[0].toFixed(1)}, {b.position[2].toFixed(1)}
+                          </span>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className="text-[10px] text-violet-300/80 hover:text-violet-200 underline pt-1"
+                        onClick={handleClearSelection}
+                      >
+                        Clear multi-select
+                      </button>
+                    </div>
+                  ) : (
                   <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
                     <div className="text-sm font-bold text-white/90">{selected.name}</div>
                     <div className="font-mono text-[11px] text-white/40">{selected.id}</div>
@@ -996,8 +1191,10 @@ export function CmsDashboard() {
                       </div>
                     </div>
                   </div>
+                  )}
 
-                  {/* Rotation controls */}
+                  {!multiSelect && (
+                  <>
                   <div className="text-xs font-semibold text-white/60 uppercase tracking-wider pt-1">Rotation (Y-axis)</div>
                   <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
                     <div className="flex items-center gap-2">
@@ -1088,14 +1285,33 @@ export function CmsDashboard() {
                   </div>
 
                   <div className="text-[10px] text-white/30 leading-relaxed">
-                    Drag booths to reposition. Drag the gold handle to rotate. Adjust size above — the 2D map reflects actual scale.
+                    Drag to reposition. Shift+click map or sidebar to multi-select and move together.
                   </div>
+                  </>
+                  )}
+                  </>
+                  ) : (
+                    <p className="text-[10px] text-white/35">Select a booth on the map to edit placement or apply it to other halls.</p>
+                  )}
+                  <details className="rounded-lg border border-white/[0.06] bg-white/[0.02] group">
+                    <summary className="cursor-pointer px-3 py-2 text-[10px] text-white/40 uppercase tracking-wider list-none">
+                      Entire hall layout (all booths)
+                    </summary>
+                    <div className="px-2 pb-2">
+                      <CmsApplyHallLayoutControls
+                        halls={expoHalls}
+                        onApplyLayoutFrom={handleApplyLayoutFrom}
+                        variant="panel"
+                      />
+                    </div>
+                  </details>
                 </div>
               )}
               </>
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
 

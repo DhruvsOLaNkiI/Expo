@@ -1,4 +1,12 @@
-import { MongoClient, Db, Collection } from 'mongodb';
+import { MongoClient, Db, type Collection } from 'mongodb';
+import {
+  DEFAULT_EXPO_HALLS,
+  DEFAULT_EXPO_HALL_ID,
+  LEGACY_EXPO_HALL_ID,
+  dedupeExpoHalls,
+  normalizeHallId,
+  type ExpoHallMeta,
+} from '../features/shared/data/expoHalls';
 
 let cachedDb: Db | null = null;
 let cachedClient: MongoClient | null = null;
@@ -187,10 +195,13 @@ export async function connectToDatabase(): Promise<Db> {
     await visitorsCollection.createIndex({ createdAt: -1 });
 
     const boothsCollection = db.collection('booths');
-    await boothsCollection.createIndex({ boothId: 1 }, { unique: true });
+    await ensureBoothCollectionIndexes(boothsCollection);
 
     const sceneCollection = db.collection('sceneSettings');
     await sceneCollection.createIndex({ configId: 1 }, { unique: true });
+
+    const expoHallsCollection = db.collection('expoHalls');
+    await expoHallsCollection.createIndex({ hallId: 1 }, { unique: true });
 
     console.log('Connected to MongoDB successfully');
     return db;
@@ -429,25 +440,189 @@ export async function getVisitorRegistrationStats(): Promise<VisitorRegistration
 
 export interface BoothOverrideDocument {
   _id?: string;
-  boothId: string;
+  /** @deprecated Legacy — use hallId + slotId. Kept for old rows. */
+  boothId?: string;
+  hallId?: string;
+  slotId?: string;
   /** Partial overrides — same shape as BoothLayoutPatch. Only R2 URLs, never base64. */
   patch: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export async function getAllBoothOverrides(): Promise<Record<string, Record<string, unknown>>> {
+function docHallAndSlot(d: BoothOverrideDocument): { hallId: string; slotId: string } {
+  if (d.hallId && d.slotId) return { hallId: d.hallId, slotId: d.slotId };
+  const legacySlot = d.boothId?.trim() || d.slotId?.trim() || '';
+  return { hallId: LEGACY_EXPO_HALL_ID, slotId: legacySlot };
+}
+
+const BOOTH_LAYOUT_PATCH_KEYS = ['position', 'rotation', 'scale', 'displayLayout'] as const;
+
+/** One booth per hall — global unique boothId blocked hall-2..6 writes. */
+async function ensureBoothCollectionIndexes(col: Collection<BoothOverrideDocument>): Promise<void> {
+  try {
+    const indexes = await col.indexes();
+    for (const idx of indexes) {
+      if (idx.key?.boothId === 1 && idx.unique && idx.name) {
+        await col.dropIndex(idx.name);
+        console.log(`Dropped legacy booths index: ${idx.name}`);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not drop legacy boothId index:', e);
+  }
+  await col.createIndex({ hallId: 1, slotId: 1 }, { unique: true, sparse: true });
+  await col.createIndex({ boothId: 1 }, { sparse: true });
+}
+
+function pickLayoutPatch(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of BOOTH_LAYOUT_PATCH_KEYS) {
+    if (patch[k] != null) out[k] = patch[k];
+  }
+  return out;
+}
+
+/**
+ * Copy position / rotation / scale / displayLayout for one slot from source hall → target hall.
+ * Merges into existing target patch (branding unchanged).
+ */
+export async function copyBoothLayoutToHall(
+  sourceHallId: string,
+  targetHallId: string,
+  slotId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const source = normalizeHallId(sourceHallId);
+  const target = normalizeHallId(targetHallId);
+  const slot = slotId.trim();
+  if (!slot) return { ok: false, error: 'Missing slotId' };
+  if (source === target) return { ok: false, error: 'Source and target hall must differ' };
+
+  try {
+    const byHall = await getBoothOverridesForHall(source);
+    const sourcePatch = byHall[slot];
+    if (!sourcePatch) {
+      return { ok: false, error: `No booth "${slot}" on ${source}` };
+    }
+    const layoutOnly = pickLayoutPatch(sourcePatch);
+    if (Object.keys(layoutOnly).length === 0) {
+      return { ok: false, error: `No layout fields on ${source}/${slot}` };
+    }
+    const ok = await patchBoothOverrideForHall(target, slot, layoutOnly);
+    if (!ok) return { ok: false, error: 'MongoDB write failed' };
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Copy failed';
+    return { ok: false, error: msg };
+  }
+}
+
+function sceneConfigId(hallId: string): string {
+  const h = normalizeHallId(hallId);
+  return h === LEGACY_EXPO_HALL_ID ? 'default' : h;
+}
+
+// ─── Expo halls registry ───
+
+export interface ExpoHallDocument {
+  _id?: string;
+  hallId: string;
+  label: string;
+  sortOrder: number;
+  enabled: boolean;
+  spawn: [number, number, number];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export async function ensureExpoHallsSeeded(): Promise<ExpoHallMeta[]> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<ExpoHallDocument>('expoHalls');
+    const now = new Date();
+    // Idempotent upsert — safe when init + cms-overview run in parallel (no double insertMany).
+    await Promise.all(
+      DEFAULT_EXPO_HALLS.map((h) =>
+        col.updateOne(
+          { hallId: h.hallId },
+          {
+            $set: {
+              label: h.label,
+              sortOrder: h.sortOrder,
+              enabled: h.enabled,
+              spawn: h.spawn,
+              updatedAt: now,
+            },
+            $setOnInsert: { hallId: h.hallId, createdAt: now },
+          },
+          { upsert: true },
+        ),
+      ),
+    );
+
+    const docs = await col.find({ enabled: { $ne: false } }).sort({ sortOrder: 1 }).toArray();
+    const halls = dedupeExpoHalls(
+      docs.map((d) => ({
+        hallId: d.hallId,
+        label: d.label,
+        sortOrder: d.sortOrder,
+        enabled: d.enabled !== false,
+        spawn: d.spawn as [number, number, number],
+      })),
+    );
+
+    // Remove duplicate Mongo rows (same hallId) left from earlier race inserts.
+    const seen = new Set<string>();
+    for (const d of docs) {
+      if (!d.hallId || seen.has(d.hallId)) {
+        if (d._id) await col.deleteOne({ _id: d._id });
+        continue;
+      }
+      seen.add(d.hallId);
+    }
+
+    if (halls.length === 0) return [...DEFAULT_EXPO_HALLS];
+    return halls;
+  } catch (error) {
+    console.error('Error ensuring expo halls:', error);
+    return [...DEFAULT_EXPO_HALLS];
+  }
+}
+
+export async function listExpoHalls(): Promise<ExpoHallMeta[]> {
+  return ensureExpoHallsSeeded();
+}
+
+export async function getBoothOverridesForHall(
+  hallId: string,
+): Promise<Record<string, Record<string, unknown>>> {
   try {
     const db = await connectToDatabase();
     const col = db.collection<BoothOverrideDocument>('booths');
-    const docs = await col.find({}).toArray();
+    const h = normalizeHallId(hallId);
+    const docs = await col
+      .find({
+        $or: [
+          { hallId: h },
+          ...(h === LEGACY_EXPO_HALL_ID ? [{ hallId: { $exists: false } }, { hallId: null }] : []),
+        ],
+      })
+      .toArray();
     const out: Record<string, Record<string, unknown>> = {};
-    for (const d of docs) out[d.boothId] = d.patch;
+    for (const d of docs) {
+      const { hallId: docHall, slotId } = docHallAndSlot(d);
+      if (docHall !== h || !slotId) continue;
+      out[slotId] = d.patch;
+    }
     return out;
   } catch (error) {
-    console.error('Error fetching booth overrides:', error);
+    console.error(`Error fetching booth overrides for ${hallId}:`, error);
     return {};
   }
+}
+
+export async function getAllBoothOverrides(): Promise<Record<string, Record<string, unknown>>> {
+  return getBoothOverridesForHall(DEFAULT_EXPO_HALL_ID);
 }
 
 export async function getBoothOverride(boothId: string): Promise<Record<string, unknown> | null> {
@@ -462,51 +637,101 @@ export async function getBoothOverride(boothId: string): Promise<Record<string, 
   }
 }
 
-export async function patchBoothOverride(
-  boothId: string,
+export async function patchBoothOverrideForHall(
+  hallId: string,
+  slotId: string,
   patch: Record<string, unknown>,
 ): Promise<boolean> {
   try {
     const db = await connectToDatabase();
     const col = db.collection<BoothOverrideDocument>('booths');
+    const h = normalizeHallId(hallId);
+    const slot = slotId.trim();
+    if (!slot) return false;
     const now = new Date();
-    const existing = await col.findOne({ boothId });
+    const existing = await col.findOne({
+      $or: [
+        { hallId: h, slotId: slot },
+        ...(h === LEGACY_EXPO_HALL_ID ? [{ boothId: slot, hallId: { $exists: false } }] : []),
+      ],
+    });
     const merged = { ...(existing?.patch ?? {}), ...patch };
     await col.updateOne(
-      { boothId },
-      { $set: { patch: merged, updatedAt: now }, $setOnInsert: { boothId, createdAt: now } },
+      { hallId: h, slotId: slot },
+      {
+        $set: {
+          patch: merged,
+          updatedAt: now,
+          hallId: h,
+          slotId: slot,
+          boothId: slot,
+        },
+        $setOnInsert: { createdAt: now },
+      },
       { upsert: true },
     );
+    if (h === LEGACY_EXPO_HALL_ID && existing?.boothId && !existing.hallId) {
+      await col.deleteOne({ boothId: slot, hallId: { $exists: false } });
+    }
     return true;
   } catch (error) {
-    console.error(`Error patching booth ${boothId}:`, error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`Error patching booth ${hallId}/${slotId}:`, msg);
     return false;
   }
 }
 
-export async function deleteBoothOverride(boothId: string): Promise<boolean> {
+export async function patchBoothOverride(
+  boothId: string,
+  patch: Record<string, unknown>,
+  hallId: string = DEFAULT_EXPO_HALL_ID,
+): Promise<boolean> {
+  return patchBoothOverrideForHall(hallId, boothId, patch);
+}
+
+export async function deleteBoothOverrideForHall(hallId: string, slotId: string): Promise<boolean> {
   try {
     const db = await connectToDatabase();
     const col = db.collection<BoothOverrideDocument>('booths');
-    await col.deleteOne({ boothId });
+    const h = normalizeHallId(hallId);
+    const slot = slotId.trim();
+    await col.deleteOne({ hallId: h, slotId: slot });
+    if (h === LEGACY_EXPO_HALL_ID) {
+      await col.deleteOne({ boothId: slot, hallId: { $exists: false } });
+    }
     return true;
   } catch (error) {
-    console.error(`Error deleting booth ${boothId}:`, error);
+    console.error(`Error deleting booth ${hallId}/${slotId}:`, error);
     return false;
   }
 }
 
-export async function saveAllBoothOverrides(
+export async function deleteBoothOverride(boothId: string, hallId: string = DEFAULT_EXPO_HALL_ID): Promise<boolean> {
+  return deleteBoothOverrideForHall(hallId, boothId);
+}
+
+export async function saveAllBoothOverridesForHall(
+  hallId: string,
   overrides: Record<string, Record<string, unknown>>,
 ): Promise<boolean> {
   try {
     const db = await connectToDatabase();
     const col = db.collection<BoothOverrideDocument>('booths');
+    const h = normalizeHallId(hallId);
     const now = new Date();
-    const ops = Object.entries(overrides).map(([boothId, patch]) => ({
+    const ops = Object.entries(overrides).map(([slotId, patch]) => ({
       updateOne: {
-        filter: { boothId },
-        update: { $set: { patch, updatedAt: now }, $setOnInsert: { boothId, createdAt: now } },
+        filter: { hallId: h, slotId },
+        update: {
+          $set: {
+            patch,
+            updatedAt: now,
+            hallId: h,
+            slotId,
+            boothId: slotId,
+          },
+          $setOnInsert: { createdAt: now },
+        },
         upsert: true,
       },
     }));
@@ -516,6 +741,13 @@ export async function saveAllBoothOverrides(
     console.error('Error saving all booth overrides:', error);
     return false;
   }
+}
+
+export async function saveAllBoothOverrides(
+  overrides: Record<string, Record<string, unknown>>,
+  hallId: string = DEFAULT_EXPO_HALL_ID,
+): Promise<boolean> {
+  return saveAllBoothOverridesForHall(hallId, overrides);
 }
 
 // ─── Scene settings (single document per expo) ───
@@ -529,14 +761,15 @@ export interface SceneSettingsDocument {
   updatedAt: Date;
 }
 
-export async function getSceneSettings(): Promise<{
+export async function getSceneSettingsForHall(hallId: string): Promise<{
   settings: Record<string, unknown>;
   r2PublicBase: string;
 }> {
   try {
     const db = await connectToDatabase();
     const col = db.collection<SceneSettingsDocument>('sceneSettings');
-    const doc = await col.findOne({ configId: 'default' });
+    const configId = sceneConfigId(hallId);
+    const doc = await col.findOne({ configId });
     return {
       settings: doc?.settings ?? {},
       r2PublicBase: doc?.r2PublicBase ?? '',
@@ -547,21 +780,30 @@ export async function getSceneSettings(): Promise<{
   }
 }
 
-export async function patchSceneSettings(
+export async function getSceneSettings(): Promise<{
+  settings: Record<string, unknown>;
+  r2PublicBase: string;
+}> {
+  return getSceneSettingsForHall(DEFAULT_EXPO_HALL_ID);
+}
+
+export async function patchSceneSettingsForHall(
+  hallId: string,
   patch: Record<string, unknown>,
   r2PublicBase?: string,
 ): Promise<boolean> {
   try {
     const db = await connectToDatabase();
     const col = db.collection<SceneSettingsDocument>('sceneSettings');
+    const configId = sceneConfigId(hallId);
     const now = new Date();
-    const existing = await col.findOne({ configId: 'default' });
+    const existing = await col.findOne({ configId });
     const merged = { ...(existing?.settings ?? {}), ...patch };
     const $set: Record<string, unknown> = { settings: merged, updatedAt: now };
     if (r2PublicBase !== undefined) $set.r2PublicBase = r2PublicBase;
     await col.updateOne(
-      { configId: 'default' },
-      { $set, $setOnInsert: { configId: 'default', createdAt: now } },
+      { configId },
+      { $set, $setOnInsert: { configId, createdAt: now } },
       { upsert: true },
     );
     return true;
@@ -569,6 +811,14 @@ export async function patchSceneSettings(
     console.error('Error patching scene settings:', error);
     return false;
   }
+}
+
+export async function patchSceneSettings(
+  patch: Record<string, unknown>,
+  r2PublicBase?: string,
+  hallId: string = DEFAULT_EXPO_HALL_ID,
+): Promise<boolean> {
+  return patchSceneSettingsForHall(hallId, patch, r2PublicBase);
 }
 
 export async function resetSceneSettings(): Promise<boolean> {
@@ -584,16 +834,43 @@ export async function resetSceneSettings(): Promise<boolean> {
 }
 
 /** Full expo config payload for GET /api/expo/config. */
-export async function getFullExpoConfig(): Promise<{
+export async function getFullExpoConfig(hallId: string = DEFAULT_EXPO_HALL_ID): Promise<{
+  hallId: string;
   booths: Record<string, Record<string, unknown>>;
   scene: Record<string, unknown>;
   r2PublicBase: string;
 }> {
+  const h = normalizeHallId(hallId);
   const [booths, { settings: scene, r2PublicBase }] = await Promise.all([
-    getAllBoothOverrides(),
-    getSceneSettings(),
+    getBoothOverridesForHall(h),
+    getSceneSettingsForHall(h),
   ]);
-  return { booths, scene, r2PublicBase };
+  return { hallId: h, booths, scene, r2PublicBase };
+}
+
+/** CMS: all halls with booth + scene overrides in one request. */
+export async function getCmsExpoOverview(): Promise<{
+  halls: ExpoHallMeta[];
+  r2PublicBase: string;
+  byHall: Record<
+    string,
+    { booths: Record<string, Record<string, unknown>>; scene: Record<string, unknown> }
+  >;
+}> {
+  const halls = await listExpoHalls();
+  const byHall: Record<
+    string,
+    { booths: Record<string, Record<string, unknown>>; scene: Record<string, unknown> }
+  > = {};
+  let r2PublicBase = '';
+  await Promise.all(
+    halls.map(async (hall) => {
+      const cfg = await getFullExpoConfig(hall.hallId);
+      if (cfg.r2PublicBase) r2PublicBase = cfg.r2PublicBase;
+      byHall[hall.hallId] = { booths: cfg.booths, scene: cfg.scene };
+    }),
+  );
+  return { halls, r2PublicBase, byHall };
 }
 
 // ─── Buyer Questionnaire ──────────────────────────────────────────────────
