@@ -12,7 +12,7 @@ let cachedDb: Db | null = null;
 let cachedClient: MongoClient | null = null;
 
 /** When a connect attempt failed, skip retries for this long so API calls fail fast instead of hanging. */
-const CONNECT_RETRY_COOLDOWN_MS = 15_000;
+const CONNECT_RETRY_COOLDOWN_MS = 15_000; 
 let lastConnectFailAt = 0;
 let lastConnectError = '';
 
