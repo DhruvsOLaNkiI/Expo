@@ -22,10 +22,15 @@ export function isLowPowerDevice(): boolean {
 /** Applied when the visitor has no saved scene config in this browser. */
 export function getBootstrapSceneForDevice(): SceneOverridesInput {
   if (isLowPowerDevice()) {
+    // Phones start at HD (not 480p) so booths look crisp out of the box; compression +
+    // the per-quality DPR ceiling keep the framerate playable. Visitors can drop to
+    // 480p / Smooth from the Quality bar if their device struggles.
     return {
-      ...SMOOTH_MODE_SCENE_PATCH,
+      modelCompression: '30fps',
       showVideos: true,
       showHallCanopy: true,
+      fogEnabled: false,
+      renderQuality: 'hd',
     };
   }
   return {
@@ -37,14 +42,24 @@ export function getBootstrapSceneForDevice(): SceneOverridesInput {
   };
 }
 
-/** Cap pixel ratio on Mac / mobile so HD does not mean 2× native resolution. */
+/**
+ * Pixel-ratio range for the canvas on Mac / mobile.
+ *
+ * Phones report devicePixelRatio 2–3; rendering at native is far too heavy, but the old
+ * flat cap (~0.9–1.15) clamped EVERY tier to roughly the same low resolution, so tapping
+ * "Full HD" on a phone changed nothing and booths looked blurry/jagged. We now keep the
+ * tier's intent: the ceiling scales with the chosen quality preset so Full HD genuinely
+ * renders sharper than 480p. r3f varies the DPR within [min, max] based on live perf, so a
+ * high ceiling only kicks in when the phone can sustain it.
+ */
 export function getEffectiveCanvasDpr(
   preset: [number, number],
   options?: { compressModels?: boolean },
 ): [number, number] {
   if (!isLowPowerDevice()) return preset;
   const tight = options?.compressModels === true;
-  const max = tight ? 0.9 : 1.15;
-  const min = tight ? 0.5 : 0.65;
-  return [Math.min(preset[0], min), Math.min(preset[1], max)];
+  // Sharper than before: Full HD reaches ~1.8 (or 1.5 when compressing), 480p stays low.
+  const ceiling = tight ? 1.5 : 1.8;
+  const [min, max] = preset;
+  return [Math.min(min, ceiling), Math.min(max, ceiling)];
 }
