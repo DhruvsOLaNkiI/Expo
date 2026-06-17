@@ -68,6 +68,91 @@ function urlForStatusQuery(url: string | undefined): string | undefined {
   return u;
 }
 
+export type PageIndexOverviewEntry = {
+  boothId: string;
+  documentType: PageIndexDocType;
+  indexed: boolean;
+  indexStatus: string | null;
+  indexError: string | null;
+  indexedAt: string | null;
+  pdfUrl: string | null;
+  docName: string | null;
+  treeStats: PageIndexTreeStats | null;
+};
+
+export type PageIndexTreeResponse = {
+  boothId: string;
+  documentType: PageIndexDocType;
+  indexed: boolean;
+  indexStatus: string | null;
+  indexError: string | null;
+  indexedAt: string | null;
+  pdfUrl: string | null;
+  docName: string | null;
+  structure: unknown;
+  treeStats: PageIndexTreeStats | null;
+};
+
+export async function fetchPageIndexTree(
+  boothId: string,
+  documentType: PageIndexDocType,
+): Promise<PageIndexTreeResponse> {
+  const qs = new URLSearchParams({ boothId, documentType });
+  let res: Response;
+  try {
+    res = await fetch(`/api/pageindex/tree?${qs}`);
+  } catch (e) {
+    const hint =
+      e instanceof TypeError && e.message === 'Failed to fetch'
+        ? 'Cannot reach /api/pageindex/tree. Run npm run dev and keep the terminal open.'
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    throw new Error(hint);
+  }
+  const text = await res.text();
+  let data: { ok: boolean; error?: string } & Partial<PageIndexTreeResponse>;
+  try {
+    data = text.trim() ? (JSON.parse(text) as typeof data) : { ok: false, error: `Empty response (${res.status})` };
+  } catch {
+    throw new Error(`Invalid PageIndex tree response (${res.status})`);
+  }
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data as PageIndexTreeResponse;
+}
+
+export async function fetchAllPageIndexOverview(): Promise<PageIndexOverviewEntry[]> {
+  let res: Response;
+  try {
+    res = await fetch('/api/pageindex/overview');
+  } catch (e) {
+    const hint =
+      e instanceof TypeError && e.message === 'Failed to fetch'
+        ? 'Cannot reach /api/pageindex/overview. Run npm run dev and keep the terminal open.'
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    throw new Error(hint);
+  }
+  const text = await res.text();
+  let data: { ok: boolean; error?: string; documents?: PageIndexOverviewEntry[] };
+  try {
+    data = text.trim() ? (JSON.parse(text) as typeof data) : { ok: false, error: `Empty response (${res.status})` };
+  } catch {
+    throw new Error(
+      res.status === 404
+        ? 'PageIndex overview API not found — restart the dev server (npm run dev).'
+        : `Invalid PageIndex overview response (${res.status})`,
+    );
+  }
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return data.documents ?? [];
+}
+
 export async function fetchBoothPageIndexStatus(
   boothId: string,
   urls: { brochureUrl?: string; priceListUrl?: string },

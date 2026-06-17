@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { registerVisitorOnServer } from '@/api/visitorMongo';
+import { VisitorLoginBackForm } from '@/features/visitor/components/VisitorLoginBackForm';
 import { useStore } from '@/store';
 
 const inputClass =
@@ -31,6 +32,8 @@ export function RegistrationLobbyHud() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] w-[90%] max-w-md bg-white/95 border border-[#d4af37]/40 p-6 rounded-2xl shadow-2xl backdrop-blur-md pointer-events-auto">
         {registrationUi === 'granted' ? (
           <GrantedPanel onContinue={enterMainExpo} />
+        ) : registrationUi === 'login' ? (
+          <LoginBackPanel onClose={closeRegistrationUi} />
         ) : (
           <RegisterForm onClose={closeRegistrationUi} />
         )}
@@ -39,14 +42,49 @@ export function RegistrationLobbyHud() {
   );
 }
 
-function PanelShell({ title, children }: { title: string; children: ReactNode }) {
+function PanelShell({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose?: () => void;
+}) {
   return (
     <>
-      <div className="mb-4 border-b border-black/10 pb-3">
+      <div className="mb-4 border-b border-black/10 pb-3 flex items-start justify-between gap-3">
         <h2 className="text-lg font-bold tracking-widest text-[#d4af37]">{title}</h2>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 -mt-0.5 -mr-1 flex h-8 w-8 items-center justify-center rounded-lg text-black/40 hover:bg-black/5 hover:text-black/70 transition-colors text-xl leading-none"
+          >
+            ×
+          </button>
+        ) : null}
       </div>
       {children}
     </>
+  );
+}
+
+function LoginBackPanel({ onClose }: { onClose: () => void }) {
+  const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
+
+  return (
+    <PanelShell title="Login back" onClose={onClose}>
+      <VisitorLoginBackForm variant="registration" onSuccess={onClose} />
+      <button
+        type="button"
+        onClick={() => openRegistrationPopup()}
+        className="w-full mt-4 py-2.5 rounded-lg border border-black/10 text-black/60 text-xs font-semibold uppercase tracking-wider hover:bg-black/5"
+      >
+        ← New registration instead
+      </button>
+    </PanelShell>
   );
 }
 
@@ -54,6 +92,7 @@ function RegisterForm({ onClose }: { onClose: () => void }) {
   const visitorProfile = useStore((s) => s.visitorProfile);
   const confirmRegistration = useStore((s) => s.confirmRegistration);
   const skipToMainExpo = useStore((s) => s.skipToMainExpo);
+  const openLoginPopup = useStore((s) => s.openLoginPopup);
 
   const [name, setName] = useState(visitorProfile?.displayName ?? '');
   const [email, setEmail] = useState(visitorProfile?.email ?? '');
@@ -100,10 +139,18 @@ function RegisterForm({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <PanelShell title="Visitor Registration">
+    <PanelShell title="Visitor Registration" onClose={onClose}>
       <p className="text-xs text-gray-500 mb-4 leading-relaxed">
         Complete the form below to check in and access the main exhibition hall.
       </p>
+
+      <button
+        type="button"
+        onClick={() => openLoginPopup()}
+        className="w-full mb-4 py-2.5 rounded-lg border border-[#d4af37]/45 bg-[#d4af37]/10 text-[#5c4a1a] text-xs font-bold uppercase tracking-wider hover:bg-[#d4af37]/18"
+      >
+        Already registered? Login back with Visitor ID
+      </button>
 
       {!visitorProfile ? (
         <p className="text-sm text-amber-800 mb-4">

@@ -69,7 +69,7 @@ export function CustomFaqVisitorPopup({
 
     void submitFaqResponses({
       boothId,
-      sessionId: getAnalyticsSessionId(),
+      sessionId: getAnalyticsSessionId(visitorProfile?.id),
       visitorId: visitorProfile?.id,
       visitorName: visitorProfile?.displayName,
       answers: payload.filter((a) => a.optionId),

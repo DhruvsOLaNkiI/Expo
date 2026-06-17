@@ -21,6 +21,15 @@ import {
   handleQuestionnairePossibilityGet,
   handleBoothEngagementActionsGet,
   handleBoothVisitorEngagementGet,
+  handleExpoEngagementInsightsGet,
+  handleExpoOverviewGet,
+  handlePavilionRankingsGet,
+  handleExpoLiveGet,
+  handleExpoAiSummaryGet,
+  handleExpoTopFaqGet,
+  handleExpoTopSalesChatGet,
+  handleExpoVisitorProfileGet,
+  handleVisitorTrendGet,
 } from './server/routes';
 
 type ApiConnectServer = {
@@ -130,6 +139,51 @@ function attachAnalyticsApi(server: ApiConnectServer, rootDir: string, mode: str
 
     if (url === '/api/analytics/booth-visitor-engagement' && req.method === 'GET') {
       void handleBoothVisitorEngagementGet(req, res);
+      return;
+    }
+
+    if (url === '/api/analytics/expo-engagement' && req.method === 'GET') {
+      void handleExpoEngagementInsightsGet(res);
+      return;
+    }
+
+    if (url === '/api/analytics/expo-overview' && req.method === 'GET') {
+      void handleExpoOverviewGet(res);
+      return;
+    }
+
+    if (url === '/api/analytics/pavilion-rankings' && req.method === 'GET') {
+      void handlePavilionRankingsGet(res);
+      return;
+    }
+
+    if (url === '/api/analytics/expo-live' && req.method === 'GET') {
+      void handleExpoLiveGet(res);
+      return;
+    }
+
+    if (url === '/api/analytics/expo-ai-summary' && req.method === 'GET') {
+      void handleExpoAiSummaryGet(res);
+      return;
+    }
+
+    if (url.startsWith('/api/analytics/visitor-trend') && req.method === 'GET') {
+      void handleVisitorTrendGet(req, res);
+      return;
+    }
+
+    if (url === '/api/analytics/expo-top-faq' && req.method === 'GET') {
+      void handleExpoTopFaqGet(res);
+      return;
+    }
+
+    if (url === '/api/analytics/expo-top-sales-chat' && req.method === 'GET') {
+      void handleExpoTopSalesChatGet(res);
+      return;
+    }
+
+    if (url.startsWith('/api/analytics/expo-visitor-profile') && req.method === 'GET') {
+      void handleExpoVisitorProfileGet(req, res);
       return;
     }
 

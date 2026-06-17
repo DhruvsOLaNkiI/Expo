@@ -160,6 +160,13 @@ export function Player() {
     applyCameraFromFeet(camera, feetRef.current, mode);
   }, [expoPhase, camera, mainSpawn, mainSpawnYaw]);
 
+  /* ── release pointer lock while layout gizmo is active ───── */
+  useEffect(() => {
+    if (!hallLayoutEditMode) return;
+    document.exitPointerLock();
+    controlsRef.current?.unlock();
+  }, [hallLayoutEditMode]);
+
   /* ── pointer lock (desktop) ───────────────────────────────── */
   useEffect(() => {
     if (isTouch) return;
@@ -211,8 +218,14 @@ export function Player() {
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest('[data-expo-ui]')) return;
-      if (hallLayoutEditMode) return;
-      if (!activeBooth && !ctaResourcePopup && registrationUi === 'none' && controlsRef.current && !isLocked.current) {
+      if (
+        !hallLayoutEditMode &&
+        !activeBooth &&
+        !ctaResourcePopup &&
+        registrationUi === 'none' &&
+        controlsRef.current &&
+        !isLocked.current
+      ) {
         controlsRef.current.lock();
       }
     };
@@ -264,12 +277,12 @@ export function Player() {
       camera.updateProjectionMatrix();
     }
 
-    if (activeBooth || ctaResourcePopup || hallLayoutEditMode || registrationUi !== 'none') {
+    if (activeBooth || ctaResourcePopup || registrationUi !== 'none') {
       applyCameraFromFeet(camera, feetRef.current, cameraMode);
       return;
     }
 
-    const canMoveDesktop = !isTouch && isLocked.current;
+    const canMoveDesktop = !isTouch && (isLocked.current || hallLayoutEditMode);
     const canMoveTouch = isTouch;
     if (!canMoveDesktop && !canMoveTouch) {
       applyCameraFromFeet(camera, feetRef.current, cameraMode);

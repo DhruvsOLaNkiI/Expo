@@ -7,6 +7,8 @@ export { HallLayoutEditHud } from './components/HallLayoutEditHud';
 export { CameraModeHud } from './components/CameraModeHud';
 export { SceneQualityHud } from './components/SceneQualityHud';
 export { ExpoSceneSettingsHud } from './components/ExpoSceneSettingsHud';
+export { ExpoVisitorMenu } from './components/ExpoVisitorMenu';
+export { ExpoAdminBottomBar } from './components/ExpoAdminBottomBar';
 export { RoamingExecutive } from './components/RoamingExecutive';
 export { CAMERA_MODES, CAMERA_MODE_ORDER } from './camera/cameraModes';
 export type { CameraMode } from './camera/cameraModes';

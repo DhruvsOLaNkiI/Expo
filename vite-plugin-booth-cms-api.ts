@@ -34,6 +34,45 @@ type ApiConnectServer = {
   };
 };
 
+function getServerAdminKey(): string {
+  return (
+    process.env.EXPO_ADMIN_KEY?.trim() ||
+    process.env.VITE_EXPO_ADMIN_KEY?.trim() ||
+    'expo-admin-dev'
+  );
+}
+
+function normalizeVisitorId(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function getServerAdminVisitorIds(): string[] {
+  const raw =
+    process.env.EXPO_ADMIN_VISITOR_IDS?.trim() ||
+    process.env.VITE_EXPO_ADMIN_VISITOR_IDS?.trim() ||
+    'VX-1BVJQ9CZ';
+  return raw.split(',').map(normalizeVisitorId).filter(Boolean);
+}
+
+function isAdminRequest(req: IncomingMessage): boolean {
+  const keyHeader = req.headers['x-expo-admin-key'];
+  const key = Array.isArray(keyHeader) ? keyHeader[0] : keyHeader;
+  if (key?.trim() && key.trim() === getServerAdminKey()) return true;
+
+  const visitorHeader = req.headers['x-expo-admin-visitor-id'];
+  const visitorId = normalizeVisitorId(
+    Array.isArray(visitorHeader) ? visitorHeader[0] ?? '' : visitorHeader ?? '',
+  );
+  if (!visitorId) return false;
+  return getServerAdminVisitorIds().includes(visitorId);
+}
+
+function rejectUnlessAdmin(req: IncomingMessage, res: ServerResponse): boolean {
+  if (isAdminRequest(req)) return true;
+  sendJson(res, 403, { ok: false, error: 'Admin key required (X-Expo-Admin-Key)' });
+  return false;
+}
+
 /** Dev + production: MongoDB-backed booth CMS + scene settings API. */
 export function boothCmsApiPlugin(_rootDir: string): Plugin {
   return {
@@ -95,6 +134,7 @@ function attachBoothCmsApi(server: ApiConnectServer) {
     // ── POST /api/booth-cms/copy-booth-layout — copy layout fields one slot hall → hall ──
     if (url === '/api/booth-cms/copy-booth-layout' && req.method === 'POST') {
       void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
@@ -122,6 +162,7 @@ function attachBoothCmsApi(server: ApiConnectServer) {
     // ── POST /api/booth-cms/patch — patch a single booth ──
     if (url === '/api/booth-cms/patch' && req.method === 'POST') {
       void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
@@ -156,6 +197,7 @@ function attachBoothCmsApi(server: ApiConnectServer) {
     // ── POST /api/booth-cms/save — bulk save all booths ──
     if (url === '/api/booth-cms/save' && req.method === 'POST') {
       void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
@@ -191,6 +233,7 @@ function attachBoothCmsApi(server: ApiConnectServer) {
       const slotId = (parts.length >= 2 ? parts[1] : parts[0])?.trim();
       if (!slotId) { sendJson(res, 400, { ok: false, error: 'Missing slotId' }); return; }
       void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
         try {
           await deleteBoothOverrideForHall(hallId, slotId);
           sendJson(res, 200, { ok: true, hallId, slotId });
@@ -204,6 +247,7 @@ function attachBoothCmsApi(server: ApiConnectServer) {
     // ── POST /api/scene/patch — patch scene settings ──
     if (url === '/api/scene/patch' && req.method === 'POST') {
       void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
         try {
           const raw = await readBody(req);
           const body = JSON.parse(raw) as {
@@ -228,6 +272,7 @@ function attachBoothCmsApi(server: ApiConnectServer) {
     // ── DELETE /api/scene — reset scene settings ──
     if (url === '/api/scene' && req.method === 'DELETE') {
       void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
         try {
           await resetSceneSettingsMongo();
           sendJson(res, 200, { ok: true });

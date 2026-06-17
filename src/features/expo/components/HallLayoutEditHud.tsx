@@ -32,6 +32,12 @@ const REGISTRATION_OPTIONS: { id: string; label: string }[] = [
   { id: 'reg-expo-backdrop', label: 'LED backdrop wall' },
   { id: 'reg-queue-lanes', label: 'Queue lanes' },
   { id: 'reg-event-totems', label: 'Info totems & signage' },
+  { id: 'reg-corner-nw', label: 'Corner plant (NW)' },
+  { id: 'reg-corner-ne', label: 'Corner plant (NE)' },
+  { id: 'reg-corner-sw', label: 'Corner plant (SW)' },
+  { id: 'reg-corner-se', label: 'Corner plant (SE)' },
+  { id: 'reg-north-screen-left', label: 'North wall screen (left)' },
+  { id: 'reg-north-screen-right', label: 'North wall screen (right)' },
 ];
 
 function parseCoord(v: string, fallback: number): number {
@@ -342,7 +348,13 @@ export function HallLayoutEditHud() {
           </div>
           <p className="mt-1 text-[10px] leading-relaxed text-white/55">
             <strong className="text-white/75">Click object</strong> to select · <strong className="text-white/75">G</strong> move · <strong className="text-white/75">R</strong> rotate · <strong className="text-white/75">S</strong> resize
-            {!inRegistration && (
+            {inRegistration ? (
+              <>
+                {' '}
+                · <strong className="text-white/75">WASD</strong> walk · click scene to look · desk: drag{' '}
+                <strong className="text-white/75">green Y ring</strong> to spin
+              </>
+            ) : (
               <>
                 {' '}
                 · <strong className="text-white/75">Entry spawn</strong> = where visitors appear
@@ -551,6 +563,7 @@ export function HallLayoutEditHud() {
         onChange={(e) => {
           const next = e.target.value || null;
           setSel(next);
+          if (next?.startsWith('reg-')) setGizmoMode('translate');
         }}
       >
         <option value="">— Choose —</option>

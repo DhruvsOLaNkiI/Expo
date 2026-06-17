@@ -20,6 +20,7 @@ import {
 import { CmsPreview3D } from './CmsPreview3D';
 import { CmsHallDisplayPreview } from './CmsHallDisplayPreview';
 import { CmsHallMapTab } from './CmsHallMapTab';
+import { CmsPageIndexTab } from './CmsPageIndexTab';
 import { CmsAllHallsOverview } from './CmsAllHallsOverview';
 import { CmsApplyHallLayoutControls } from './CmsApplyHallLayoutControls';
 import { CmsApplySelectedBoothLayout } from './CmsApplySelectedBoothLayout';
@@ -288,7 +289,18 @@ function readFile(file: File): Promise<string> {
   });
 }
 
-type Tab = 'allHalls' | 'layout' | 'branding' | 'displays' | 'images' | 'media' | 'company' | 'lighting' | 'scene' | 'hallMap';
+type Tab =
+  | 'allHalls'
+  | 'layout'
+  | 'branding'
+  | 'displays'
+  | 'images'
+  | 'media'
+  | 'company'
+  | 'lighting'
+  | 'scene'
+  | 'hallMap'
+  | 'pageIndex';
 
 const BOOTH_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'allHalls', label: 'All Halls', icon: '▦' },
@@ -297,6 +309,7 @@ const BOOTH_TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'displays', label: 'Displays', icon: '▣' },
   { id: 'images', label: 'Images', icon: '◫' },
   { id: 'media', label: 'Media', icon: '▶' },
+  { id: 'pageIndex', label: 'Page Indexing', icon: '⊟' },
   { id: 'company', label: 'Company', icon: '◉' },
   { id: 'lighting', label: 'Lighting', icon: '☀' },
   { id: 'scene', label: 'Scene', icon: '⛶' },
@@ -330,6 +343,8 @@ export function CmsDashboard() {
   const activeHallLabel = getExpoHallMeta(activeHallId)?.label ?? activeHallId;
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
+  const isAdmin = useStore((s) => s.isAdmin);
+  const setAdminLoginOpen = useStore((s) => s.setAdminLoginOpen);
 
   useEffect(() => {
     void (async () => {
@@ -763,6 +778,34 @@ export function CmsDashboard() {
 
   const siteMapFields = useMemo(() => siteMapToStorageFields(siteMapSlides), [siteMapSlides]);
 
+  if (!isAdmin) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0a0f] text-white px-6">
+        <p className="text-[10px] uppercase tracking-[0.35em] text-violet-300/70 mb-2">Expo CMS</p>
+        <h1 className="text-xl font-bold mb-2">Admin access required</h1>
+        <p className="text-sm text-white/50 text-center max-w-md mb-6 leading-relaxed">
+          Booth content, scene settings, and hall layout are global — only an admin can edit them.
+        </p>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <button
+            type="button"
+            onClick={() => setAdminLoginOpen(true)}
+            className="rounded-lg bg-violet-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-violet-500"
+          >
+            Admin login
+          </button>
+          <button
+            type="button"
+            onClick={() => setCmsPage('expo')}
+            className="rounded-lg border border-white/15 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white/70 hover:bg-white/5"
+          >
+            Back to expo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[100] flex bg-[#0a0a0f] text-white font-sans select-none">
       {/* Sidebar */}
@@ -878,7 +921,9 @@ export function CmsDashboard() {
         <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0d0d14]/80 px-6 py-3 backdrop-blur-lg">
           <div className="flex items-center gap-4">
             <h2 className="text-base font-bold tracking-wider">
-              {tab === 'allHalls'
+              {tab === 'pageIndex'
+                ? 'Page Indexing'
+                : tab === 'allHalls'
                 ? 'All Expo Halls'
                 : isHallDisplay
                   ? 'Hall Big Display'
@@ -887,7 +932,15 @@ export function CmsDashboard() {
                     : (name || 'Select a booth')}
             </h2>
             <span className="rounded bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40 font-mono">
-              {tab === 'allHalls' ? '6 halls' : isHallDisplay ? 'hall-led' : isAllDisplays ? 'all-displays' : `${activeHallId} · ${selectedId}`}
+              {tab === 'pageIndex'
+                ? 'mongodb · pageindexes'
+                : tab === 'allHalls'
+                  ? '6 halls'
+                  : isHallDisplay
+                    ? 'hall-led'
+                    : isAllDisplays
+                      ? 'all-displays'
+                      : `${activeHallId} · ${selectedId}`}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -937,7 +990,15 @@ export function CmsDashboard() {
         <div className="flex flex-1 overflow-hidden">
           {!isAllDisplays && (
           <div className="flex-1 min-w-0 relative">
-            {tab === 'allHalls' ? (
+            {tab === 'pageIndex' ? (
+              <CmsPageIndexTab
+                booths={mergedList}
+                onSelectBooth={(boothId) => {
+                  handleBoothSelect(boothId);
+                  setTab('media');
+                }}
+              />
+            ) : tab === 'allHalls' ? (
               <CmsAllHallsOverview
                 halls={expoHalls}
                 activeHallId={activeHallId}
@@ -1008,7 +1069,7 @@ export function CmsDashboard() {
           )}
 
           {/* Properties panel */}
-          {tab !== 'allHalls' && (
+          {tab !== 'allHalls' && tab !== 'pageIndex' && (
           <div className={`${isAllDisplays ? 'flex-1' : 'w-80 shrink-0'} border-l border-white/[0.06] bg-[#0d0d14] overflow-y-auto`}>
             <div className={`${isAllDisplays ? 'p-6 max-w-4xl mx-auto' : 'p-5'} space-y-4`}>
               {isAllDisplays ? (

@@ -2,6 +2,8 @@ import { circOut } from 'motion';
 import { openDb, IDB_STORE, IDB_BOOTH_KEY } from './boothCmsPersist';
 import { REG_MAIN_EXPO_SPAWN } from '@/src/data/registrationHall';
 import { ucs2 } from 'punycode';
+import {faqResponseLocal} from '@/src/dashboard/faqResponseLocal';
+import {appendLocalFaqSubmission, readLocalFaqSubmissions} from '@/src/dashboard/faqResponseLocal';
 
 async function idbPutJson(json: string): Promise<boolean> {
   try {
@@ -51,6 +53,44 @@ function (main user ) = {
     ucs2 access token to THe USer 
     NOw,moveBy, the Both But THis FOr Trasnfornming IT FOrm THis SO THe usercan Easy Ly Acces IT  
 
+    const fixed: TeleportDestination[] = [
+      { id: 'main-entrance', label: 'Main entrance', position: [...REG_MAIN_EXPO_SPAWN] },
+      { id: 'reception', label: 'Reception & LED', position: [0, EYE_Y, entranceZ - 4] },
+      { id: 'center', label: 'Help Desk · center', position: [0, EYE_Y, 0] },
+      { id: 'help-desk', label: 'Help Desk', position: [0, EYE_Y, 0] },
+      { id: 'west-aisle', label: '← Left · West booths', position: [EXPO_AISLE_WEST_X, EYE_Y, 0] },
+      { id: 'east-aisle', label: 'Right · East booths →', position: [EXPO_AISLE_EAST_X, EYE_Y, 0] },
+      { id: 'both-rows', label: 'View both rows', position: [0, EYE_Y, -2] },
+      { id: 'ballroom', label: 'Ballroom stage', position: [HALL_HALF_WIDTH - 7, EYE_Y, 0] },
+      { id: 'west-wing', label: 'West row', position: [EXPO_AISLE_WEST_X, EYE_Y, -6] },
+      { id: 'east-wing', label: 'East row', position: [EXPO_AISLE_EAST_X, EYE_Y, -6] },
+    ];
+  
+    const boothStops = [
+      nearBooth('vertex-elite', 'Vertex Elite', -6),
+      nearBooth('builder-2', 'Aurum Residences', -5),
+      nearBooth('builder-1', 'Luxe Towers', -5),
+      nearBooth('builder-8', 'Luxe Gardens', -5),
+      nearBooth('builder-9', 'Luxe Skyline', -5),
+      nearBooth('builder-5', 'The Monarch', -5),
+      nearBooth('builder-4', 'Crown Estates', -5),
+      nearBooth('builder-6', 'Horizon Vistas', -5),
+    ].filter((d): d is TeleportDestination => d != null);
+  
+    const seen = new Set<string>();
+    return [...fixed, ...boothStops, ...].filter((d) => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+  }
+  
+  export const REGISTRATION_LOBBY_DESTINATION: TeleportDestination = {
+    id: 'registration-lobby',
+    label: 'Registration lobby',
+    position: [...REG_SPAWN],
+  };
+  
     export function Lightinig([<Ecompress>  </Ecompress><compress></compress>]( Ecompress, )
       return (
         function Lighting({ compressedMode = false }: { compressedMode?: boolean }) {
@@ -96,6 +136,58 @@ async function idbGetJson(): Promise<string | null> {
   return parsed.name === name && parsed.email === email && parsed.company === company
   */
   
+}
+
+
+function faqResponseLocal(): void {
+  if (typeof === 'Defined'){
+    console.log('faqResponseLocal is defined');
+  }else {
+    console.log('faqResponseLocal is not define');
+  }
+
+  export function faqResponseLocal(): void {
+    if (typeof faqResponseLocal === 'Defined'){
+      const faqResponseLocal = faqResponseLocal(debugger, 'faqResponseLocal');
+    }''else {
+      console.log('faqResponseLocal is not define');
+    }
+    faqResponseLocal(debugger, 'faqResponseLocal');
+    faqResponseLocal(debugger, 'faqResponseLocal');
+    faqResponseLocal(debugger, 'faqResponseLocal');
+
+  }
+}
+function readAll(): Record<string, FaqSubmissionRow[]> {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, FaqSubmissionRow[]>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAll(data: Record<string, FaqSubmissionRow[]>): void {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function appendLocalFaqSubmission(row: FaqSubmissionRow): void {
+  const all = readAll();
+  const list = all[row.boothId] ?? [];
+  all[row.boothId] = [row, ...list].slice(0, 200);
+  writeAll(all);
+}
+
+export function readLocalFaqSubmissions(boothId: string): FaqSubmissionRow[] {
+  return readAll()[boothId] ?? [];
 }
 
 export class CmsUploadError extends Error {
@@ -149,6 +241,7 @@ async function idbDeleteJson(): Promise<void> {
         resolve();
         console.errror 
       }
+      faqResponseLocal(debugger, 'faqResponseLocal')
       tx.onerror = () => {
         db.close();
         resolve();

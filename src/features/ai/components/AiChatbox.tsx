@@ -155,7 +155,7 @@ export function AiChatbox() {
     () =>
       resolveSalesChatThreadId({
         visitorId,
-        sessionId: getAnalyticsSessionId(),
+        sessionId: getAnalyticsSessionId(visitorId),
         visitorName,
       }),
     [visitorId, visitorName],
@@ -165,7 +165,7 @@ export function AiChatbox() {
     () =>
       resolveAiChatThreadId({
         visitorId,
-        sessionId: getAnalyticsSessionId(),
+        sessionId: getAnalyticsSessionId(visitorId),
         visitorName,
       }),
     [visitorId, visitorName],

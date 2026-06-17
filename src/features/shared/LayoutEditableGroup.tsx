@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import * as THREE from 'three';
 import { useStore } from '@/store';
+import { isLayoutTransformDragging } from '@/store/persist/hallLayout';
 import { registerLayoutObject, unregisterLayoutObject } from '@/features/shared/layoutRegistry';
 
 type Props = {
@@ -27,7 +28,7 @@ export function LayoutEditableGroup({
   const ref = useRef<THREE.Group>(null);
   const edit = useStore((s) => s.hallLayoutEditMode);
   const sel = useStore((s) => s.hallLayoutSelection);
-  const isEditing = edit && sel === name;
+  const isEditing = (edit && sel === name) || (sel === name && isLayoutTransformDragging());
 
   // Register immediately in the layout phase (fires before useEffect)
   useLayoutEffect(() => {

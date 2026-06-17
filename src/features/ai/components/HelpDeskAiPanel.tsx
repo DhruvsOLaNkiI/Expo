@@ -85,7 +85,8 @@ export function HelpDeskAiPanel() {
   const [listMode, setListMode] = useState<DeveloperListMode | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<ProjectFilterTag>>(new Set());
   const [selectedDeveloper, setSelectedDeveloper] = useState<ExpoDeveloper | null>(null);
-  const [savedIds, setSavedIds] = useState<string[]>(() => loadHelpDeskMemory().savedBoothIds);
+  const visitorId = visitorProfile?.id;
+  const [savedIds, setSavedIds] = useState<string[]>(() => loadHelpDeskMemory(visitorId).savedBoothIds);
   const [directionHint, setDirectionHint] = useState<string | null>(null);
   const [meetingNote, setMeetingNote] = useState<string | null>(null);
   const [liveStats, setLiveStats] = useState<ExpoLiveStats | null>(null);
@@ -104,7 +105,10 @@ export function HelpDeskAiPanel() {
 
   const trending = useMemo(() => getTrendingDevelopers(catalog), [catalog]);
   const featured = useMemo(() => getFeaturedDevelopers(catalog), [catalog]);
-  const recentIds = useMemo(() => loadHelpDeskMemory().recentBoothIds, [step, selectedDeveloper]);
+  const recentIds = useMemo(
+    () => loadHelpDeskMemory(visitorId).recentBoothIds,
+    [step, selectedDeveloper, visitorId],
+  );
 
   const aiSuggestion = useMemo(() => {
     const base = getAiSuggestion(propertyType ?? 'residential', listMode, activeFilters);
@@ -142,7 +146,7 @@ export function HelpDeskAiPanel() {
       resetFlow();
       return;
     }
-    const mem = loadHelpDeskMemory();
+    const mem = loadHelpDeskMemory(visitorId);
     setSavedIds(mem.savedBoothIds);
     void fetchExpoLiveStats().then(setLiveStats);
     if (helpDeskOpenPane === 'halls') {
@@ -154,7 +158,7 @@ export function HelpDeskAiPanel() {
       ? `Welcome ${visitorProfile.displayName} to the Virtual Property Expo. What type of property are you looking for?`
       : 'Welcome to the Virtual Property Expo. What type of property are you looking for?';
     speak(greeting);
-  }, [helpDeskOpen, helpDeskOpenPane, resetFlow, visitorProfile?.displayName]);
+  }, [helpDeskOpen, helpDeskOpenPane, resetFlow, visitorProfile?.displayName, visitorId]);
 
   if (!helpDeskOpen) return null;
 
@@ -163,12 +167,15 @@ export function HelpDeskAiPanel() {
   const teleportToBooth = (boothId: string, dev: ExpoDeveloper) => {
     const dest = teleportDestinations.find((d) => d.id === boothId);
     if (dest) {
-      pushRecentDeveloper(boothId);
-      saveHelpDeskPreferences({
-        propertyType: propertyType ?? undefined,
-        listMode: listMode ?? undefined,
-        lastBoothIds: [boothId],
-      });
+      pushRecentDeveloper(boothId, visitorId);
+      saveHelpDeskPreferences(
+        {
+          propertyType: propertyType ?? undefined,
+          listMode: listMode ?? undefined,
+          lastBoothIds: [boothId],
+        },
+        visitorId,
+      );
       teleportPlayer(dest.position);
       setHelpDeskOpen(false);
     }
@@ -183,8 +190,8 @@ export function HelpDeskAiPanel() {
   };
 
   const handleSave = (boothId: string) => {
-    const nowSaved = toggleSavedDeveloper(boothId);
-    setSavedIds(loadHelpDeskMemory().savedBoothIds);
+    const nowSaved = toggleSavedDeveloper(boothId, visitorId);
+    setSavedIds(loadHelpDeskMemory(visitorId).savedBoothIds);
     setMeetingNote(nowSaved ? 'Developer saved to your shortlist.' : 'Removed from shortlist.');
   };
 
@@ -210,13 +217,13 @@ export function HelpDeskAiPanel() {
 
   const pickListMode = (mode: DeveloperListMode) => {
     setListMode(mode);
-    saveHelpDeskPreferences({ propertyType: propertyType ?? undefined, listMode: mode });
+    saveHelpDeskPreferences({ propertyType: propertyType ?? undefined, listMode: mode }, visitorId);
     setStep('browse');
   };
 
   const openProjects = (dev: ExpoDeveloper) => {
     setSelectedDeveloper(dev);
-    pushRecentDeveloper(dev.boothId);
+    pushRecentDeveloper(dev.boothId, visitorId);
     setStep('projects');
   };
 

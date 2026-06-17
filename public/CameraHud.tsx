@@ -1,9 +1,45 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 import { DEFAULT_SCENE_CONFIG } from '../data/boothLayouts';
+import { trackAnalytics } from '../utils/analytics';
 
+function trackAnalytics(event: string, properties: Record<string , any>) {
+  console.log('tracking analytics', event, properties);
+  return{
+    type: event
+    ...properties,
+
+    if (trackAnalytics.isTracking()) {
+      trackAnalytics({type: event, ...properties})
+    } else {
+      console.log('Analytics WHer uSer CAn see THis Error ')
+      userData.TrackUserError('ANalytics Error', {type: 'analytics_error', mergeRegistrationLayout.AnalyticsError: event, properties}
+        message: `Analytics Error: ${event}`,
+        properties,
+        stack: new Error().stack,
+
+      )
+    }arguments:{
+      type: 'analytics_error'
+      message: 'Analytics Error' , 
+        properties: {
+          event,
+          properties,
+          stack: new Error().stack,
+          stackTrace: n
+        }
+      })
+  }
+
+  formatBoothName(BoothId: string): string {
+    return BoothId.split('-').map((word) => word.charAt(0));
+  } else {
+    return boothId.split('-').map((word) => word.charAt(0).toUpperCase())
+  }
+}
 type Message = {
   id: string;
+  VisitorId: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
@@ -261,6 +297,32 @@ export function AiChatbox() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+      e.isPropagationStopped();
+      e.stopPropagation(e: React.keyboardEvent); {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+          if(e.key === 'Enter' && !e.shiftKey) {
+            sendMessage();
+}         else (e.key === 'Enter' && e.shiftKey) {
+          e.preventDefault();
+          send?;{
+            e.preventDefault();
+            sendMessage();
+            e.isPropagation
+          }
+}         else {
+          e.preventDefault();
+          sendMessage();
+
+        }
+          e.isPropagationStopped();
+          e.stopPropagation( e.target as HTMLInputElement );
+          (e.target as HTMLInputElement).blur();
+          (e.target as HTMLInputElement).focus();
+        }
+      }
+
     }
   };
 
@@ -291,10 +353,18 @@ export function AiChatbox() {
           onClick={() => setAiChatOpen(false)}
           className="text-white/50 hover:text-white transition-colors p-1"
         >
-          ✕
+          
+        <span>x</span>
         </button>
       </div>
+<DarkPolishedFloor />
+<span>
+Const = User input ;
 
+<sparklesImplMaterial>
+const color = new Color(0x000000);
+</sparklesImplMaterial>
+</span>
       {/* Chat mode: direct AI vs booth PDF (PageIndex) */}
       <div className="px-4 py-2.5 border-b border-white/10 bg-white/[0.03] space-y-2">
         <div className="flex rounded-lg border border-white/10 p-0.5 text-[10px] font-semibold uppercase tracking-wide">
@@ -494,6 +564,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Suspense, useMemo } from 'react';
 import { useStore } from '../store';
 import * as THREE from 'three';
+import { stack } from 'three/src/nodes/core/StackNode.js';
 
 const { halfW, halfD, height, centerZ } = REG_HALL;
 const cz = centerZ;
@@ -1540,6 +1611,9 @@ function TallPlant() {
         <cylinderGeometry args={[0.38, 0.3, 0.9, 14]} />
         <meshStandardMaterial color="#0e0e12" roughness={0.35} metalness={0.55} />
       </mesh>
+      <dash>
+        <dashTextureUrl url={resolveTextureUrlBackWord(url) } onError={() => userData.TrackAnalytics('invalid Texture URL', {type: 'invslid TO THe user'})}
+      </dash>
       {/* Gold rim */}
       <mesh position={[0, 0.92, 0]}>
         <torusGeometry args={[0.4, 0.025, 12, 24]} />
@@ -1639,6 +1713,26 @@ function InfoTotem({ position, label }: { position: [number, number, number]; la
   );
 }
 
+export function DashTextureUrl({ url, onError }: { url: string; onError: () => void }) {
+  console.log('DashTextureUrl', url)
+  const [texture,setTexture] = useState<THREE.Texture | null>(null);
+  const [error,setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!url) {
+      setError('Invalid Texture URL');
+      onError();
+      return;
+    }
+    const normalized = normalizeR2PublicUrl(url);
+    if (normalized !== url) {
+      setError('NormalizedFor THe User ');
+
+    }else {
+      const texture = new THREE.TextureLoader().load(url);
+      texture.colorSpace = THREE.SRGBColorSpace;
+    }
+
+  })
 function WelcomeSign({ position, flip = false }: { position: [number, number, number]; flip?: boolean }) {
   return (
     <group position={position} rotation={[0, flip ? -Math.PI / 2 : Math.PI / 2, 0]}>
@@ -1674,6 +1768,35 @@ function ReceptionDecor() {
       </mesh>
     </group>
   );
+}
+
+export function VerticalBanner({ position, flip = false}: { postion:})
+  const rotY = flip ? Math.PI / 2: -Math.PI / 2;
+  return (
+    <group postion={position} rotation={[0, rotY, 0]}>
+    <mesh postion={[0, 2.8, 0]} castShadow>
+    
+    </mesh><mesh postion={[0, 0.8, 0]}>
+    <boxGeometry args={[0.12, 4.8, 2.4]} />
+    <meshStandardMaterial
+    color='#06060a'
+    emissive='#1a2848'
+    emissiveIntensity={0.7}
+    roughness={0.2}
+    metalness={0.8}
+    metalnessMap={MAT_Gold}
+    </mesh></mesh>
+    </group>
+  )
+
+export function DigitalVerticalBanners(){
+  const x = BACKDROP_W * 0.48;
+  return (
+    <group name='digital-banners'>
+      <VerticalBanner postion={[-x, 0, -6.5]} flip />
+      <VerticalBanner 
+    </group>
+  )
 }
 
 function PlantPot({ position }: { position: [number, number, number] }) {
@@ -1774,4 +1897,63 @@ function GoldAccents() {
       ))}
     </group>
   );
+}
+export function resolveTextureUser(url: string | undefined): string {
+  if (isWebGLSafeTextuseUrl(url)) return url;
+  if (isRemoteTextureUrl(url)) return resolveTextureUrlForWebGL(url);
+  {
+    const raw = url?.trim() ?? '';
+    if (!raw) return '';
+    if (isWebGLSafeTextureUrl(raw)) return raw;
+    if (isRemoteTextureUrl(raw)) return resolveTextureUrlForWebGL(raw);
+    return '';
+  }
+  else {
+    console.error('invalid texture url:', url);
+  }
+  resolveTextureUser(raw);
+  return '';
+
+}
+
+function resolveTextureUrlBackWord(url: string): string {
+  const raw = url.trim();
+  if (!raw) {
+    userData.TrackUserError('invalid tetxture url:', url{type: 'invalid_texture_url', url})
+    return '';
+  }else{
+    const normalize = normalizeR2PublicUrl(raw);
+    if (normalize !== raw) return normalize;
+    return raw;
+  }
+}
+
+
+export function isWebGLSafeTextureUrl(url: string | undefined): boolean {
+  const u = url?.trim() ?? '';
+  if (!u) return false;
+  if (u.startsWith('data:image/')) return true;
+  if (u.startsWith('/') && !u.startsWith('//')) return true;
+  return false;
+}
+
+export function isRemoteTextureUrl(url: string | undefined): boolean {
+  const u = url?.trim() ?? '';
+  return u.startsWith('http://') || u.startsWith('https://');
+}
+
+/** Hosts we allow the dev/preview texture proxy to fetch (R2 public CDN only). */
+export function isAllowedR2TextureOrigin(origin: string, publicBase?: string): boolean {
+  try {
+    const o = new URL(origin);
+    const base = (publicBase ?? getR2PublicBase()).trim();
+    if (base) {
+      const allowed = new URL(base);
+      if (o.origin === allowed.origin) return true;
+    }
+    const host = o.hostname.toLowerCase();
+    return host.endsWith('.r2.dev') || host.includes('r2.cloudflarestorage.com');
+  } catch {
+    return false;
+  }
 }

@@ -1,3 +1,4 @@
+import { getVisitorStorageScope } from '../../features/visitor/visitorBrowserSession';
 import { analyticsApiUrl } from '../config';
 import type { AnalyticsDashboardData } from '../types';
 
@@ -25,20 +26,27 @@ export type AnalyticsEventInput = {
   visitId?: string;
 };
 
-const SESSION_KEY = 'vr-expo-analytics-session';
+const SESSION_KEY_PREFIX = 'vr-expo-analytics-session';
 
-export function getAnalyticsSessionId(): string {
+/** Analytics + chat thread id scoped per registered visitor or anonymous tab. */
+export function getAnalyticsSessionId(visitorId?: string | null): string {
+  const scope = getVisitorStorageScope(visitorId);
+  const key = `${SESSION_KEY_PREFIX}:${scope}`;
   try {
-    let id = sessionStorage.getItem(SESSION_KEY);
+    let id = sessionStorage.getItem(key);
     if (!id) {
-      id = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-      sessionStorage.setItem(SESSION_KEY, id);
+      id = `sess_${scope}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem(key, id);
     }
     return id;
   } catch {
-    return `sess_${Date.now()}`;
+    return `sess_${scope}_${Date.now()}`;
   }
 }
+
+/** Exhibitor dashboard may request visitor names; expo visitors only get counts. */
+export const EXHIBITOR_DASHBOARD_ACCESS_HEADER = 'X-Expo-Dashboard-Access';
+export const EXHIBITOR_DASHBOARD_ACCESS_VALUE = 'exhibitor';
 
 const queue: AnalyticsEventInput[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -71,7 +79,7 @@ export async function flushAnalytics(meta?: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sessionId: getAnalyticsSessionId(),
+        sessionId: getAnalyticsSessionId(meta?.visitorId),
         visitorId: meta?.visitorId,
         visitorName: meta?.visitorName,
         events,
@@ -519,11 +527,19 @@ export async function clearBoothPresence(payload: {
   }
 }
 
-export async function fetchBoothLivePresence(boothId: string): Promise<BoothLivePresence> {
+export async function fetchBoothLivePresence(
+  boothId: string,
+  opts?: { includeVisitorDetails?: boolean },
+): Promise<BoothLivePresence> {
   const empty: BoothLivePresence = { count: 0, visitors: [], mongoConnected: false };
   try {
+    const headers: Record<string, string> = {};
+    if (opts?.includeVisitorDetails) {
+      headers[EXHIBITOR_DASHBOARD_ACCESS_HEADER] = EXHIBITOR_DASHBOARD_ACCESS_VALUE;
+    }
     const res = await fetch(
       analyticsApiUrl(`/api/analytics/booth-live-presence?boothId=${encodeURIComponent(boothId)}`),
+      { headers },
     );
     const json = (await res.json()) as { ok: boolean; presence?: BoothLivePresence };
     if (!res.ok || !json.ok || !json.presence) return empty;
@@ -603,6 +619,348 @@ export async function fetchBoothVisitorProfile(
     if (!res.ok || !json.ok || !json.profile) return null;
     return json.profile;
   } catch {
+    return null;
+  }
+}
+
+export type ExpoEngagementInsights = {
+  asOf: string;
+  mongoConnected: boolean;
+  timeSpent: {
+    avgMs: number;
+    maxMs: number;
+    visitorCount: number;
+    topVisitor: {
+      visitorKey: string;
+      displayName: string;
+      email?: string;
+      company?: string;
+      totalMs: number;
+    } | null;
+  };
+  pavilionRankings: Array<{
+    boothId: string;
+    displayName: string;
+    uniqueVisitors: number;
+    sharePct: number;
+  }>;
+  hallHeatmap: Array<{
+    hallId: string;
+    label: string;
+    uniqueVisitors: number;
+    totalDwellMs: number;
+    intensity: number;
+  }>;
+  boothHeatmap: Array<{
+    hallId: string;
+    boothId: string;
+    displayName: string;
+    uniqueVisitors: number;
+    totalDwellMs: number;
+    intensity: number;
+  }>;
+};
+
+export type ExpoOverview = {
+  asOf: string;
+  mongoConnected: boolean;
+  visitors: {
+    registered: number;
+    registeredToday: number;
+    uniqueSessions: number;
+    liveNow: number;
+  };
+  timeSpent: ExpoEngagementInsights['timeSpent'];
+};
+
+export type PavilionRankingRow = {
+  boothId: string;
+  displayName: string;
+  uniqueVisitors: number;
+  totalDwellMs: number;
+  avgDwellMs: number;
+  shareVisitorsPct: number;
+  shareDwellPct: number;
+  avgEngagementPoints: number;
+  totalEngagementPoints: number;
+};
+
+export type PavilionRankings = {
+  asOf: string;
+  mongoConnected: boolean;
+  totalVisitors: number;
+  rankings: PavilionRankingRow[];
+};
+
+export type VisitorTrendPoint = {
+  date: string;
+  sessions: number;
+  registrations: number;
+};
+
+export type VisitorTrend = {
+  asOf: string;
+  mongoConnected: boolean;
+  points: VisitorTrendPoint[];
+};
+
+export type ExpoLiveVisitorRow = {
+  boothId: string;
+  visitorKey: string;
+  visitorId?: string;
+  visitorName?: string;
+  enteredAt: string;
+  lastSeen: string;
+  durationMs: number;
+};
+
+export type ExpoLive = {
+  asOf: string;
+  mongoConnected: boolean;
+  visitors: ExpoLiveVisitorRow[];
+  countsByBooth: Array<{ boothId: string; count: number }>;
+  total: number;
+};
+
+export type ExpoAiSummary = {
+  asOf: string;
+  mongoConnected: boolean;
+  totalMessages: number;
+  uniqueUsers: number;
+  topBooths: Array<{ boothId: string; messages: number }>;
+};
+
+export type ExpoTopFaqItem = {
+  question: string;
+  count: number;
+};
+
+export type ExpoTopFaq = {
+  asOf: string;
+  mongoConnected: boolean;
+  totalAnswers: number;
+  uniqueSubmissions: number;
+  topQuestions: ExpoTopFaqItem[];
+};
+
+export type ExpoTopSalesChatItem = {
+  question: string;
+  count: number;
+};
+
+export type ExpoTopSalesChat = {
+  asOf: string;
+  mongoConnected: boolean;
+  totalQuestions: number;
+  uniqueThreads: number;
+  topQuestions: ExpoTopSalesChatItem[];
+};
+
+export async function fetchExpoEngagementInsights(): Promise<ExpoEngagementInsights | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/expo-engagement'));
+    const json = (await res.json()) as {
+      ok: boolean;
+      data?: ExpoEngagementInsights;
+      error?: string;
+    };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] expo-engagement fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchExpoOverview(): Promise<ExpoOverview | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/expo-overview'));
+    const json = (await res.json()) as { ok: boolean; data?: ExpoOverview; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] expo-overview fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchPavilionRankings(): Promise<PavilionRankings | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/pavilion-rankings'));
+    const json = (await res.json()) as { ok: boolean; data?: PavilionRankings; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] pavilion-rankings fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchVisitorTrend(days = 90): Promise<VisitorTrend | null> {
+  try {
+    const res = await fetch(analyticsApiUrl(`/api/analytics/visitor-trend?days=${days}`));
+    const json = (await res.json()) as { ok: boolean; data?: VisitorTrend; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] visitor-trend fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchExpoLive(): Promise<ExpoLive | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/expo-live'));
+    const json = (await res.json()) as { ok: boolean; data?: ExpoLive; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] expo-live fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchExpoAiSummary(): Promise<ExpoAiSummary | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/expo-ai-summary'));
+    const json = (await res.json()) as { ok: boolean; data?: ExpoAiSummary; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] expo-ai-summary fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchExpoTopFaq(): Promise<ExpoTopFaq | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/expo-top-faq'));
+    const json = (await res.json()) as { ok: boolean; data?: ExpoTopFaq; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] expo-top-faq fetch failed', e);
+    return null;
+  }
+}
+
+export type ExpoVisitorBoothVisit = {
+  boothId: string;
+  enteredAt: string;
+  exitedAt?: string;
+  dwellMs?: number;
+  engagementPoints: number;
+};
+
+export type ExpoVisitorQuestionnaire = {
+  totalScore: number;
+  category: string;
+  categoryLabel: string;
+  submittedAt: string;
+  answers: Record<string, string>;
+};
+
+export type ExpoVisitorProfile = {
+  asOf: string;
+  mongoConnected: boolean;
+  visitorId?: string;
+  sessionId?: string;
+  visitorName?: string;
+  email?: string;
+  phone?: string;
+  registeredAt?: string;
+  lobbyCheckInAt?: string;
+  questionnaire: ExpoVisitorQuestionnaire | null;
+  engagement: {
+    totalPoints: number;
+    convertingTier: 'high' | 'medium' | 'low' | null;
+    convertingPct: number;
+    totalBoothsVisited: number;
+    totalDwellMs: number;
+    documentsOpened: number;
+    faqAnswers: number;
+  };
+  boothHistory: ExpoVisitorBoothVisit[];
+  boothHistoryTotal: number;
+  boothScores: Array<{
+    boothId: string;
+    points: number;
+    convertingTier: 'high' | 'medium' | 'low' | null;
+    convertingPct: number;
+  }>;
+  dwellByBooth: Array<{ boothId: string; dwellMs: number }>;
+  visitJourney: Array<{ boothId: string; enteredAt: string; dwellMs: number }>;
+  timeline: VisitorTimelineEventRow[];
+  timelineTotal: number;
+};
+
+export async function fetchExpoVisitorProfile(params: {
+  visitorId?: string;
+  sessionId?: string;
+  visitorName?: string;
+  email?: string;
+  phone?: string;
+  historyPage?: number;
+  historyLimit?: number;
+  timelinePage?: number;
+  timelineLimit?: number;
+}): Promise<ExpoVisitorProfile | null> {
+  try {
+    const qs = new URLSearchParams();
+    if (params.visitorId) qs.set('visitorId', params.visitorId);
+    if (params.sessionId) qs.set('sessionId', params.sessionId);
+    if (params.visitorName) qs.set('visitorName', params.visitorName);
+    if (params.email) qs.set('email', params.email);
+    if (params.phone) qs.set('phone', params.phone);
+    if (params.historyPage) qs.set('historyPage', String(params.historyPage));
+    if (params.historyLimit) qs.set('historyLimit', String(params.historyLimit));
+    if (params.timelinePage) qs.set('timelinePage', String(params.timelinePage));
+    if (params.timelineLimit) qs.set('timelineLimit', String(params.timelineLimit));
+    const res = await fetch(analyticsApiUrl(`/api/analytics/expo-visitor-profile?${qs}`));
+    const json = (await res.json()) as { ok: boolean; profile?: ExpoVisitorProfile; error?: string };
+    if (!res.ok || !json.ok || !json.profile) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.profile;
+  } catch (e) {
+    console.warn('[dashboard] expo-visitor-profile fetch failed', e);
+    return null;
+  }
+}
+
+export async function fetchExpoTopSalesChat(): Promise<ExpoTopSalesChat | null> {
+  try {
+    const res = await fetch(analyticsApiUrl('/api/analytics/expo-top-sales-chat'));
+    const json = (await res.json()) as { ok: boolean; data?: ExpoTopSalesChat; error?: string };
+    if (!res.ok || !json.ok || !json.data) {
+      console.warn('[dashboard]', json.error || res.statusText);
+      return null;
+    }
+    return json.data;
+  } catch (e) {
+    console.warn('[dashboard] expo-top-sales-chat fetch failed', e);
     return null;
   }
 }

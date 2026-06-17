@@ -43,6 +43,7 @@ virtual-residential-expo/
 | `cms/` | CMS dashboard, scene panel, 3D preview |
 | `pageindex/` | PageIndex admin portal |
 | `shared/` | Cross-cutting data (booth layouts, teleport, help desk catalog) |
+| `payments/` | Payment types + (future) server routes, Razorpay, MongoDB orders — see `PAYMENTS_ARCHITECTURE.md` |
 
 Import from feature barrels when possible:
 
@@ -97,6 +98,8 @@ node scripts/fix-feature-imports.mjs
 | `/` | 3D expo (registration → main hall) |
 | `/cms` | CMS dashboard (lazy-loaded) |
 | `/pageindex` | PageIndex portal (lazy-loaded) |
+
+Payment system design: **`PAYMENTS_ARCHITECTURE.md`** (Razorpay + MongoDB, same or split host).
 
 ## Server / deployment
 

@@ -204,12 +204,26 @@ export const CATEGORY_META: Record<LeadCategory, {
   },
 };
 
+import { scopedStorageKey } from '@/features/visitor/visitorBrowserSession';
+
 const LS_KEY = 'vr-expo-questionnaire-done';
 
-export function markQuestionnaireDone(): void {
-  try { localStorage.setItem(LS_KEY, '1'); } catch { /* */ }
+function questionnaireKey(visitorId?: string | null): string {
+  return scopedStorageKey(LS_KEY, visitorId);
 }
 
-export function isQuestionnaireDone(): boolean {
-  try { return localStorage.getItem(LS_KEY) === '1'; } catch { return false; }
+export function markQuestionnaireDone(visitorId?: string | null): void {
+  try {
+    localStorage.setItem(questionnaireKey(visitorId), '1');
+  } catch {
+    /* */
+  }
+}
+
+export function isQuestionnaireDone(visitorId?: string | null): boolean {
+  try {
+    return localStorage.getItem(questionnaireKey(visitorId)) === '1';
+  } catch {
+    return false;
+  }
 }

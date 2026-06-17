@@ -516,6 +516,19 @@ export type RegistrationLayoutConfig = {
   ];
   /** Euler radians for lounge gizmo targets (`reg-lobby-*`, `reg-imported-*`). */
   loungeRotations: Record<string, [number, number, number]>;
+  /** World transforms for hall corner plants (`reg-corner-nw`, etc.). */
+  cornerPlantTransforms: Record<
+    string,
+    { position: [number, number, number]; rotation: [number, number, number] }
+  >;
+  /** Media on north lobby wall screens (`reg-north-screen-left` / `reg-north-screen-right`). */
+  northWallScreenLeftUrl: string;
+  northWallScreenRightUrl: string;
+  /** World transforms for north wall flank screens (`left` / `right` keys). */
+  northWallScreenTransforms: Record<
+    string,
+    { position: [number, number, number]; rotation: [number, number, number] }
+  >;
   importedModels: RegistrationImportedModel[];
 };
 
@@ -542,6 +555,10 @@ export const DEFAULT_REGISTRATION_LAYOUT: RegistrationLayoutConfig = {
     'reg-lobby-chair-left': [0, 0.4, 0],
     'reg-lobby-chair-right': [0, -0.4, 0],
   },
+  cornerPlantTransforms: {},
+  northWallScreenLeftUrl: '/images/first-ever-virtual-property-expo.png',
+  northWallScreenRightUrl: '/images/first ever expo.jpg',
+  northWallScreenTransforms: {},
   importedModels: [],
 };
 
@@ -554,6 +571,14 @@ export function mergeRegistrationLayout(
     ...overrides,
     loungePlantOffsets: overrides.loungePlantOffsets ?? DEFAULT_REGISTRATION_LAYOUT.loungePlantOffsets,
     loungeRotations: { ...DEFAULT_REGISTRATION_LAYOUT.loungeRotations, ...overrides.loungeRotations },
+    cornerPlantTransforms: {
+      ...DEFAULT_REGISTRATION_LAYOUT.cornerPlantTransforms,
+      ...overrides.cornerPlantTransforms,
+    },
+    northWallScreenTransforms: {
+      ...DEFAULT_REGISTRATION_LAYOUT.northWallScreenTransforms,
+      ...overrides.northWallScreenTransforms,
+    },
     importedModels: overrides.importedModels ?? DEFAULT_REGISTRATION_LAYOUT.importedModels,
   };
 }

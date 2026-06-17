@@ -13,6 +13,7 @@ import { resolveFasciaLayout } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
+import { ProximityLight } from './ProximityLight';
 import { BoothManagedHeader } from './BoothManagedHeader';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BOOTH_WALL, boothSideWallContinuousArgs, type BoothWallPlacementAdjustments } from './boothWallMetrics';
@@ -280,17 +281,19 @@ export function CrownEstatesBooth({
       </Suspense>
 
       {/* Cinematic Spotlight */}
-      <spotLight
-        position={[0, 7.5, -1.2]}
-        angle={0.5}
-        penumbra={0.8}
-        intensity={60}
-        color="#ffffff"
-        distance={20}
-        decay={2}
-        target-position={[0, 3, -3.8]}
-        castShadow
-      />
+      <ProximityLight range={26}>
+        <spotLight
+          position={[0, 7.5, -1.2]}
+          angle={0.5}
+          penumbra={0.8}
+          intensity={60}
+          color="#ffffff"
+          distance={20}
+          decay={2}
+          target-position={[0, 3, -3.8]}
+          castShadow
+        />
+      </ProximityLight>
 
       <BoothStandee name={name} accent={champagneGold} boothId={id} displayLayout={displayLayout} />
 

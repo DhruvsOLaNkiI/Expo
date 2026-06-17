@@ -1,13 +1,13 @@
 import { REG_HALL, REG_RECEPTION_Z } from '@/features/shared/data/registrationHall';
 import {
   mergeRegistrationLayout,
+  mergeSceneConfig,
   type RegistrationImportedModel,
   type RegistrationLayoutConfig,
 } from '@/features/shared/data/boothLayouts';
+import { LedScreenSurface, LedScreenSuspenseFallback } from '@/features/media/components/LedVideoPlane';
 import { LayoutEditableGroup } from '@/features/shared/LayoutEditableGroup';
 import { Text, useGLTF } from '@react-three/drei';
-import { useModelCompression } from '@/hooks/useModelCompression';
-import { optimizeGlbRoot } from '@/utils/glbPerformance';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Suspense, useMemo } from 'react';
 import { useStore } from '@/store';
@@ -58,6 +58,7 @@ export function RegistrationHall() {
       <DarkPolishedFloor />
       <PremiumWalls />
       <NorthWallTitle />
+      <NorthWallFlankScreens />
       <Suspense fallback={null}>
         <RegistrationCornerPlants />
       </Suspense>
@@ -302,7 +303,102 @@ function stationPositions(count: number, span: number): number[] {
   return Array.from({ length: count }, (_, i) => start + i * step);
 }
 
-/** Wall title on the north lobby surface (no LED video panels). */
+const NORTH_SCREEN_SIZE: [number, number] = [4.6, 2.2];
+const NORTH_WALL_FACE_Z = cz - halfD + 0.54;
+const NORTH_SCREEN_DEFAULT_LEFT: [number, number, number] = [-7.4, 2.45, NORTH_WALL_FACE_Z];
+const NORTH_SCREEN_DEFAULT_RIGHT: [number, number, number] = [7.4, 2.45, NORTH_WALL_FACE_Z];
+
+/** Compact LED panel with gold bezel for north wall flank screens. */
+function RegistrationNorthWallLedPanel({
+  url,
+  showVideos,
+}: {
+  url: string;
+  showVideos: boolean;
+}) {
+  const [w, h] = NORTH_SCREEN_SIZE;
+  return (
+    <group>
+      <mesh position={[0, 0, -0.1]}>
+        <boxGeometry args={[w + 0.28, h + 0.28, 0.12]} />
+        <meshStandardMaterial color="#0a0a10" metalness={0.85} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 0, -0.04]}>
+        <boxGeometry args={[w + 0.12, h + 0.12, 0.06]} />
+        <meshStandardMaterial
+          color="#1a1a22"
+          emissive={GOLD}
+          emissiveIntensity={0.18}
+          metalness={0.9}
+          roughness={0.15}
+        />
+      </mesh>
+      {showVideos ? (
+        <Suspense fallback={<LedScreenSuspenseFallback args={NORTH_SCREEN_SIZE} />}>
+          <LedScreenSurface args={NORTH_SCREEN_SIZE} url={url} position={[0, 0, 0.01]} />
+        </Suspense>
+      ) : (
+        <mesh position={[0, 0, 0.01]}>
+          <planeGeometry args={NORTH_SCREEN_SIZE} />
+          <meshStandardMaterial color="#08080c" metalness={0.7} roughness={0.25} />
+        </mesh>
+      )}
+      <mesh position={[0, h / 2 + 0.06, 0.02]}>
+        <boxGeometry args={[w + 0.2, 0.08, 0.06]} />
+        <meshStandardMaterial color={GOLD} metalness={0.8} roughness={0.2} emissive={GOLD} emissiveIntensity={0.45} />
+      </mesh>
+      <mesh position={[0, -h / 2 - 0.06, 0.02]}>
+        <boxGeometry args={[w + 0.2, 0.08, 0.06]} />
+        <meshStandardMaterial color={GOLD} metalness={0.8} roughness={0.2} emissive={GOLD} emissiveIntensity={0.45} />
+      </mesh>
+    </group>
+  );
+}
+
+/** LED screens flanking the north wall title (left / right of REGISTRATION DESK). */
+function NorthWallFlankScreens() {
+  const sceneOverrides = useStore((s) => s.sceneOverrides);
+  const layout = useMemo(
+    () => mergeRegistrationLayout(sceneOverrides.registrationLayout),
+    [sceneOverrides.registrationLayout],
+  );
+  const showVideos = useMemo(() => mergeSceneConfig(sceneOverrides).showVideos, [sceneOverrides]);
+
+  const screens = [
+    {
+      id: 'left' as const,
+      url: layout.northWallScreenLeftUrl,
+      defaultPos: NORTH_SCREEN_DEFAULT_LEFT,
+    },
+    {
+      id: 'right' as const,
+      url: layout.northWallScreenRightUrl,
+      defaultPos: NORTH_SCREEN_DEFAULT_RIGHT,
+    },
+  ];
+
+  return (
+    <group name="reg-north-wall-screens">
+      {screens.map(({ id, url, defaultPos }) => {
+        const saved = layout.northWallScreenTransforms[id];
+        const position = saved?.position ?? defaultPos;
+        const rotation = saved?.rotation ?? [0, 0, 0];
+        return (
+          <LayoutEditableGroup
+            key={id}
+            name={`reg-north-screen-${id}`}
+            position={position}
+            rotation={rotation}
+          >
+            <RegistrationNorthWallLedPanel url={url} showVideos={showVideos} />
+          </LayoutEditableGroup>
+        );
+      })}
+    </group>
+  );
+}
+
+/** Wall title on the north lobby surface. */
 function NorthWallTitle() {
   const wallFaceZ = cz - halfD + 0.48;
   const centerY = height * 0.46;
@@ -464,7 +560,13 @@ function applyReceptionDeskMaterials(root: THREE.Object3D) {
         mat.color.set('#111111');
         mat.metalness = 0.8;
         mat.roughness = 0.2;
+      } else {
+        // Unnamed GLB slots — default to wood so the desk does not render as black shards.
+        mat.color.copy(woodDark);
+        mat.metalness = 0.08;
+        mat.roughness = 0.75;
       }
+      mat.needsUpdate = true;
     }
   });
 }
@@ -506,7 +608,7 @@ function prepareReceptionDeskModel(source: THREE.Object3D) {
     const s = new THREE.Vector3();
     b.getSize(s);
     const name = (m.name || '').toLowerCase();
-    const namedFloor = /floor|ground|mat|plane|base|platform|carpet|rug/i.test(name);
+    const namedFloor = /(?:^|_)(floor|ground|baseplate|platform|carpet|rug)(?:_|$)/i.test(name);
     const thinAtFeet =
       s.y < 0.1 && b.max.y < floorCutoff && Math.max(s.x, s.z) > 0.4;
     if (namedFloor || thinAtFeet) {
@@ -525,12 +627,11 @@ function ReceptionDeskGlbModel({
 }: {
   onRegister: () => void;
 }) {
-  const modelCompression = useModelCompression();
   const { scene } = useGLTF(RECEPTION_DESK_GLB_URL) as { scene: THREE.Object3D };
   const model = useMemo(() => {
-    const root = prepareReceptionDeskModel(scene);
-    return optimizeGlbRoot(root, modelCompression);
-  }, [scene, modelCompression]);
+    // Hero prop — never decimate (30fps compression shatters this GLB into floating shards).
+    return prepareReceptionDeskModel(scene);
+  }, [scene]);
   const deskSize = useMemo(() => {
     const b = new THREE.Box3().setFromObject(model);
     const s = new THREE.Vector3();
@@ -784,6 +885,50 @@ function lobbyRotation(
   return layout.loungeRotations[name] ?? [0, 0, 0];
 }
 
+const PLANT_LEAF_GREEN = new THREE.Color('#2f6b38');
+const PLANT_STEM_BROWN = new THREE.Color('#4a3528');
+const PLANT_POT_DARK = new THREE.Color('#1c1612');
+
+/** Keep foliage readable in the bright registration lobby (textures preserved when present). */
+function applyRegistrationPlantMaterials(root: THREE.Object3D) {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+
+    const label = `${mesh.name || ''} ${(mesh.material as THREE.Material).name || ''}`.toLowerCase();
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+    for (const mat of mats) {
+      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+      mat.side = THREE.DoubleSide;
+
+      if (mat.map) {
+        mat.needsUpdate = true;
+        continue;
+      }
+
+      if (/leaf|foliage|fern|palm|green|needle|sprig|bush/i.test(label)) {
+        mat.color.copy(PLANT_LEAF_GREEN);
+        mat.emissive.set('#1a4022');
+        mat.emissiveIntensity = 0.22;
+      } else if (/pot|vase|planter|soil|dirt|ceramic/i.test(label)) {
+        mat.color.copy(PLANT_POT_DARK);
+        mat.emissive.set('#000000');
+        mat.emissiveIntensity = 0;
+      } else if (/stem|trunk|wood|bark|branch|stalk/i.test(label)) {
+        mat.color.copy(PLANT_STEM_BROWN);
+      } else {
+        mat.color.copy(PLANT_LEAF_GREEN);
+        mat.emissive.set('#143318');
+        mat.emissiveIntensity = 0.15;
+      }
+      mat.metalness = 0.02;
+      mat.roughness = 0.88;
+      mat.needsUpdate = true;
+    }
+  });
+}
+
 function prepareRegistrationCornerPlant(source: THREE.Object3D) {
   const root = source.clone(true) as THREE.Object3D;
   root.rotation.set(0, 0, 0);
@@ -811,6 +956,22 @@ function prepareRegistrationCornerPlant(source: THREE.Object3D) {
   const box3 = new THREE.Box3().setFromObject(root);
   root.position.y -= box3.min.y;
   root.updateMatrixWorld(true);
+  applyRegistrationPlantMaterials(root);
+  return root;
+}
+
+function prepareRegistrationImportedGlb(source: THREE.Object3D, url: string) {
+  const root = source.clone(true) as THREE.Object3D;
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (m.isMesh) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+    }
+  });
+  if (/plant|tree|fern|palm|shrub|bush|flower/i.test(url)) {
+    applyRegistrationPlantMaterials(root);
+  }
   return root;
 }
 
@@ -821,74 +982,67 @@ const REG_CORNER_PLANT_PLACEMENTS: Array<{
   rotation: [number, number, number];
 }> = [
   {
-    id: 'corner-nw',
+    id: 'nw',
     position: [-halfW + REG_CORNER_INSET, 0, cz - halfD + REG_CORNER_INSET],
     rotation: [0, Math.PI / 4, 0],
   },
   {
-    id: 'corner-ne',
+    id: 'ne',
     position: [halfW - REG_CORNER_INSET, 0, cz - halfD + REG_CORNER_INSET],
     rotation: [0, -Math.PI / 4, 0],
   },
   {
-    id: 'corner-sw',
+    id: 'sw',
     position: [-halfW + REG_CORNER_INSET, 0, cz + halfD - REG_CORNER_INSET],
     rotation: [0, -Math.PI / 4, 0],
   },
   {
-    id: 'corner-se',
+    id: 'se',
     position: [halfW - REG_CORNER_INSET, 0, cz + halfD - REG_CORNER_INSET],
     rotation: [0, Math.PI / 4, 0],
   },
 ];
 
-function RegistrationCornerPlant({
-  name,
-  position,
-  rotation,
-}: {
-  name: string;
-  position: [number, number, number];
-  rotation: [number, number, number];
-}) {
-  const modelCompression = useModelCompression();
+function RegistrationCornerPlantMesh() {
   const { scene } = useGLTF(REG_CORNER_PLANT_GLB_URL) as { scene: THREE.Object3D };
-  const model = useMemo(() => {
-    const root = prepareRegistrationCornerPlant(scene);
-    return optimizeGlbRoot(root, modelCompression);
-  }, [scene, modelCompression]);
+  const model = useMemo(() => prepareRegistrationCornerPlant(scene), [scene]);
 
   return (
-    <group name={name} position={position} rotation={rotation}>
+    <>
       <primitive object={model} />
-    </group>
+      <pointLight position={[0, 2.8, 1.4]} intensity={0.55} color="#dff5e4" distance={7} decay={2} />
+    </>
   );
 }
 
 function RegistrationCornerPlants() {
+  const regLayout = useStore((s) => s.sceneOverrides.registrationLayout);
+  const layout = useMemo(() => mergeRegistrationLayout(regLayout), [regLayout]);
+
   return (
     <group name="reg-corner-plants">
-      {REG_CORNER_PLANT_PLACEMENTS.map((p) => (
-        <RegistrationCornerPlant key={p.id} name={p.id} position={p.position} rotation={p.rotation} />
-      ))}
+      {REG_CORNER_PLANT_PLACEMENTS.map((p) => {
+        const saved = layout.cornerPlantTransforms[p.id];
+        const position = saved?.position ?? p.position;
+        const rotation = saved?.rotation ?? p.rotation;
+        return (
+          <LayoutEditableGroup
+            key={p.id}
+            name={`reg-corner-${p.id}`}
+            position={position}
+            rotation={rotation}
+          >
+            <RegistrationCornerPlantMesh />
+          </LayoutEditableGroup>
+        );
+      })}
     </group>
   );
 }
 
 function RegistrationGlbMesh({ url }: { url: string }) {
-  const modelCompression = useModelCompression();
   const { scene } = useGLTF(url) as { scene: THREE.Object3D };
-  const clone = useMemo(() => {
-    const c = scene.clone(true);
-    c.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mesh = child as THREE.Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-      }
-    });
-    return optimizeGlbRoot(c, modelCompression);
-  }, [scene, modelCompression]);
+  const clone = useMemo(() => prepareRegistrationImportedGlb(scene, url), [scene, url]);
   return <primitive object={clone} />;
 }
 

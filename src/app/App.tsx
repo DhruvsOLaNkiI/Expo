@@ -12,6 +12,8 @@ import {
   Effects,
   HallLayoutGizmos,
   HallLayoutEditHud,
+  ExpoVisitorMenu,
+  ExpoAdminBottomBar,
   CameraModeHud,
   SceneQualityHud,
   ExpoSceneSettingsHud,
@@ -24,8 +26,8 @@ import {
   RegistrationLobbyHud,
 } from '@/features/registration';
 import { AiChatbox, HelpDeskAiPanel } from '@/features/ai';
-import { FastTravelHud } from '@/features/teleport';
-import { VisitorOnboarding, VisitorBadge } from '@/features/visitor';
+import { AdminBadge, AdminLoginModal, AdminRequiredScreen } from '@/features/admin';
+import { VisitorBadge, VisitorOnboarding } from '@/features/visitor';
 import {
   CtaResourcePopupView,
   SharedVideoTextureUpdater,
@@ -153,8 +155,6 @@ function Joystick() {
 export default function App() {
   const ctaResourcePopup = useStore((s) => s.ctaResourcePopup);
   const setCtaResourcePopup = useStore((s) => s.setCtaResourcePopup);
-  const setAiChatOpen = useStore((s) => s.setAiChatOpen);
-  const setHelpDeskOpen = useStore((s) => s.setHelpDeskOpen);
   const showInstructions = useStore((s) => s.showInstructions);
   const setShowInstructions = useStore((s) => s.setShowInstructions);
   const cmsPage = useStore((s) => s.cmsPage);
@@ -180,8 +180,12 @@ export default function App() {
     sceneConfig.renderQuality === 'fullhd' && !compressModels && !inRegistration;
   const setHallLayoutEditMode = useStore((s) => s.setHallLayoutEditMode);
   const setHallLayoutSelection = useStore((s) => s.setHallLayoutSelection);
+  const setHallLayoutGizmoMode = useStore((s) => s.setHallLayoutGizmoMode);
   const registrationUi = useStore((s) => s.registrationUi);
   const openRegistrationPopup = useStore((s) => s.openRegistrationPopup);
+  const openLoginPopup = useStore((s) => s.openLoginPopup);
+  const setAdminLoginOpen = useStore((s) => s.setAdminLoginOpen);
+  const isAdmin = useStore((s) => s.isAdmin);
   const skipToMainExpo = useStore((s) => s.skipToMainExpo);
   const visitorProfile = useStore((s) => s.visitorProfile);
   const [isTouch, setIsTouch] = useState(false);
@@ -196,9 +200,9 @@ export default function App() {
   const needsOnboarding = !visitorProfile;
 
   const handleQuestionnaireClose = useCallback(() => {
-    markQuestionnaireDone();
+    markQuestionnaireDone(visitorProfile?.id);
     setShowQuestionnaire(false);
-  }, []);
+  }, [visitorProfile?.id]);
 
   const sceneBg = inRegistration ? '#FAF7F0' : sceneConfig.bgColor || '#f5f2ec';
   const fogEnabled = sceneConfig.fogEnabled === true;
@@ -234,13 +238,13 @@ export default function App() {
     if (normalized.toLowerCase() === '/exbidash') return;
     if (normalized === '/cms') {
       setCmsPage('cms');
-      window.history.replaceState(null, '', '/cms');
+      window.history.replaceState(null, '', useStore.getState().cmsPage === 'cms' ? '/cms' : '/');
     } else if (normalized === '/pageindex') {
       setCmsPage('pageindex');
-      window.history.replaceState(null, '', '/pageindex');
+      window.history.replaceState(null, '', useStore.getState().cmsPage === 'pageindex' ? '/pageindex' : '/');
     } else if (normalized === '/analytics') {
       setCmsPage('analytics');
-      window.history.replaceState(null, '', '/analytics');
+      window.history.replaceState(null, '', useStore.getState().cmsPage === 'analytics' ? '/analytics' : '/');
     }
   }, [setCmsPage]);
 
@@ -273,10 +277,10 @@ export default function App() {
 
   // Show questionnaire once when visitor enters the main expo floor
   useEffect(() => {
-    if (expoPhase !== 'expo' || needsOnboarding || isQuestionnaireDone()) return;
+    if (expoPhase !== 'expo' || needsOnboarding || isQuestionnaireDone(visitorProfile?.id)) return;
     const t = window.setTimeout(() => setShowQuestionnaire(true), 1200);
     return () => window.clearTimeout(t);
-  }, [expoPhase, needsOnboarding]);
+  }, [expoPhase, needsOnboarding, visitorProfile?.id]);
 
   const pathNow = (window.location.pathname.replace(/\/$/, '') || '/').toLowerCase();
   const onExhibitorDash = pathNow === '/exbidash' || isExhibitorRoute;
@@ -293,20 +297,31 @@ export default function App() {
     return (
       <Suspense fallback={<AdminRouteFallback label="CMS" />}>
         <CmsDashboard />
+        <AdminLoginModal />
       </Suspense>
     );
   }
   if (cmsPage === 'pageindex') {
     return (
       <Suspense fallback={<AdminRouteFallback label="PageIndex" />}>
-        <PageIndexPortal />
+        {isAdmin ? (
+          <PageIndexPortal />
+        ) : (
+          <AdminRequiredScreen title="PageIndex" />
+        )}
+        <AdminLoginModal />
       </Suspense>
     );
   }
   if (cmsPage === 'analytics') {
     return (
       <Suspense fallback={<AdminRouteFallback label="Analytics" />}>
-        <AnalyticsDashboard />
+        {isAdmin ? (
+          <AnalyticsDashboard />
+        ) : (
+          <AdminRequiredScreen title="Analytics" />
+        )}
+        <AdminLoginModal />
       </Suspense>
     );
   }
@@ -374,94 +389,75 @@ export default function App() {
 
       {needsOnboarding && <VisitorOnboarding />}
       {visitorProfile && <VisitorBadge />}
+      <AdminLoginModal />
+      <AdminBadge />
       <RegistrationLobbyHud />
-      {!inRegistration && <FastTravelHud />}
-      <CameraModeHud />
-      <SceneQualityHud />
-      <ExpoSceneSettingsHud />
+      {visitorProfile && (
+        <ExpoVisitorMenu onOpenAnalytics={() => openAnalyticsDashboard(setCmsPage)} />
+      )}
+      {isAdmin && (
+        <>
+          <ExpoAdminBottomBar onOpenAnalytics={() => openAnalyticsDashboard(setCmsPage)} />
+          <CameraModeHud />
+          <SceneQualityHud />
+          <ExpoSceneSettingsHud />
+        </>
+      )}
       <VideoEnabledHint />
       {!inRegistration && <VertexEliteScreenHud />}
       <HallLayoutEditHud />
 
       {inRegistration && !showInstructions && registrationUi === 'none' && !needsOnboarding && (
         <>
-          <button
-            type="button"
-            className="fixed bottom-3 left-3 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
-            onClick={() => {
-              setHallLayoutSelection('reg-reception-root');
-              setHallLayoutEditMode(true);
-            }}
-          >
-            Edit layout
-          </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="fixed bottom-3 left-3 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
+              onClick={() => {
+                setHallLayoutSelection('reg-registration-desk');
+                setHallLayoutGizmoMode('translate');
+                setHallLayoutEditMode(true);
+              }}
+            >
+              Edit layout
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="fixed bottom-3 left-3 z-[55] rounded-lg border border-violet-500/35 bg-violet-950/80 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-violet-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-violet-900/90 transition-all"
+              onClick={() => setAdminLoginOpen(true)}
+            >
+              Admin
+            </button>
+          )}
           <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[55] flex flex-col sm:flex-row items-center gap-2 pointer-events-auto">
-          <button
-            type="button"
-            className="rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md hover:bg-black transition-all"
-            onClick={() => openRegistrationPopup()}
-          >
-            Register Now
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-white/20 bg-[#1a1a22]/80 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white/80 shadow-xl backdrop-blur-md hover:bg-black/90 transition-all"
-            onClick={() => skipToMainExpo()}
-          >
-            Skip to expo
-          </button>
+            <button
+              type="button"
+              className="rounded-lg border border-[#d4af37]/40 bg-[#1a1a22]/90 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md hover:bg-black transition-all"
+              onClick={() => openRegistrationPopup()}
+            >
+              Register Now
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-[#d4af37]/55 bg-[#d4af37]/15 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5e6c8] shadow-xl backdrop-blur-md hover:bg-[#d4af37]/25 transition-all"
+              onClick={() => openLoginPopup()}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-white/20 bg-[#1a1a22]/80 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white/80 shadow-xl backdrop-blur-md hover:bg-black/90 transition-all"
+              onClick={() => skipToMainExpo()}
+            >
+              Skip to expo
+            </button>
           </div>
         </>
       )}
 
-      {!needsOnboarding && !inRegistration && (
+      {!needsOnboarding && (
         <>
-          <button
-            type="button"
-            className="fixed bottom-3 left-36 z-[55] rounded-lg border border-cyan-500/25 bg-cyan-950/75 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-cyan-100 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-cyan-900/90 transition-all"
-            onClick={() => {
-              setHallLayoutSelection(null);
-              setHallLayoutEditMode(true);
-            }}
-          >
-            Edit layout
-          </button>
-          <button
-            type="button"
-            className="fixed bottom-3 left-3 z-[55] rounded-lg border border-emerald-500/25 bg-emerald-950/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-emerald-200 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-emerald-900/90 transition-all"
-            onClick={() => setCmsPage('pageindex')}
-          >
-            PageIndex
-          </button>
-          <button
-            type="button"
-            className="fixed bottom-14 right-3 z-[55] rounded-lg border border-violet-500/30 bg-violet-950/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-violet-200 shadow-xl backdrop-blur-md pointer-events-auto hover:bg-violet-900/90 transition-all"
-            onClick={() => openAnalyticsDashboard(setCmsPage)}
-          >
-            Analytics
-          </button>
-          <button
-            type="button"
-            className="fixed bottom-3 right-3 z-[55] rounded-lg border border-white/15 bg-[#1a1a22]/90 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl backdrop-blur-md pointer-events-auto hover:bg-[#1a1a22] transition-all"
-            onClick={() => setCmsPage('cms')}
-          >
-            Open CMS
-          </button>
-          <button
-            type="button"
-            className="fixed bottom-3 right-[17.5rem] z-[55] rounded-lg border border-[#d4af37]/35 bg-[#0f1a3d]/90 backdrop-blur-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5e6c8] shadow-xl pointer-events-auto hover:bg-[#1a2d52] transition-all"
-            onClick={() => setHelpDeskOpen(true)}
-          >
-            Help Desk
-          </button>
-          <button
-            type="button"
-            className="fixed bottom-3 right-32 z-[55] rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/10 backdrop-blur-md px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#d4af37] shadow-xl pointer-events-auto hover:bg-[#d4af37]/20 transition-all flex items-center gap-2"
-            onClick={() => setAiChatOpen(true)}
-          >
-            <span>🤖</span>
-            Ask AI
-          </button>
           <AiChatbox />
           <HelpDeskAiPanel />
         </>

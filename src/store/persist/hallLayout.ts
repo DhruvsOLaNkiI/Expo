@@ -20,6 +20,15 @@ const BANNER_LOCAL_BASE: [number, number, number] = [0, 6, -4.5];
 let sceneRef: THREE.Scene | null = null;
 let activeTarget: THREE.Object3D | null = null;
 let activeSelection: string | null = null;
+let transformDragging = false;
+
+export function setLayoutTransformDragging(active: boolean): void {
+  transformDragging = active;
+}
+
+export function isLayoutTransformDragging(): boolean {
+  return transformDragging;
+}
 
 export function registerHallLayoutScene(scene: THREE.Scene | null) {
   sceneRef = scene;
@@ -184,6 +193,38 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
       registrationLayout: {
         receptionOffset: [obj.position.x, obj.position.y, obj.position.z - REG_RECEPTION_Z],
         loungeRotations: saveLoungeRotation(reg, selection, obj),
+      },
+    });
+    return true;
+  }
+
+  if (selection.startsWith('reg-corner-')) {
+    const cornerId = selection.slice('reg-corner-'.length);
+    patchSceneOverride({
+      registrationLayout: {
+        cornerPlantTransforms: {
+          ...reg.cornerPlantTransforms,
+          [cornerId]: {
+            position: [obj.position.x, obj.position.y, obj.position.z],
+            rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+          },
+        },
+      },
+    });
+    return true;
+  }
+
+  if (selection.startsWith('reg-north-screen-')) {
+    const side = selection.slice('reg-north-screen-'.length);
+    patchSceneOverride({
+      registrationLayout: {
+        northWallScreenTransforms: {
+          ...reg.northWallScreenTransforms,
+          [side]: {
+            position: [obj.position.x, obj.position.y, obj.position.z],
+            rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+          },
+        },
       },
     });
     return true;

@@ -205,7 +205,7 @@ export function BuyerQuestionnairePopup({ onClose }: { onClose: () => void }) {
   const handleBack = () => setStep((s) => Math.max(0, s - 1));
 
   const handleSkip = () => {
-    markQuestionnaireDone();
+    markQuestionnaireDone(visitorProfile?.id);
     onClose();
   };
 
@@ -226,7 +226,7 @@ export function BuyerQuestionnairePopup({ onClose }: { onClose: () => void }) {
     };
     setResult(res);
     setSubmitting(true);
-    markQuestionnaireDone();
+    markQuestionnaireDone(visitorProfile?.id);
     void submitQuestionnaire(res).finally(() => setSubmitting(false));
   }, [step, answers, visitorProfile]);
 

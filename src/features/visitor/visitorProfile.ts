@@ -31,6 +31,16 @@ export function generateVisitorId(): string {
   return `VX-${t}${r}`;
 }
 
+/** Normalize visitor-entered IDs (e.g. vx-abc12 → VX-ABC12). */
+export function normalizeVisitorId(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+export function isValidVisitorId(id: string): boolean {
+  const n = normalizeVisitorId(id);
+  return /^[A-Z0-9][A-Z0-9-]{3,23}$/.test(n);
+}
+
 export function readVisitorProfile(): VisitorProfile | null {
   if (typeof window === 'undefined') return null;
   try {

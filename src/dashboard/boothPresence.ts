@@ -5,6 +5,10 @@ export const BOOTH_PRESENCE_PING_MS = 5_000;
 
 type VisitorMeta = { visitorId?: string; visitorName?: string };
 
+function sessionId(meta: VisitorMeta): string {
+  return getAnalyticsSessionId(meta.visitorId);
+}
+
 export function createBoothPresenceTracker(meta: VisitorMeta) {
   let timer: ReturnType<typeof setInterval> | null = null;
   let currentBooth: string | null = null;
@@ -20,7 +24,7 @@ export function createBoothPresenceTracker(meta: VisitorMeta) {
     if (!currentBooth) return;
     void pingBoothPresence({
       boothId: currentBooth,
-      sessionId: getAnalyticsSessionId(),
+      sessionId: sessionId(meta),
       visitorId: meta.visitorId,
       visitorName: meta.visitorName,
     });
@@ -29,7 +33,7 @@ export function createBoothPresenceTracker(meta: VisitorMeta) {
   const leaveBooth = (boothId: string) => {
     void clearBoothPresence({
       boothId,
-      sessionId: getAnalyticsSessionId(),
+      sessionId: sessionId(meta),
       visitorId: meta.visitorId,
     });
   };

@@ -13,6 +13,8 @@ import {
 } from './src/constants/uploadLimits';
 import {
   getPageIndexes,
+  listAllPageIndexes,
+  getPageIndexDocumentRaw,
   hasValidPageIndexStructure,
   markPageIndexFailed,
   savePageIndex,
@@ -142,6 +144,104 @@ function attachPageIndexApi(server: ApiConnectServer, rootDir: string, mode: str
 
       server.middlewares.use((req, res, next) => {
         const url = req.url?.split('?')[0] ?? '';
+
+        if (url === '/api/pageindex/tree' && req.method === 'GET') {
+          void (async () => {
+            const urlParts = req.url?.split('?') ?? [];
+            const queryParams = new URLSearchParams(urlParts[1] || '');
+            const boothId = queryParams.get('boothId')?.trim();
+            const documentType = queryParams.get('documentType')?.trim();
+            if (!boothId || !documentType) {
+              sendJson(res as ServerResponse, 400, { ok: false, error: 'Missing boothId or documentType' });
+              return;
+            }
+            if (!process.env.MONGODB_URI?.trim()) {
+              sendJson(res as ServerResponse, 503, {
+                ok: false,
+                error: 'MONGODB_URI not set — cannot read tree',
+              });
+              return;
+            }
+            try {
+              const stored = await getPageIndexDocumentRaw(boothId, documentType);
+              if (!stored) {
+                sendJson(res as ServerResponse, 404, {
+                  ok: false,
+                  error: `No PageIndex row for ${boothId}/${documentType}`,
+                });
+                return;
+              }
+              const indexed = hasValidPageIndexStructure(stored.structure);
+              const treeStats = indexed ? summarizePageIndexTree(stored.structure) : null;
+              const docName =
+                stored.structure &&
+                typeof stored.structure === 'object' &&
+                typeof (stored.structure as { doc_name?: string }).doc_name === 'string'
+                  ? (stored.structure as { doc_name: string }).doc_name
+                  : null;
+              sendJson(res as ServerResponse, 200, {
+                ok: true,
+                boothId,
+                documentType,
+                indexed,
+                indexStatus: stored.indexStatus ?? null,
+                indexError: stored.indexError?.trim() || null,
+                indexedAt: stored.indexedAt ? new Date(stored.indexedAt).toISOString() : null,
+                pdfUrl: stored.pdfUrl?.trim() || null,
+                docName,
+                structure: stored.structure ?? null,
+                treeStats,
+              });
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e);
+              sendJson(res as ServerResponse, 500, { ok: false, error: msg });
+            }
+          })();
+          return;
+        }
+
+        if (url === '/api/pageindex/overview' && req.method === 'GET') {
+          void (async () => {
+            if (!process.env.MONGODB_URI?.trim()) {
+              sendJson(res as ServerResponse, 503, {
+                ok: false,
+                error: 'MONGODB_URI not set — cannot read index overview',
+              });
+              return;
+            }
+            try {
+              const rows = await listAllPageIndexes();
+              const documents = rows.map((stored) => {
+                const indexed = hasValidPageIndexStructure(stored.structure);
+                const indexStatus =
+                  stored.indexStatus ?? (indexed ? 'ready' : stored ? 'pending' : undefined);
+                const treeStats = indexed ? summarizePageIndexTree(stored.structure) : null;
+                const docName =
+                  stored.structure &&
+                  typeof stored.structure === 'object' &&
+                  typeof (stored.structure as { doc_name?: string }).doc_name === 'string'
+                    ? (stored.structure as { doc_name: string }).doc_name
+                    : null;
+                return {
+                  boothId: stored.boothId,
+                  documentType: stored.documentType,
+                  indexed,
+                  indexStatus: indexStatus ?? null,
+                  indexError: stored.indexError?.trim() || null,
+                  indexedAt: stored.indexedAt ? new Date(stored.indexedAt).toISOString() : null,
+                  pdfUrl: stored.pdfUrl?.trim() || null,
+                  docName,
+                  treeStats,
+                };
+              });
+              sendJson(res as ServerResponse, 200, { ok: true, documents });
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e);
+              sendJson(res as ServerResponse, 500, { ok: false, error: msg });
+            }
+          })();
+          return;
+        }
 
         if (url === '/api/pageindex/status' && req.method === 'GET') {
           void (async () => {

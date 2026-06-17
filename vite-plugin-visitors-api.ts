@@ -2,7 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { loadEnv } from 'vite';
 import { computeCatalogStats } from './src/data/expoStats';
-import { getVisitorRegistrationStats, markVisitorLobbyCheckIn, saveVisitorRegistration, saveQuestionnaireResult } from './src/server/mongodb';
+import {
+  getVisitorById,
+  getVisitorRegistrationStats,
+  markVisitorLobbyCheckIn,
+  saveVisitorRegistration,
+  saveQuestionnaireResult,
+} from './src/server/mongodb';
 import type { ExpoLiveStats } from './src/data/expoStats';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -128,6 +134,51 @@ function attachVisitorsApi(server: ApiConnectServer, rootDir: string, mode: stri
               mongoConnected,
             };
             sendJson(res as ServerResponse, 200, { ok: true, stats });
+          })();
+          return;
+        }
+
+        if (url === '/api/visitors/lookup' && req.method === 'GET') {
+          void (async () => {
+            const q = new URL(req.url ?? '', 'http://localhost').searchParams;
+            const visitorId = (q.get('visitorId') ?? '').trim();
+            if (!visitorId) {
+              sendJson(res, 400, { ok: false, error: 'visitorId query param is required' });
+              return;
+            }
+            if (!process.env.MONGODB_URI) {
+              sendJson(res, 503, {
+                ok: false,
+                error: 'MongoDB is not configured — cannot look up returning visitors.',
+              });
+              return;
+            }
+            try {
+              const doc = await getVisitorById(visitorId);
+              if (!doc) {
+                sendJson(res, 404, { ok: false, error: 'Visitor ID not found' });
+                return;
+              }
+              sendJson(res, 200, {
+                ok: true,
+                visitor: {
+                  visitorId: doc.visitorId,
+                  displayName: doc.displayName,
+                  email: doc.email,
+                  phone: doc.phone,
+                  avatar: doc.avatar,
+                  createdAt: doc.createdAt ? new Date(doc.createdAt).getTime() : undefined,
+                  lobbyCheckInAt: doc.lobbyCheckInAt
+                    ? new Date(doc.lobbyCheckInAt).getTime()
+                    : null,
+                },
+              });
+            } catch (e: unknown) {
+              sendJson(res, 500, {
+                ok: false,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
           })();
           return;
         }

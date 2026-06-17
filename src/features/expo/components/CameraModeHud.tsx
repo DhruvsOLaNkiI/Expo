@@ -12,8 +12,10 @@ export function CameraModeHud() {
   const visitorProfile = useStore((s) => s.visitorProfile);
   const aiChatOpen = useStore((s) => s.aiChatOpen);
   const helpDeskOpen = useStore((s) => s.helpDeskOpen);
+  const isAdmin = useStore((s) => s.isAdmin);
 
   if (
+    !isAdmin ||
     !visitorProfile ||
     showInstructions ||
     registrationUi !== 'none' ||

@@ -22,6 +22,7 @@ import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { HallAisleStandees } from './HallAisleStandees';
 import { HallSuspendedCanopies } from './HallSuspendedCanopy.tsx';
 import { SideExpoBooths } from './SideExpoBooths';
+import { ProximityLight } from './ProximityLight';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, VERTEX_ELITE_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
@@ -735,9 +736,11 @@ export function BoothHeaderLogo({
 
   return (
     <group position={[0, 6.5, -3.58]}>
-      {/* Soft wash toward wall — mall-style backlit halo */}
-      <pointLight position={[0, 0, -0.28]} intensity={2.2} distance={5.5} decay={2} color={haloEmissive} />
-      <pointLight position={[0, 0.15, -0.22]} intensity={0.85} distance={4} decay={2} color="#fff5e6" />
+      {/* Soft wash toward wall — mall-style backlit halo (near-field only) */}
+      <ProximityLight range={18}>
+        <pointLight position={[0, 0, -0.28]} intensity={2.2} distance={5.5} decay={2} color={haloEmissive} />
+        <pointLight position={[0, 0.15, -0.22]} intensity={0.85} distance={4} decay={2} color="#fff5e6" />
+      </ProximityLight>
 
       {/* Deep lightbox — warm emissive “LED wash” behind graphic */}
       <mesh position={[0, 0, -0.14]}>
@@ -1042,13 +1045,18 @@ export function StandardLuxuryBooth({
             <LedScreenSurface args={[6.2, 3.4]} url={stageLedUrl} />
           </Suspense>
         </group>
-        <pointLight
-          position={[0, 0, -0.15]}
-          intensity={12}
-          distance={4}
-          decay={2}
-          color="#e8f0ff"
-        />
+        {/* Screen glow only matters when the panel is actually lit, and only up close. */}
+        {stageLedUrl ? (
+          <ProximityLight range={16}>
+            <pointLight
+              position={[0, 0, -0.15]}
+              intensity={12}
+              distance={4}
+              decay={2}
+              color="#e8f0ff"
+            />
+          </ProximityLight>
+        ) : null}
       </BoothDisplayEditable>
 
       <Suspense fallback={null}>
@@ -1067,16 +1075,18 @@ export function StandardLuxuryBooth({
       </Suspense>
 
 
-      <spotLight
-        position={[0, 7.5, -1.2]}
-        angle={0.45}
-        penumbra={0.7}
-        intensity={lighting.spotlightIntensity}
-        color={lighting.spotlightColor}
-        distance={18}
-        decay={2}
-        target-position={[0, 3, -3.8]}
-      />
+      <ProximityLight range={26}>
+        <spotLight
+          position={[0, 7.5, -1.2]}
+          angle={0.45}
+          penumbra={0.7}
+          intensity={lighting.spotlightIntensity}
+          color={lighting.spotlightColor}
+          distance={18}
+          decay={2}
+          target-position={[0, 3, -3.8]}
+        />
+      </ProximityLight>
 
       <BoothStandee name={name} accent={accent} boothId={id} displayLayout={displayLayout} />
 
@@ -1312,13 +1322,17 @@ export function EcoEdenBooth({
             <LedScreenSurface args={[6.2, 3.4]} url={stageLedUrl} />
           </Suspense>
         </group>
-        <pointLight
-          position={[0, 0, -0.15]}
-          intensity={12}
-          distance={4}
-          decay={2}
-          color="#e8f0ff"
-        />
+        {stageLedUrl ? (
+          <ProximityLight range={16}>
+            <pointLight
+              position={[0, 0, -0.15]}
+              intensity={12}
+              distance={4}
+              decay={2}
+              color="#e8f0ff"
+            />
+          </ProximityLight>
+        ) : null}
       </BoothDisplayEditable>
 
       <Suspense fallback={null}>
@@ -1378,16 +1392,18 @@ export function EcoEdenBooth({
         </group>
       </BoothDisplayEditable>
 
-      <spotLight
-        position={[0, 7.5, -1.2]}
-        angle={0.45}
-        penumbra={0.7}
-        intensity={lighting.spotlightIntensity}
-        color="#fff8ef"
-        distance={18}
-        decay={2}
-        target-position={[0, 3, -3.8]}
-      />
+      <ProximityLight range={26}>
+        <spotLight
+          position={[0, 7.5, -1.2]}
+          angle={0.45}
+          penumbra={0.7}
+          intensity={lighting.spotlightIntensity}
+          color="#fff8ef"
+          distance={18}
+          decay={2}
+          target-position={[0, 3, -3.8]}
+        />
+      </ProximityLight>
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -2246,17 +2262,19 @@ function HelpDeskCustomGirl() {
 
   return (
     <group name="concierge-desk-hostess">
-      <spotLight
-        position={[px, 5.2, pz + 1.5]}
-        angle={0.48}
-        penumbra={0.88}
-        intensity={52}
-        color="#fff6e8"
-        distance={14}
-        decay={2}
-        castShadow
-      />
-      <pointLight position={[px, 2.8, pz + 1.2]} intensity={14} color="#ffe8c8" distance={8} decay={2} />
+      <ProximityLight range={28}>
+        <spotLight
+          position={[px, 5.2, pz + 1.5]}
+          angle={0.48}
+          penumbra={0.88}
+          intensity={52}
+          color="#fff6e8"
+          distance={14}
+          decay={2}
+          castShadow
+        />
+        <pointLight position={[px, 2.8, pz + 1.2]} intensity={14} color="#ffe8c8" distance={8} decay={2} />
+      </ProximityLight>
 
       <ExpoHostessAvatar
         position={CONCIERGE_HOSTESS_POS}

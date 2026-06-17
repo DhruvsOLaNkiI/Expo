@@ -21,6 +21,15 @@ import {
   handleQuestionnairePossibilityGet,
   handleBoothEngagementActionsGet,
   handleBoothVisitorEngagementGet,
+  handleExpoEngagementInsightsGet,
+  handleExpoOverviewGet,
+  handlePavilionRankingsGet,
+  handleExpoLiveGet,
+  handleExpoAiSummaryGet,
+  handleExpoTopFaqGet,
+  handleExpoTopSalesChatGet,
+  handleExpoVisitorProfileGet,
+  handleVisitorTrendGet,
 } from './routes';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -116,6 +125,42 @@ export function createAnalyticsServer(opts: CreateAnalyticsServerOptions = {}) {
 
   app.get('/api/analytics/booth-visitor-engagement', (req, res) => {
     void handleBoothVisitorEngagementGet(req, res);
+  });
+
+  app.get('/api/analytics/expo-engagement', (_req, res) => {
+    void handleExpoEngagementInsightsGet(res);
+  });
+
+  app.get('/api/analytics/expo-overview', (_req, res) => {
+    void handleExpoOverviewGet(res);
+  });
+
+  app.get('/api/analytics/pavilion-rankings', (_req, res) => {
+    void handlePavilionRankingsGet(res);
+  });
+
+  app.get('/api/analytics/expo-live', (_req, res) => {
+    void handleExpoLiveGet(res);
+  });
+
+  app.get('/api/analytics/expo-ai-summary', (_req, res) => {
+    void handleExpoAiSummaryGet(res);
+  });
+
+  app.get('/api/analytics/visitor-trend', (req, res) => {
+    void handleVisitorTrendGet(req, res);
+  });
+
+  app.get('/api/analytics/expo-top-faq', (_req, res) => {
+    void handleExpoTopFaqGet(res);
+  });
+
+  app.get('/api/analytics/expo-top-sales-chat', (_req, res) => {
+    void handleExpoTopSalesChatGet(res);
+  });
+
+  app.get('/api/analytics/expo-visitor-profile', (req, res) => {
+    void handleExpoVisitorProfileGet(req, res);
   });
 
   app.get('/api/analytics/health', (_req, res) => {

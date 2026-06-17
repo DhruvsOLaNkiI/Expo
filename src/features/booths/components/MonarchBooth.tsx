@@ -15,6 +15,7 @@ import {
 } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
+import { ProximityLight } from './ProximityLight';
 import { BoothSignageFascia } from './BoothSignageFascia';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BoothWallLogos } from './BoothWallLogos';
@@ -285,18 +286,20 @@ export function MonarchBooth({
         />
       </Suspense>
 
-      <spotLight
-        position={[0, 7.5, -1.2]}
-        angle={0.5}
-        penumbra={0.8}
-        intensity={lighting.spotlightIntensity ?? 65}
-        color={lighting.spotlightColor ?? '#fff4e6'}
-        distance={20}
-        decay={2}
-        castShadow
-      />
-      <pointLight position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
-      <pointLight position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
+      <ProximityLight range={26}>
+        <spotLight
+          position={[0, 7.5, -1.2]}
+          angle={0.5}
+          penumbra={0.8}
+          intensity={lighting.spotlightIntensity ?? 65}
+          color={lighting.spotlightColor ?? '#fff4e6'}
+          distance={20}
+          decay={2}
+          castShadow
+        />
+        <pointLight position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
+        <pointLight position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
+      </ProximityLight>
 
       <BoothStandee name={name} accent={trim} boothId={id} displayLayout={displayLayout} />
 

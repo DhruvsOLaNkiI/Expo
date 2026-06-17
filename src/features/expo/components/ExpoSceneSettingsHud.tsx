@@ -45,8 +45,9 @@ export function ExpoSceneSettingsHud() {
   const registrationUi = useStore((s) => s.registrationUi);
   const showInstructions = useStore((s) => s.showInstructions);
   const cmsPage = useStore((s) => s.cmsPage);
+  const isAdmin = useStore((s) => s.isAdmin);
 
-  if (cmsPage !== 'expo' || hallLayoutEditMode || registrationUi !== 'none' || showInstructions) {
+  if (!isAdmin || cmsPage !== 'expo' || hallLayoutEditMode || registrationUi !== 'none' || showInstructions) {
     return null;
   }
 
@@ -78,8 +79,8 @@ export function ExpoSceneSettingsHud() {
               onChange={(v) => patchScene({ showVideos: v })}
             />
             <ToggleRow
-              label="Center ring canopy"
-              hint="8 screens on the center ring — at 480p videos run in lower quality"
+              label="Center ring canopy (circular LED)"
+              hint="Hide the suspended jumbotron above the help desk — 8 screens + ticker. Better FPS on phones."
               checked={cfg.showHallCanopy}
               onChange={(v) => patchScene({ showHallCanopy: v })}
             />

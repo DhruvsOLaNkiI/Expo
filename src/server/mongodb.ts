@@ -213,6 +213,18 @@ export async function connectToDatabase(): Promise<Db> {
   }
 }
 
+/** All PageIndex rows in MongoDB (for CMS overview tab). */
+export async function listAllPageIndexes(): Promise<PageIndexDocument[]> {
+  try {
+    const db = await connectToDatabase();
+    const collection = db.collection<PageIndexDocument>('pageindexes');
+    return collection.find({}).sort({ boothId: 1, documentType: 1 }).toArray();
+  } catch (error) {
+    console.error('Error listing all PageIndex documents:', error);
+    throw error;
+  }
+}
+
 export async function getPageIndexes(boothId: string): Promise<PageIndexDocument[]> {
   try {
     const db = await connectToDatabase();
@@ -291,18 +303,30 @@ export async function updatePageIndex(boothId: string, documentType: string, doc
   }
 }
 
+/** Raw Mongo row for CMS tree inspector (includes failed / pending docs). */
+export async function getPageIndexDocumentRaw(
+  boothId: string,
+  documentType: string,
+): Promise<PageIndexDocument | null> {
+  try {
+    const db = await connectToDatabase();
+    const collection = db.collection<PageIndexDocument>('pageindexes');
+    return collection.findOne(
+      { boothId, documentType },
+      { sort: { indexedAt: -1, updatedAt: -1 } },
+    );
+  } catch (error) {
+    console.error(`Error fetching raw PageIndex for ${boothId}/${documentType}:`, error);
+    throw error;
+  }
+}
+
 export async function getPageIndexByBoothAndType(
   boothId: string,
   documentType: string
 ): Promise<PageIndexDocument | null> {
   try {
-    const db = await connectToDatabase();
-    const collection = db.collection<PageIndexDocument>('pageindexes');
-    
-    const doc = await collection.findOne(
-      { boothId, documentType },
-      { sort: { indexedAt: -1, updatedAt: -1 } },
-    );
+    const doc = await getPageIndexDocumentRaw(boothId, documentType);
     if (!doc) return null;
     if (doc.indexStatus === 'ready' || hasValidPageIndexStructure(doc.structure)) return doc;
     return null;

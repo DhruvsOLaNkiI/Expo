@@ -77,9 +77,8 @@ export function resolveSalesChatThreadId(params: {
   if (id) return `v:${id}`;
   const sid = params.sessionId?.trim();
   if (sid) return `s:${sid}`;
-  const name = params.visitorName?.trim();
-  if (name) return `n:${name.toLowerCase().replace(/\s+/g, '-')}`;
-  return `anon:${Date.now()}`;
+  // Never key threads by display name — different users could share the same label.
+  return `anon:${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function migrateRow(row: SalesChatMessageRow): SalesChatMessageRow {

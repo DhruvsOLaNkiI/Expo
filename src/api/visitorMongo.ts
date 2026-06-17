@@ -56,6 +56,47 @@ export async function registerVisitorOnServer(
   }
 }
 
+export type ReturningVisitorPayload = {
+  visitorId: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  avatar: VisitorProfile['avatar'];
+  createdAt?: number;
+  lobbyCheckInAt?: number | null;
+};
+
+export async function fetchReturningVisitor(
+  visitorId: string,
+): Promise<{ ok: true; visitor: ReturningVisitorPayload } | { ok: false; error: string }> {
+  const id = visitorId.trim();
+  if (!id) return { ok: false, error: 'Visitor ID is required' };
+
+  try {
+    const res = await fetch(`/api/visitors/lookup?visitorId=${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+    });
+    const data = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      visitor?: ReturningVisitorPayload;
+    };
+    if (!res.ok || !data.ok || !data.visitor) {
+      return {
+        ok: false,
+        error:
+          data.error ||
+          (res.status === 404
+            ? 'Visitor ID not found. Register as a new visitor or check your ID.'
+            : `Lookup failed (${res.status})`),
+      };
+    }
+    return { ok: true, visitor: data.visitor };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Network error' };
+  }
+}
+
 export async function recordVisitorLobbyCheckIn(visitorId: string): Promise<ApiResult> {
   try {
     const res = await fetch('/api/visitors/check-in', {

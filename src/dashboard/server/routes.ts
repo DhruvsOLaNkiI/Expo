@@ -18,6 +18,15 @@ import {
   getQuestionnairePossibilityStats,
   getBoothEngagementActionStats,
   getBoothVisitorEngagementScores,
+  getExpoEngagementInsights,
+  getExpoOverview,
+  getPavilionRankings,
+  getExpoLive,
+  getExpoAiSummary,
+  getExpoTopFaqQuestions,
+  getExpoTopSalesChatQuestions,
+  getExpoVisitorProfile,
+  getVisitorTrend,
   type AnalyticsTrackPayload,
 } from './store';
 
@@ -533,8 +542,17 @@ export async function handleBoothLivePresenceGet(
     sendJson(res, 400, { ok: false, error: 'boothId query required' });
     return;
   }
+  const exhibitorAccess =
+    (req.headers['x-expo-dashboard-access'] ?? '').toString().trim().toLowerCase() === 'exhibitor';
   try {
     const presence = await getBoothLivePresence(boothId);
+    if (!exhibitorAccess) {
+      sendJson(res, 200, {
+        ok: true,
+        presence: { count: presence.count, visitors: [], mongoConnected: presence.mongoConnected },
+      });
+      return;
+    }
     sendJson(res, 200, { ok: true, presence });
   } catch (e: unknown) {
     sendJson(res, 500, {
@@ -590,6 +608,154 @@ export async function handleBoothVisitorEngagementGet(
   try {
     const scores = await getBoothVisitorEngagementScores(boothId);
     sendJson(res, 200, { ok: true, scores });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoEngagementInsightsGet(res: ServerResponse): Promise<void> {
+  if (!process.env.MONGODB_URI?.trim()) {
+    sendJson(res, 200, {
+      ok: true,
+      mongoConnected: false,
+      error: 'MONGODB_URI is not set — analytics need MongoDB',
+    });
+    return;
+  }
+  try {
+    const data = await getExpoEngagementInsights();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoOverviewGet(res: ServerResponse): Promise<void> {
+  try {
+    const data = await getExpoOverview();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handlePavilionRankingsGet(res: ServerResponse): Promise<void> {
+  try {
+    const data = await getPavilionRankings();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoLiveGet(res: ServerResponse): Promise<void> {
+  try {
+    const data = await getExpoLive();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoAiSummaryGet(res: ServerResponse): Promise<void> {
+  try {
+    const data = await getExpoAiSummary();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoTopFaqGet(res: ServerResponse): Promise<void> {
+  try {
+    const data = await getExpoTopFaqQuestions();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoVisitorProfileGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const visitorId = url.searchParams.get('visitorId')?.trim();
+  const sessionId = url.searchParams.get('sessionId')?.trim();
+  const visitorName = url.searchParams.get('visitorName')?.trim();
+  const email = url.searchParams.get('email')?.trim();
+  const phone = url.searchParams.get('phone')?.trim();
+  const historyPage = Number(url.searchParams.get('historyPage') ?? '1');
+  const historyLimit = Number(url.searchParams.get('historyLimit') ?? '10');
+  const timelinePage = Number(url.searchParams.get('timelinePage') ?? '1');
+  const timelineLimit = Number(url.searchParams.get('timelineLimit') ?? '10');
+  if (!visitorId && !sessionId && !visitorName && !email && !phone) {
+    sendJson(res, 400, {
+      ok: false,
+      error: 'visitorId, sessionId, visitorName, email, or phone required',
+    });
+    return;
+  }
+  try {
+    const profile = await getExpoVisitorProfile({
+      visitorId,
+      sessionId,
+      visitorName,
+      email,
+      phone,
+      historyPage: Number.isFinite(historyPage) ? historyPage : 1,
+      historyLimit: Number.isFinite(historyLimit) ? historyLimit : 10,
+      timelinePage: Number.isFinite(timelinePage) ? timelinePage : 1,
+      timelineLimit: Number.isFinite(timelineLimit) ? timelineLimit : 10,
+    });
+    sendJson(res, 200, { ok: true, profile });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleExpoTopSalesChatGet(res: ServerResponse): Promise<void> {
+  try {
+    const data = await getExpoTopSalesChatQuestions();
+    sendJson(res, 200, { ok: true, data });
+  } catch (e: unknown) {
+    sendJson(res, 500, {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+export async function handleVisitorTrendGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const days = Math.min(90, Math.max(7, Number(url.searchParams.get('days') ?? 90) || 90));
+  try {
+    const data = await getVisitorTrend(days);
+    sendJson(res, 200, { ok: true, data });
   } catch (e: unknown) {
     sendJson(res, 500, {
       ok: false,

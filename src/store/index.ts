@@ -39,15 +39,25 @@ import {
   CAMERA_MODE_ORDER,
   type CameraMode,
 } from '@/features/expo/camera/cameraModes';
+import { fetchReturningVisitor } from '@/api/visitorMongo';
+import {
+  computeIsAdmin,
+  getAdminApiHeaders,
+  persistAdminSession,
+  validateAdminKey,
+} from '@/features/admin/adminSession';
 import {
   clearVisitorProfile as clearVisitorProfileStorage,
   DEFAULT_AVATAR,
   generateVisitorId,
+  isValidVisitorId,
+  normalizeVisitorId,
   persistVisitorProfile,
   readVisitorProfile,
   type VisitorAvatar,
   type VisitorProfile,
 } from '@/features/visitor/visitorProfile';
+import { resetAnonymousBrowserScope } from '@/features/visitor/visitorBrowserSession';
 
 const SCENE_CMS_LS_KEY = 'virtual-expo-scene-config';
 
@@ -236,6 +246,13 @@ interface AppState {
   cmsPage: 'expo' | 'cms' | 'pageindex' | 'analytics';
   setCmsPage: (page: 'expo' | 'cms' | 'pageindex' | 'analytics') => void;
 
+  /** Admin can edit global environment (CMS, scene, booths, layout). */
+  isAdmin: boolean;
+  adminLoginOpen: boolean;
+  setAdminLoginOpen: (open: boolean) => void;
+  loginAdmin: (key: string) => boolean;
+  logoutAdmin: () => void;
+
   activeHallId: string;
   expoHalls: ExpoHallMeta[];
   /** CMS cache: booth overrides per hall (slotId → patch). */
@@ -298,12 +315,17 @@ interface AppState {
     avatar: VisitorAvatar;
   }) => void;
   clearVisitorProfile: () => void;
+  /** Restore a returning visitor by Visitor ID (MongoDB lookup + local session). */
+  loginReturningVisitor: (
+    visitorId: string,
+  ) => Promise<{ ok: boolean; error?: string; enteredExpo?: boolean }>;
 
   /** `registration` = arrival lobby; `expo` = main 90×90 hall. */
   expoPhase: 'registration' | 'expo';
-  registrationUi: 'none' | 'register' | 'granted';
+  registrationUi: 'none' | 'register' | 'login' | 'granted';
   registrationPass: boolean;
   openRegistrationPopup: () => void;
+  openLoginPopup: () => void;
   closeRegistrationUi: () => void;
   confirmRegistration: (input: {
     displayName: string;
@@ -432,7 +454,33 @@ export const useStore = create<AppState>((set, get) => ({
   boothCmsOpen: false,
   setBoothCmsOpen: (open) => set({ boothCmsOpen: open }),
   cmsPage: 'expo',
-  setCmsPage: (page) => set({ cmsPage: page }),
+  setCmsPage: (page) => {
+    if (page !== 'expo' && !get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
+    set({ cmsPage: page });
+  },
+
+  isAdmin: computeIsAdmin(readVisitorProfile()),
+  adminLoginOpen: false,
+  setAdminLoginOpen: (open) => set({ adminLoginOpen: open }),
+  loginAdmin: (key) => {
+    if (!validateAdminKey(key)) return false;
+    persistAdminSession(true, key);
+    set({ isAdmin: true, adminLoginOpen: false });
+    return true;
+  },
+  logoutAdmin: () => {
+    persistAdminSession(false);
+    const profile = get().visitorProfile;
+    const stillAdmin = computeIsAdmin(profile);
+    set({
+      isAdmin: stillAdmin,
+      hallLayoutEditMode: false,
+      cmsPage: stillAdmin ? get().cmsPage : 'expo',
+    });
+  },
 
   activeHallId: DEFAULT_EXPO_HALL_ID,
   expoHalls: [...DEFAULT_EXPO_HALLS],
@@ -444,6 +492,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   hallLayoutEditMode: false,
   setHallLayoutEditMode: (on) => {
+    if (on && !get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     if (!on && get().hallLayoutEditMode) {
       commitHallLayoutTransform();
     }
@@ -476,6 +528,7 @@ export const useStore = create<AppState>((set, get) => ({
     persistVisitorProfile(profile);
     set({
       visitorProfile: profile,
+      isAdmin: computeIsAdmin(profile),
       expoPhase: 'registration',
       registrationUi: 'none',
       showInstructions: true,
@@ -484,7 +537,76 @@ export const useStore = create<AppState>((set, get) => ({
   },
   clearVisitorProfile: () => {
     clearVisitorProfileStorage();
-    set({ visitorProfile: null });
+    resetAnonymousBrowserScope();
+    set({ visitorProfile: null, isAdmin: computeIsAdmin(null) });
+  },
+
+  loginReturningVisitor: async (visitorId) => {
+    const id = normalizeVisitorId(visitorId);
+    if (!isValidVisitorId(id)) {
+      return { ok: false, error: 'Enter a valid Visitor ID (e.g. VX-ABC12).' };
+    }
+
+    const restoreSession = (profile: VisitorProfile, hasPass: boolean, enteredExpo: boolean) => {
+      persistVisitorProfile(profile);
+      if (hasPass) {
+        try {
+          localStorage.setItem(REG_PASS_LS_KEY, '1');
+        } catch {
+          /* */
+        }
+      }
+      if (typeof document !== 'undefined' && document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+      if (enteredExpo) {
+        set({
+          visitorProfile: profile,
+          isAdmin: computeIsAdmin(profile),
+          registrationPass: true,
+          registrationUi: 'none',
+          expoPhase: 'expo',
+          showInstructions: true,
+        });
+        get().teleportPlayer(
+          resolveMainExpoSpawn(mergeHallLayout(get().sceneOverrides.hallLayout)),
+        );
+        return { ok: true, enteredExpo: true };
+      }
+      set({
+        visitorProfile: profile,
+        isAdmin: computeIsAdmin(profile),
+        registrationPass: hasPass,
+        registrationUi: hasPass ? 'granted' : 'none',
+        expoPhase: 'registration',
+        showInstructions: false,
+      });
+      get().teleportPlayer(REG_SPAWN);
+      return { ok: true, enteredExpo: false };
+    };
+
+    const local = readVisitorProfile();
+    if (local?.id === id) {
+      const hasPass = readRegistrationPass();
+      return restoreSession(local, hasPass, hasPass);
+    }
+
+    const remote = await fetchReturningVisitor(id);
+    if (!remote.ok) {
+      return { ok: false, error: remote.error };
+    }
+
+    const v = remote.visitor;
+    const profile: VisitorProfile = {
+      id: v.visitorId,
+      displayName: v.displayName,
+      avatar: v.avatar ?? { ...DEFAULT_AVATAR },
+      email: v.email,
+      phone: v.phone,
+      createdAt: v.createdAt ?? Date.now(),
+    };
+    const hasPass = !!v.lobbyCheckInAt || !!(v.email?.trim() && v.phone?.trim());
+    return restoreSession(profile, hasPass, !!v.lobbyCheckInAt);
   },
 
   registrationUi: 'none',
@@ -500,6 +622,12 @@ export const useStore = create<AppState>((set, get) => ({
     }
     set({ registrationUi: 'register' });
   },
+  openLoginPopup: () => {
+    if (typeof document !== 'undefined' && document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    set({ registrationUi: 'login' });
+  },
   closeRegistrationUi: () => set({ registrationUi: 'none' }),
   confirmRegistration: (input) => {
     const profile = get().visitorProfile;
@@ -511,7 +639,7 @@ export const useStore = create<AppState>((set, get) => ({
         phone: input.phone.trim(),
       };
       persistVisitorProfile(updated);
-      set({ visitorProfile: updated });
+      set({ visitorProfile: updated, isAdmin: computeIsAdmin(updated) });
     }
     try {
       localStorage.setItem(REG_PASS_LS_KEY, '1');
@@ -565,6 +693,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
     set({
       visitorProfile: profile,
+      isAdmin: computeIsAdmin(profile),
       registrationPass: true,
       registrationUi: 'none',
       expoPhase: 'expo',
@@ -969,6 +1098,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   patchBoothOverride: async (id, patch, hallIdArg) => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return false;
+    }
     const hallId = normalizeHallId(hallIdArg ?? get().activeHallId);
     const prev = get().boothOverrides[id] || {};
     const nextEntry = { ...prev } as BoothLayoutPatch;
@@ -1006,7 +1139,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const res = await fetch('/api/booth-cms/patch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAdminApiHeaders() },
         body: JSON.stringify({ hallId, slotId: id, boothId: id, patch: definedPatch }),
       });
       const data = await res.json();
@@ -1019,6 +1152,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   resetBoothOverride: async (id) => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     const hallId = normalizeHallId(get().activeHallId);
     const { [id]: _, ...rest } = get().boothOverrides;
     set({ boothOverrides: rest, overridesByHall: { ...get().overridesByHall, [hallId]: rest } });
@@ -1028,6 +1165,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteBoothOverride: async (id) => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     const hallId = normalizeHallId(get().activeHallId);
     const { [id]: _, ...rest } = get().boothOverrides;
     set({ boothOverrides: rest, overridesByHall: { ...get().overridesByHall, [hallId]: rest } });
@@ -1037,6 +1178,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   duplicateBoothOverride: async (fromId, newId) => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     const hallId = normalizeHallId(get().activeHallId);
     const source = get().boothOverrides[fromId];
     if (!source) return;
@@ -1054,6 +1199,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   resetAllBoothOverrides: async () => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     const hallId = normalizeHallId(get().activeHallId);
     set({
       boothOverrides: {},
@@ -1069,6 +1218,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   patchSceneOverride: (patch) => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     const hallId = normalizeHallId(get().activeHallId);
     const cur = get().sceneOverrides;
     const next: SceneOverridesInput = { ...cur, ...patch };
@@ -1089,6 +1242,9 @@ export const useStore = create<AppState>((set, get) => ({
           : prevReg.loungeRotations,
         loungePlantOffsets: incomingReg.loungePlantOffsets ?? prevReg.loungePlantOffsets,
         importedModels: incomingReg.importedModels ?? prevReg.importedModels,
+        cornerPlantTransforms: incomingReg.cornerPlantTransforms
+          ? { ...(prevReg.cornerPlantTransforms || {}), ...incomingReg.cornerPlantTransforms }
+          : prevReg.cornerPlantTransforms,
       };
     }
 
@@ -1100,12 +1256,16 @@ export const useStore = create<AppState>((set, get) => ({
 
     void fetch('/api/scene/patch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAdminApiHeaders() },
       body: JSON.stringify({ hallId, patch: next }),
     }).catch(() => { /* API may be unavailable */ });
   },
 
   resetSceneOverrides: () => {
+    if (!get().isAdmin) {
+      set({ adminLoginOpen: true });
+      return;
+    }
     persistSceneConfig({});
     set({ sceneOverrides: {} });
     void fetch('/api/scene', { method: 'DELETE' }).catch(() => {});

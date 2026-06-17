@@ -613,7 +613,7 @@ export function OverviewDashboard({ onOpenDocuments, onNav }: Props) {
   useEffect(() => {
     let cancelled = false;
     const pollLive = async () => {
-      const presence = await fetchBoothLivePresence(boothId);
+      const presence = await fetchBoothLivePresence(boothId, { includeVisitorDetails: true });
       if (cancelled) return;
       setLivePresence(presence);
       if (presence.mongoConnected) {

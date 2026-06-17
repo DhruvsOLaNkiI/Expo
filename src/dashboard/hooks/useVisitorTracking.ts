@@ -151,8 +151,8 @@ export function useVisitorTracking() {
   }, [visitorId, visitorName]);
 
   useEffect(() => {
-    void getAnalyticsSessionId();
-  }, []);
+    void getAnalyticsSessionId(visitorId);
+  }, [visitorId]);
 }
 
 /** @deprecated Use useVisitorTracking */
