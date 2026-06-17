@@ -18,6 +18,7 @@ import {
   SceneQualityHud,
   ExpoSceneSettingsHud,
   RoamingExecutive,
+  FpsMeter,
 } from '@/features/expo';
 import { Booths, Ballroom, VertexEliteScreenHud } from '@/features/booths';
 import {
@@ -401,6 +402,7 @@ export default function App() {
           <CameraModeHud />
           <SceneQualityHud />
           <ExpoSceneSettingsHud />
+          <FpsMeter />
         </>
       )}
       <VideoEnabledHint />
