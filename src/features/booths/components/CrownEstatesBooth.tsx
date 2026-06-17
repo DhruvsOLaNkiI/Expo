@@ -13,7 +13,7 @@ import { resolveFasciaLayout } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
-import { ProximityLight } from './ProximityLight';
+import { ProximityLight, BOOTH_ACCENT_LIGHT_RANGE, BOOTH_ACCENT_LIGHT_MARGIN } from './ProximityLight';
 import { BoothManagedHeader } from './BoothManagedHeader';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BOOTH_WALL, boothSideWallContinuousArgs, type BoothWallPlacementAdjustments } from './boothWallMetrics';
@@ -281,7 +281,7 @@ export function CrownEstatesBooth({
       </Suspense>
 
       {/* Cinematic Spotlight */}
-      <ProximityLight range={26}>
+      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
         <spotLight
           position={[0, 7.5, -1.2]}
           angle={0.5}

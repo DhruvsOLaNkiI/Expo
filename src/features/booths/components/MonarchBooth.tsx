@@ -15,7 +15,7 @@ import {
 } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
-import { ProximityLight } from './ProximityLight';
+import { ProximityLight, BOOTH_ACCENT_LIGHT_RANGE, BOOTH_ACCENT_LIGHT_MARGIN } from './ProximityLight';
 import { BoothSignageFascia } from './BoothSignageFascia';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BoothWallLogos } from './BoothWallLogos';
@@ -286,7 +286,7 @@ export function MonarchBooth({
         />
       </Suspense>
 
-      <ProximityLight range={26}>
+      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
         <spotLight
           position={[0, 7.5, -1.2]}
           angle={0.5}

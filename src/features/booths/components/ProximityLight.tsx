@@ -12,6 +12,12 @@ type Props = {
   children: ReactNode;
 };
 
+/** Booth rows sit ~14 m from hall center — keep this below that so center plaza stays dark. */
+export const BOOTH_ACCENT_LIGHT_RANGE = 12;
+export const BOOTH_ACCENT_LIGHT_MARGIN = 4;
+/** Help-desk hostess lights — only needed within a few meters of the counter. */
+export const CONCIERGE_LIGHT_RANGE = 14;
+
 /**
  * Distance-gates expensive real-time lights.
  *

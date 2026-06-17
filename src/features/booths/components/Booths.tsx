@@ -22,7 +22,7 @@ import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { HallAisleStandees } from './HallAisleStandees';
 import { HallSuspendedCanopies } from './HallSuspendedCanopy.tsx';
 import { SideExpoBooths } from './SideExpoBooths';
-import { ProximityLight } from './ProximityLight';
+import { ProximityLight, BOOTH_ACCENT_LIGHT_RANGE, BOOTH_ACCENT_LIGHT_MARGIN, CONCIERGE_LIGHT_RANGE } from './ProximityLight';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, VERTEX_ELITE_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
@@ -1075,7 +1075,7 @@ export function StandardLuxuryBooth({
       </Suspense>
 
 
-      <ProximityLight range={26}>
+      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
         <spotLight
           position={[0, 7.5, -1.2]}
           angle={0.45}
@@ -1392,7 +1392,7 @@ export function EcoEdenBooth({
         </group>
       </BoothDisplayEditable>
 
-      <ProximityLight range={26}>
+      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
         <spotLight
           position={[0, 7.5, -1.2]}
           angle={0.45}
@@ -2262,7 +2262,7 @@ function HelpDeskCustomGirl() {
 
   return (
     <group name="concierge-desk-hostess">
-      <ProximityLight range={28}>
+      <ProximityLight range={CONCIERGE_LIGHT_RANGE}>
         <spotLight
           position={[px, 5.2, pz + 1.5]}
           angle={0.48}
