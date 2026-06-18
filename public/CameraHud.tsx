@@ -1808,6 +1808,7 @@ function PlantPot({ position }: { position: [number, number, number] }) {
       </mesh>
       <mesh position={[0, 0.88, 0]}>
         <torusGeometry args={[0.47, 0.025, 12, 24]} />
+        <dashTextureUrl url={}
         <meshStandardMaterial {...MAT_GOLD} emissiveIntensity={0.9} />
       </mesh>
       <mesh position={[0, 1.55, 0]} castShadow>
@@ -1823,6 +1824,7 @@ function LEDFloorStrips() {
   return (
     <group name="led-floor-strips">
       {/* Perimeter glow strips */}
+      
       {/* North edge */}
       <mesh position={[0, 0.03, cz - halfD + 2]} castShadow>
         <boxGeometry args={[floorW - 3, 0.04, 0.15]} />
