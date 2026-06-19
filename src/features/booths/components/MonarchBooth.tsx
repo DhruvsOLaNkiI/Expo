@@ -15,7 +15,8 @@ import {
 } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
-import { ProximityLight, BOOTH_ACCENT_LIGHT_RANGE, BOOTH_ACCENT_LIGHT_MARGIN } from './ProximityLight';
+import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
+import { PooledBoothLight } from './BoothLightPool';
 import { BoothSignageFascia } from './BoothSignageFascia';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BoothWallLogos } from './BoothWallLogos';
@@ -286,20 +287,19 @@ export function MonarchBooth({
         />
       </Suspense>
 
-      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
-        <spotLight
-          position={[0, 7.5, -1.2]}
-          angle={0.5}
-          penumbra={0.8}
-          intensity={lighting.spotlightIntensity ?? 65}
-          color={lighting.spotlightColor ?? '#fff4e6'}
-          distance={20}
-          decay={2}
-          castShadow
-        />
-        <pointLight position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
-        <pointLight position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} decay={2} />
-      </ProximityLight>
+      <PooledBoothLight
+        kind="spot"
+        position={[0, 7.5, -1.2]}
+        targetPosition={[0, 0, 0]}
+        angle={0.5}
+        penumbra={0.8}
+        intensity={lighting.spotlightIntensity ?? 65}
+        color={lighting.spotlightColor ?? '#fff4e6'}
+        distance={20}
+        range={BOOTH_ACCENT_LIGHT_RANGE}
+      />
+      <PooledBoothLight kind="point" position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} range={BOOTH_ACCENT_LIGHT_RANGE} />
+      <PooledBoothLight kind="point" position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} range={BOOTH_ACCENT_LIGHT_RANGE} />
 
       <BoothStandee name={name} accent={trim} boothId={id} displayLayout={displayLayout} />
 

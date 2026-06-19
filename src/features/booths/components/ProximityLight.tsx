@@ -12,9 +12,13 @@ type Props = {
   children: ReactNode;
 };
 
-/** Booth rows sit ~14 m from hall center — keep this below that so center plaza stays dark. */
-export const BOOTH_ACCENT_LIGHT_RANGE = 12;
-export const BOOTH_ACCENT_LIGHT_MARGIN = 4;
+/**
+ * Booth rows sit ~14 m from hall center. Kept tight (9 m) so that, standing in the aisle,
+ * only the 1–2 booths you're actually next to light up — every extra lit booth adds spot +
+ * point lights that forward rendering pays for on every pixel.
+ */
+export const BOOTH_ACCENT_LIGHT_RANGE = 9;
+export const BOOTH_ACCENT_LIGHT_MARGIN = 3;
 /** Help-desk hostess lights — only needed within a few meters of the counter. */
 export const CONCIERGE_LIGHT_RANGE = 14;
 

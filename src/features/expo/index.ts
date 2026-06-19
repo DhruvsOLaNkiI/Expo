@@ -11,5 +11,6 @@ export { ExpoVisitorMenu } from './components/ExpoVisitorMenu';
 export { ExpoAdminBottomBar } from './components/ExpoAdminBottomBar';
 export { RoamingExecutive } from './components/RoamingExecutive';
 export { FpsMeter } from './components/FpsMeter';
+export { RenderStatsProbe } from './components/RenderStatsProbe';
 export { CAMERA_MODES, CAMERA_MODE_ORDER } from './camera/cameraModes';
 export type { CameraMode } from './camera/cameraModes';

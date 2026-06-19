@@ -19,6 +19,7 @@ import {
   ExpoSceneSettingsHud,
   RoamingExecutive,
   FpsMeter,
+  RenderStatsProbe,
 } from '@/features/expo';
 import { Booths, Ballroom, VertexEliteScreenHud } from '@/features/booths';
 import {
@@ -167,6 +168,7 @@ export default function App() {
   const showRoamingExecutive = sceneConfig.showRoamingExecutive;
   const showVideos = sceneConfig.showVideos;
   const compressModels = sceneConfig.modelCompression === '30fps';
+  const performanceBoost = sceneConfig.performanceBoost;
   const expoPhase = useStore((s) => s.expoPhase);
   const inRegistration = expoPhase === 'registration';
   const qualityPreset = useMemo(
@@ -362,9 +364,9 @@ export default function App() {
           <Suspense fallback={null}>
             <SharedVideoTextureUpdater />
             {inRegistration ? (
-              <RegistrationLobbyLighting compressedMode={compressModels} />
+              <RegistrationLobbyLighting compressedMode={compressModels} boost={performanceBoost} />
             ) : (
-              <Lighting compressedMode={compressModels} />
+              <Lighting compressedMode={compressModels} boost={performanceBoost} />
             )}
             {inRegistration ? (
               <RegistrationHall />
@@ -383,6 +385,7 @@ export default function App() {
             )}
             <HallLayoutGizmos />
             <Player />
+            {isAdmin && <RenderStatsProbe />}
             {postProcessing && <Effects />}
           </Suspense>
         </Canvas>

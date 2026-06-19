@@ -717,6 +717,13 @@ export type SceneConfig = {
    * Use `30fps` for integrated GPUs / mobile; `off` keeps full mesh detail.
    */
   modelCompression: 'off' | '30fps';
+  /**
+   * Master performance boost. When true: hostess animation is distance-gated, global
+   * directional lights are reduced, extra shadow casters are dropped, GLB textures are
+   * capped to 1024px, and geometry decimation only touches heavy meshes. Turn off to
+   * compare raw vs optimized FPS. Default on.
+   */
+  performanceBoost: boolean;
   /** Render tier: resolution (DPR) + bundled performance settings. */
   renderQuality: RenderQuality;
   /** Google Gemini API key for Ask AI chatbox. */
@@ -763,6 +770,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showBoothHostess: true,
   hiddenBooths: [...DEFAULT_HIDDEN_SIDE_BOOTH_IDS],
   modelCompression: '30fps',
+  performanceBoost: true,
   renderQuality: 'hd',
   aiApiKey: '',
   aiDeckContext: '',

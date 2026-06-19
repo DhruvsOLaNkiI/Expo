@@ -91,6 +91,22 @@ export function SceneQualityHud() {
         >
           {cfg.showHallCanopy ? 'Hide ring' : 'Ring off'}
         </button>
+        <button
+          type="button"
+          onClick={() => patchScene({ performanceBoost: !cfg.performanceBoost })}
+          className={`rounded-lg border px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
+            cfg.performanceBoost
+              ? 'border-sky-400/55 bg-sky-950/85 text-sky-100 shadow-md'
+              : 'border-white/15 text-white/70 hover:bg-white/10'
+          }`}
+          title={
+            cfg.performanceBoost
+              ? 'Performance Boost ON — hostess gating, fewer lights, smaller shadows, 1024px textures, soft decimation. Tap to compare raw FPS.'
+              : 'Performance Boost OFF — full lights/textures/geometry (heavier). Tap to re-enable optimizations.'
+          }
+        >
+          {cfg.performanceBoost ? 'Boost ON' : 'Boost OFF'}
+        </button>
       </div>
     </div>
   );

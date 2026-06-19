@@ -22,7 +22,7 @@ import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import { HallAisleStandees } from './HallAisleStandees';
 import { HallSuspendedCanopies } from './HallSuspendedCanopy.tsx';
 import { SideExpoBooths } from './SideExpoBooths';
-import { ProximityLight, BOOTH_ACCENT_LIGHT_RANGE, BOOTH_ACCENT_LIGHT_MARGIN, CONCIERGE_LIGHT_RANGE } from './ProximityLight';
+import { BOOTH_ACCENT_LIGHT_RANGE, CONCIERGE_LIGHT_RANGE } from './ProximityLight';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, VERTEX_ELITE_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
@@ -53,6 +53,8 @@ import { MonarchBooth } from './MonarchBooth';
 import { HorizonVistasBooth } from './HorizonVistasBooth';
 import { CrownEstatesBooth } from './CrownEstatesBooth';
 import { useModelCompression } from '@/hooks/useModelCompression';
+import { usePerformanceBoost } from '@/hooks/usePerformanceBoost';
+import { BoothLightPool, PooledBoothLight } from './BoothLightPool';
 import { optimizeGlbRoot, shouldHideDecorativeGlbInstances } from '@/utils/glbPerformance';
 
 const EMPTY_HOSTESS_REPLIES: HostessQuickReply[] = [];
@@ -433,6 +435,10 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
 
   return (
     <group position={[0, 0, 0]}>
+      {/* Constant-count light pool — reassigned to the nearest booths each frame so the scene's
+          light count never changes (no shader recompiles / stutter when moving between booths). */}
+      <BoothLightPool />
+
       {/* Central Featured Help Desk Zone */}
       <FeaturedProperty position={[0, 0, 0]} />
 
@@ -737,10 +743,8 @@ export function BoothHeaderLogo({
   return (
     <group position={[0, 6.5, -3.58]}>
       {/* Soft wash toward wall — mall-style backlit halo (near-field only) */}
-      <ProximityLight range={18}>
-        <pointLight position={[0, 0, -0.28]} intensity={2.2} distance={5.5} decay={2} color={haloEmissive} />
-        <pointLight position={[0, 0.15, -0.22]} intensity={0.85} distance={4} decay={2} color="#fff5e6" />
-      </ProximityLight>
+      <PooledBoothLight kind="point" position={[0, 0, -0.28]} intensity={2.2} distance={5.5} color={haloEmissive} range={18} />
+      <PooledBoothLight kind="point" position={[0, 0.15, -0.22]} intensity={0.85} distance={4} color="#fff5e6" range={18} />
 
       {/* Deep lightbox — warm emissive “LED wash” behind graphic */}
       <mesh position={[0, 0, -0.14]}>
@@ -1047,15 +1051,14 @@ export function StandardLuxuryBooth({
         </group>
         {/* Screen glow only matters when the panel is actually lit, and only up close. */}
         {stageLedUrl ? (
-          <ProximityLight range={16}>
-            <pointLight
-              position={[0, 0, -0.15]}
-              intensity={12}
-              distance={4}
-              decay={2}
-              color="#e8f0ff"
-            />
-          </ProximityLight>
+          <PooledBoothLight
+            kind="point"
+            position={[0, 0, -0.15]}
+            intensity={12}
+            distance={4}
+            color="#e8f0ff"
+            range={16}
+          />
         ) : null}
       </BoothDisplayEditable>
 
@@ -1075,18 +1078,17 @@ export function StandardLuxuryBooth({
       </Suspense>
 
 
-      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
-        <spotLight
-          position={[0, 7.5, -1.2]}
-          angle={0.45}
-          penumbra={0.7}
-          intensity={lighting.spotlightIntensity}
-          color={lighting.spotlightColor}
-          distance={18}
-          decay={2}
-          target-position={[0, 3, -3.8]}
-        />
-      </ProximityLight>
+      <PooledBoothLight
+        kind="spot"
+        position={[0, 7.5, -1.2]}
+        targetPosition={[0, 3, -3.8]}
+        angle={0.45}
+        penumbra={0.7}
+        intensity={lighting.spotlightIntensity}
+        color={lighting.spotlightColor}
+        distance={18}
+        range={BOOTH_ACCENT_LIGHT_RANGE}
+      />
 
       <BoothStandee name={name} accent={accent} boothId={id} displayLayout={displayLayout} />
 
@@ -1323,15 +1325,14 @@ export function EcoEdenBooth({
           </Suspense>
         </group>
         {stageLedUrl ? (
-          <ProximityLight range={16}>
-            <pointLight
-              position={[0, 0, -0.15]}
-              intensity={12}
-              distance={4}
-              decay={2}
-              color="#e8f0ff"
-            />
-          </ProximityLight>
+          <PooledBoothLight
+            kind="point"
+            position={[0, 0, -0.15]}
+            intensity={12}
+            distance={4}
+            color="#e8f0ff"
+            range={16}
+          />
         ) : null}
       </BoothDisplayEditable>
 
@@ -1392,18 +1393,17 @@ export function EcoEdenBooth({
         </group>
       </BoothDisplayEditable>
 
-      <ProximityLight range={BOOTH_ACCENT_LIGHT_RANGE} margin={BOOTH_ACCENT_LIGHT_MARGIN}>
-        <spotLight
-          position={[0, 7.5, -1.2]}
-          angle={0.45}
-          penumbra={0.7}
-          intensity={lighting.spotlightIntensity}
-          color="#fff8ef"
-          distance={18}
-          decay={2}
-          target-position={[0, 3, -3.8]}
-        />
-      </ProximityLight>
+      <PooledBoothLight
+        kind="spot"
+        position={[0, 7.5, -1.2]}
+        targetPosition={[0, 3, -3.8]}
+        angle={0.45}
+        penumbra={0.7}
+        intensity={lighting.spotlightIntensity}
+        color="#fff8ef"
+        distance={18}
+        range={BOOTH_ACCENT_LIGHT_RANGE}
+      />
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -1800,11 +1800,12 @@ function Plant({
   scale?: number;
 }) {
   const modelCompression = useModelCompression();
+  const boost = usePerformanceBoost();
   const { scene } = useGLTF(HALL_TREE_MODEL_URL) as { scene: THREE.Object3D };
   const model = useMemo(() => {
     const root = prepareHallTreeModel(scene, scale);
-    return optimizeGlbRoot(root, modelCompression);
-  }, [scene, scale, modelCompression]);
+    return optimizeGlbRoot(root, modelCompression, { boost });
+  }, [scene, scale, modelCompression, boost]);
   return (
     <group name={name} position={position}>
       <primitive object={model} />
@@ -2044,6 +2045,14 @@ function applyLuxuryNavyOutfit(root: THREE.Object3D) {
   });
 }
 
+/** Beyond this camera distance (m) a hostess stops its idle animation — too far to notice. */
+const HOSTESS_ANIM_RANGE = 18;
+const HOSTESS_ANIM_RANGE_SQ = HOSTESS_ANIM_RANGE * HOSTESS_ANIM_RANGE;
+/** Beyond this distance the whole skinned hostess mesh is hidden (no draw call / skinning). */
+const HOSTESS_RENDER_RANGE = 24;
+const HOSTESS_RENDER_RANGE_SQ = HOSTESS_RENDER_RANGE * HOSTESS_RENDER_RANGE;
+const hostessGateTmp = new THREE.Vector3();
+
 function ExpoHostessAvatar({
   position,
   rotation,
@@ -2058,7 +2067,9 @@ function ExpoHostessAvatar({
   subtleIdleLoop?: boolean;
 }) {
   const breathingRef = useRef<THREE.Group>(null);
+  const rootGroupRef = useRef<THREE.Group>(null);
   const modelCompression = useModelCompression();
+  const boost = usePerformanceBoost();
   const { scene, animations } = useGLTF(HOSTESS_MODEL_URL) as {
     scene: THREE.Object3D;
     animations: THREE.AnimationClip[];
@@ -2068,8 +2079,12 @@ function ExpoHostessAvatar({
   const model = useMemo(() => {
     const root = prepareHostessModel(scene, { skipManualArmPose: animCount > 0 });
     if (navyOutfit) applyLuxuryNavyOutfit(root);
-    return optimizeGlbRoot(root, modelCompression);
-  }, [scene, animCount, navyOutfit, modelCompression]);
+    return optimizeGlbRoot(root, modelCompression, { boost });
+  }, [scene, animCount, navyOutfit, modelCompression, boost]);
+
+  /** #1 Distance-gate the per-frame idle work — far hostesses skip animation entirely. */
+  const animActiveRef = useRef(true);
+  const gateFrameRef = useRef(0);
 
   /** Hips_01 / Mixamo-style rig: without a baked clip, skip spine/forearm procedural idle. */
   const isScene3Hostess = useMemo(() => {
@@ -2151,7 +2166,21 @@ function ExpoHostessAvatar({
     };
   }, [model, animations, subtleIdleLoop]);
 
-  useFrame((state, delta) => {
+  useFrame((state) => {
+    if (boost) {
+      gateFrameRef.current = (gateFrameRef.current + 1) % 12;
+      if (gateFrameRef.current === 0 && rootGroupRef.current) {
+        rootGroupRef.current.getWorldPosition(hostessGateTmp);
+        const dSq = hostessGateTmp.distanceToSquared(state.camera.position);
+        const visible = dSq <= HOSTESS_RENDER_RANGE_SQ;
+        if (rootGroupRef.current.visible !== visible) rootGroupRef.current.visible = visible;
+        animActiveRef.current = dSq <= HOSTESS_ANIM_RANGE_SQ;
+      }
+      if (!animActiveRef.current) return;
+    } else if (rootGroupRef.current && !rootGroupRef.current.visible) {
+      rootGroupRef.current.visible = true;
+    }
+
     const t = state.clock.elapsedTime;
     const ph = idlePhase;
 
@@ -2185,7 +2214,7 @@ function ExpoHostessAvatar({
   });
 
   return (
-    <group position={position} rotation={rotation}>
+    <group ref={rootGroupRef} position={position} rotation={rotation}>
       <group ref={breathingRef}>
         <primitive object={model} />
       </group>
@@ -2262,19 +2291,18 @@ function HelpDeskCustomGirl() {
 
   return (
     <group name="concierge-desk-hostess">
-      <ProximityLight range={CONCIERGE_LIGHT_RANGE}>
-        <spotLight
-          position={[px, 5.2, pz + 1.5]}
-          angle={0.48}
-          penumbra={0.88}
-          intensity={52}
-          color="#fff6e8"
-          distance={14}
-          decay={2}
-          castShadow
-        />
-        <pointLight position={[px, 2.8, pz + 1.2]} intensity={14} color="#ffe8c8" distance={8} decay={2} />
-      </ProximityLight>
+      <PooledBoothLight
+        kind="spot"
+        position={[px, 5.2, pz + 1.5]}
+        targetPosition={[px, 0, pz]}
+        angle={0.48}
+        penumbra={0.88}
+        intensity={52}
+        color="#fff6e8"
+        distance={14}
+        range={CONCIERGE_LIGHT_RANGE}
+      />
+      <PooledBoothLight kind="point" position={[px, 2.8, pz + 1.2]} intensity={14} color="#ffe8c8" distance={8} range={CONCIERGE_LIGHT_RANGE} />
 
       <ExpoHostessAvatar
         position={CONCIERGE_HOSTESS_POS}

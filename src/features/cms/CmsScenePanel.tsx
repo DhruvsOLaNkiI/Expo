@@ -166,7 +166,21 @@ export function CmsScenePanel() {
       </p>
 
       <SectionTitle>Performance (advanced)</SectionTitle>
-      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/[0.04] p-3">
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-sky-400/25 bg-sky-400/[0.05] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-sky-400"
+          checked={cfg.performanceBoost}
+          onChange={(e) => patchScene({ performanceBoost: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-sky-300">Performance Boost (recommended)</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/40">
+            Distance-gates the hostess idle animation, drops 2 global fill lights, shrinks the shadow map, caps GLB textures to 1024px, and uses soft non-destructive decimation (heavy meshes only). Big phone FPS win with minimal visual change. Turn off to compare raw vs optimized FPS.
+          </span>
+        </span>
+      </label>
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#d4af37]/20 bg-[#d4af37]/[0.04] p-3">
         <input
           type="checkbox"
           className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
