@@ -477,7 +477,16 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               accent={b.accent}
               counterColor={b.counterColor}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
+              wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
+              wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
+              sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallLeftImageUrl) || undefined}
+              sideWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallRightImageUrl) || undefined}
+              exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
+              exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
+              counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              wallPlacementAdjustments={b.wallPlacementAdjustments}
               company={b.company}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
@@ -518,6 +527,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
               wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
               wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
@@ -560,6 +570,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
               wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
               wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
@@ -675,6 +686,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
               wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
               wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
@@ -908,6 +920,7 @@ export function StandardLuxuryBooth({
   hostessQuickReplies,
   showVideos = true,
   displayLayout,
+  projectLogoUrl,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -920,6 +933,7 @@ export function StandardLuxuryBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  projectLogoUrl?: string;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   wallLogoLeftUrl?: string;
   wallLogoRightUrl?: string;
@@ -987,6 +1001,7 @@ export function StandardLuxuryBooth({
         boothName={name}
         accent={glow}
         headerLogoUrl={headerLogoUrl}
+        projectLogoUrl={projectLogoUrl}
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         fasciaColor={wallColor}
@@ -1140,7 +1155,7 @@ export function EcoSignageImage({ url }: { url: string }) {
 export function EcoEdenBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
   backWallColor, tvWallColor, headerFasciaColor, counterTopColor,
-  videoUrl, stageScreenUrl, headerLogoUrl, headerBranding, wallLogoLeftUrl, wallLogoRightUrl,
+  videoUrl, stageScreenUrl, headerLogoUrl, headerBranding, projectLogoUrl, wallLogoLeftUrl, wallLogoRightUrl,
   sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
   wallPlacementAdjustments,
   lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', siteMapUrls,
@@ -1166,6 +1181,7 @@ export function EcoEdenBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  projectLogoUrl?: string;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   wallLogoLeftUrl?: string;
   wallLogoRightUrl?: string;
@@ -1256,6 +1272,7 @@ export function EcoEdenBooth({
         boothName={name}
         accent={darkGreen}
         headerLogoUrl={headerLogoUrl}
+        projectLogoUrl={projectLogoUrl}
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         fasciaColor={fasciaBg}
@@ -1438,6 +1455,15 @@ export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
   headerLogoUrl,
   headerBranding,
+  projectLogoUrl,
+  wallLogoLeftUrl,
+  wallLogoRightUrl,
+  sideWallLeftImageUrl,
+  sideWallRightImageUrl,
+  exteriorWallLeftImageUrl,
+  exteriorWallRightImageUrl,
+  counterFrontImageUrl,
+  wallPlacementAdjustments,
   videoUrl, stageScreenUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', customFaqQuestions = [], siteMapUrls,
   media = [],
   company,
@@ -1458,6 +1484,15 @@ export function VertexEliteBooth({
   counterColor: string;
   headerLogoUrl?: string;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
+  projectLogoUrl?: string;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: import('@/features/booths/components/boothWallMetrics').BoothWallPlacementAdjustments;
   videoUrl: string;
   stageScreenUrl?: string;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
@@ -1494,8 +1529,10 @@ export function VertexEliteBooth({
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   const fasciaLogoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
+  const fasciaProjectLogoUrl = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
   const fasciaLogoScale = resolveHeaderLogoScale(headerBranding);
   const { centerLogo, hideCenterText } = resolveFasciaLayout(headerBranding);
+  const showRightProjectLogo = Boolean(fasciaProjectLogoUrl) && !centerLogo;
   const fasciaTitle = resolveBoothHeaderBranding({
     name,
     headerBranding,
@@ -1578,6 +1615,13 @@ export function VertexEliteBooth({
           />
         </Text>
       ) : null}
+      {showRightProjectLogo ? (
+        <Suspense fallback={null}>
+          <group position={[4.25, 6.5, -3.5]}>
+            <BoothFasciaLogo url={fasciaProjectLogoUrl!} scale={fasciaLogoScale} />
+          </group>
+        </Suspense>
+      ) : null}
 
       <BoothDisplayEditable
         boothId={id}
@@ -1629,6 +1673,21 @@ export function VertexEliteBooth({
           />
         </BoothDisplayEditable>
       )}
+
+      <Suspense fallback={null}>
+        <BoothWallLogos
+          wallLogoLeftUrl={wallLogoLeftUrl}
+          wallLogoRightUrl={wallLogoRightUrl}
+        />
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+        />
+      </Suspense>
 
       <BoothStandee name={name} accent={glow} boothId={id} displayLayout={displayLayout} />
 

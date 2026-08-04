@@ -61,6 +61,7 @@ export function MonarchBooth({
   stageScreenUrl,
   headerLogoUrl,
   headerBranding,
+  projectLogoUrl,
   wallLogoLeftUrl,
   wallLogoRightUrl,
   sideWallLeftImageUrl,
@@ -96,6 +97,7 @@ export function MonarchBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  projectLogoUrl?: string;
   headerBranding?: BoothHeaderBranding;
   wallLogoLeftUrl?: string;
   wallLogoRightUrl?: string;
@@ -189,6 +191,7 @@ export function MonarchBooth({
         boothName={name}
         accent={trim}
         headerLogoUrl={safeHeaderLogo || undefined}
+        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         fasciaColor={fasciaColor}

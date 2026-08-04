@@ -60,14 +60,17 @@ type Props = {
   headerFasciaColor?: string;
   accentColor?: string;
   headerLogoUrl: string;
+  projectLogoUrl: string;
   wallLogoLeftUrl: string;
   wallLogoRightUrl: string;
   headerBranding: BoothHeaderBranding;
   onLogoUrl: (url: string) => void;
+  onProjectLogoUrl: (url: string) => void;
   onWallLogoLeftUrl: (url: string) => void;
   onWallLogoRightUrl: (url: string) => void;
   onBrandingChange: (patch: Partial<BoothHeaderBranding>) => void;
   onUploadLogo: (file: File) => Promise<void>;
+  onUploadProjectLogo: (file: File) => Promise<void>;
   onUploadWallLogoLeft: (file: File) => Promise<void>;
   onUploadWallLogoRight: (file: File) => Promise<void>;
 };
@@ -79,14 +82,17 @@ export function BoothLayoutSetupSection({
   headerFasciaColor = '#fcfaf5',
   accentColor = '#d4af37',
   headerLogoUrl,
+  projectLogoUrl,
   wallLogoLeftUrl,
   wallLogoRightUrl,
   headerBranding,
   onLogoUrl,
+  onProjectLogoUrl,
   onWallLogoLeftUrl,
   onWallLogoRightUrl,
   onBrandingChange,
   onUploadLogo,
+  onUploadProjectLogo,
   onUploadWallLogoLeft,
   onUploadWallLogoRight,
 }: Props) {
@@ -155,12 +161,24 @@ export function BoothLayoutSetupSection({
               <span className="exb-muted">Center text hidden</span>
             ) : null}
           </div>
-          {showRera ? (
+          {showRera && !projectLogoUrl ? (
             <div className="exb-fascia-slot exb-fascia-slot-rera">
               <span className="exb-fascia-rera-label">RERA</span>
               <span>{resolved.reraNumber || 'Registration no.'}</span>
             </div>
-          ) : null}
+          ) : (
+            <div className="exb-fascia-slot exb-fascia-slot-logo exb-fascia-slot-project-logo">
+              {projectLogoUrl ? (
+                <img
+                  src={projectLogoUrl}
+                  alt=""
+                  style={{ maxHeight: previewLogoMaxH, maxWidth: Math.round(88 * logoScale) }}
+                />
+              ) : (
+                <span>PROJECT LOGO</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -208,6 +226,42 @@ export function BoothLayoutSetupSection({
               ) : null}
             </div>
           </div>
+        </div>
+
+        <div className="exb-booth-layout-field">
+          <span className="exb-booth-layout-label">Project logo · top fascia (right slot)</span>
+          <div className="exb-asset-logo-row">
+            {projectLogoUrl ? (
+              <img src={projectLogoUrl} alt="" className="exb-asset-logo-preview" />
+            ) : (
+              <div className="exb-asset-logo-placeholder">PR</div>
+            )}
+            <div className="exb-booth-layout-actions">
+              <label className="exb-btn">
+                <Upload size={14} />
+                Upload logo
+                <input
+                  type="file"
+                  className="exb-hidden-input"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    void onUploadProjectLogo(f);
+                  }}
+                />
+              </label>
+              {projectLogoUrl ? (
+                <button type="button" className="exb-btn" onClick={() => onProjectLogoUrl('')}>
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <p className="exb-muted exb-logo-scale-hint">
+            Appears on the right of AIROCITY / project name. Replaces the RERA text slot when set.
+          </p>
         </div>
 
         <div className="exb-booth-layout-field exb-logo-scale-field">
@@ -296,12 +350,13 @@ export function BoothLayoutSetupSection({
         </label>
 
         <label className="exb-booth-layout-field">
-          <span className="exb-booth-layout-label">RERA registration · right slot</span>
+          <span className="exb-booth-layout-label">RERA registration · right slot (if no project logo)</span>
           <input
             className="exb-field"
             placeholder="e.g. P52100001234"
             value={headerBranding.reraNumber ?? ''}
             onChange={(e) => onBrandingChange({ reraNumber: e.target.value })}
+            disabled={Boolean(projectLogoUrl)}
           />
         </label>
       </div>

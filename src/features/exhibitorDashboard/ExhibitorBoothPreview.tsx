@@ -46,6 +46,7 @@ export function ExhibitorBoothPreview() {
         videoUrl={booth.videoUrl}
         stageScreenUrl={boothStageScreenUrl(booth)}
         headerLogoUrl={sanitizeBoothLogoUrlForWebGL(booth.headerLogoUrl) ?? ''}
+        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(booth.projectLogoUrl) ?? ''}
         headerBranding={booth.headerBranding}
         company={booth.company}
         wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(booth.wallLogoLeftUrl) ?? ''}

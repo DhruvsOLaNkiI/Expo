@@ -1,10 +1,11 @@
-import { ChevronDown, Store } from 'lucide-react';
+import { Building2, ChevronDown, Store } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { boothDisplayCode } from './exhibitorConfig';
 import { useExhibitorBoothContext } from './ExhibitorBoothContext';
 
 export function BoothSwitcher() {
-  const { boothId, booth, booths, setBoothId } = useExhibitorBoothContext();
+  const { boothId, booth, booths, setBoothId, hallId, hallLabel, halls, setHallId, loading } =
+    useExhibitorBoothContext();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -41,20 +42,53 @@ export function BoothSwitcher() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        disabled={loading}
       >
         <div className="exb-logo">
           {logoUrl ? <img src={logoUrl} alt="" className="exb-logo-img" /> : initials}
         </div>
         <div className="exb-brand-card-body">
           <h3>{company}</h3>
-          <p>Booth · {boothDisplayCode(boothId)}</p>
-          <span className="exb-online">● Online</span>
+          <p>
+            Booth · {boothDisplayCode(boothId)} · {hallLabel}
+          </p>
+          <span className="exb-online">{loading ? '● Loading…' : '● Online'}</span>
         </div>
         <ChevronDown size={16} className={`exb-booth-chevron ${open ? 'open' : ''}`} />
       </button>
 
       {open ? (
-        <div className="exb-booth-panel" role="listbox" aria-label="Switch booth">
+        <div className="exb-booth-panel" role="listbox" aria-label="Switch hall and booth">
+          <div className="exb-booth-panel-head">
+            <Building2 size={14} />
+            <span>Expo hall</span>
+          </div>
+          <div className="exb-booth-scroll exb-hall-scroll">
+            {halls.map((h) => {
+              const active = h.hallId === hallId;
+              const num = h.hallId.replace(/\D/g, '') || '?';
+              return (
+                <button
+                  key={h.hallId}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={`exb-booth-option ${active ? 'active' : ''}`}
+                  onClick={() => {
+                    void setHallId(h.hallId).then(() => setOpen(false));
+                  }}
+                >
+                  <span className="exb-booth-option-avatar">{num}</span>
+                  <span className="exb-booth-option-text">
+                    <strong>{h.label}</strong>
+                    <em>{h.hallId}</em>
+                  </span>
+                  {active ? <span className="exb-booth-option-check">✓</span> : null}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="exb-booth-panel-head">
             <Store size={14} />
             <span>Switch booth ({booths.length})</span>

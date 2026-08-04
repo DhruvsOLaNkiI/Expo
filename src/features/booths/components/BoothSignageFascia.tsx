@@ -122,6 +122,7 @@ export function BoothSignageFascia({
   boothName,
   accent = '#d4af37',
   headerLogoUrl,
+  projectLogoUrl,
   headerBranding,
   companyTagline,
   fasciaColor = '#e6e4de',
@@ -134,6 +135,8 @@ export function BoothSignageFascia({
   boothName: string;
   accent?: string;
   headerLogoUrl?: string;
+  /** Right fascia logo (project logo). */
+  projectLogoUrl?: string;
   headerBranding?: BoothHeaderBranding;
   companyTagline?: string;
   fasciaColor?: string;
@@ -152,8 +155,11 @@ export function BoothSignageFascia({
   const titleSize = Math.min(0.62, width * 0.038);
   const subSize = titleSize * 0.42;
   const logoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
+  const rightLogoUrl = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
   const logoScale = resolveHeaderLogoScale(headerBranding);
   const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(headerBranding);
+  const showRightLogo = Boolean(rightLogoUrl) && !centerLogo;
+  const showRightRera = showRera && !showRightLogo;
 
   return (
     <group position={position}>
@@ -251,7 +257,13 @@ export function BoothSignageFascia({
         </>
       ) : null}
 
-      {showRera ? (
+      {showRightLogo ? (
+        <group position={[width * 0.34, 0.02, zFace]}>
+          <FasciaLogoSlot url={rightLogoUrl!} scale={logoScale} />
+        </group>
+      ) : null}
+
+      {showRightRera ? (
         <group position={[width * 0.34, 0, zFace]}>
           <Text
             position={[0, 0.1, 0]}

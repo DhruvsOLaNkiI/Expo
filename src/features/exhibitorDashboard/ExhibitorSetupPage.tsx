@@ -108,6 +108,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
   const [headerFasciaColor, setHeaderFasciaColor] = useState<string>(BUILDER_8_GREEN_THEME.headerFasciaColor);
   const [counterTopColor, setCounterTopColor] = useState<string>(BUILDER_8_GREEN_THEME.counterTopColor);
   const [headerLogoUrl, setHeaderLogoUrl] = useState('');
+  const [projectLogoUrl, setProjectLogoUrl] = useState('');
   const [wallLogoLeftUrl, setWallLogoLeftUrl] = useState('');
   const [wallLogoRightUrl, setWallLogoRightUrl] = useState('');
   const [sideWallLeftImageUrl, setSideWallLeftImageUrl] = useState('');
@@ -129,6 +130,8 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     if (!booth) return;
     const rawLogo = booth.headerLogoUrl ?? '';
     setHeaderLogoUrl(loadLocalImageUrl(rawLogo));
+    const rawProjectLogo = booth.projectLogoUrl ?? '';
+    setProjectLogoUrl(loadLocalImageUrl(rawProjectLogo));
     const rawLeft = booth.wallLogoLeftUrl ?? '';
     setWallLogoLeftUrl(loadLocalImageUrl(rawLeft));
     const rawRight = booth.wallLogoRightUrl ?? '';
@@ -146,6 +149,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     setWallPlacementAdjustments({ ...(booth.wallPlacementAdjustments ?? {}) });
     if (
       isRemoteBoothLogoUrl(rawLogo) ||
+      isRemoteBoothLogoUrl(rawProjectLogo) ||
       isRemoteBoothLogoUrl(rawLeft) ||
       isRemoteBoothLogoUrl(rawRight) ||
       isRemoteBoothLogoUrl(rawSideLeft) ||
@@ -186,6 +190,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
         headerFasciaColor: boothId === 'builder-8' ? headerFasciaColor.trim() || undefined : undefined,
         counterTopColor: boothId === 'builder-8' ? counterTopColor.trim() || undefined : undefined,
         headerLogoUrl: patchPlacementImageUrl(headerLogoUrl),
+        projectLogoUrl: patchPlacementImageUrl(projectLogoUrl),
         wallLogoLeftUrl: patchPlacementImageUrl(wallLogoLeftUrl),
         wallLogoRightUrl: patchPlacementImageUrl(wallLogoRightUrl),
         sideWallLeftImageUrl: patchPlacementImageUrl(sideWallLeftImageUrl),
@@ -222,6 +227,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     floorPlans,
     headerBranding,
     headerLogoUrl,
+    projectLogoUrl,
     wallLogoLeftUrl,
     wallLogoRightUrl,
     sideWallLeftImageUrl,
@@ -500,12 +506,17 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           headerFasciaColor={boothId === 'builder-8' ? headerFasciaColor : color}
           accentColor={accent}
           headerLogoUrl={headerLogoUrl}
+          projectLogoUrl={projectLogoUrl}
           wallLogoLeftUrl={wallLogoLeftUrl}
           wallLogoRightUrl={wallLogoRightUrl}
           headerBranding={headerBranding}
           onLogoUrl={(url) => {
             setHeaderLogoUrl(url);
             if (!url) void persist({ headerLogoUrl: null }, 'Header logo removed');
+          }}
+          onProjectLogoUrl={(url) => {
+            setProjectLogoUrl(url);
+            if (!url) void persist({ projectLogoUrl: null }, 'Project logo removed');
           }}
           onWallLogoLeftUrl={setWallLogoLeftUrl}
           onWallLogoRightUrl={setWallLogoRightUrl}
@@ -530,6 +541,16 @@ export function ExhibitorSetupPage({ onNav }: Props) {
               const url = await exhibitorUploadBoothLogo(f);
               setHeaderLogoUrl(url);
               const r = await persist({ headerLogoUrl: url }, 'Header logo');
+              setStatusMsg(r.message);
+            } catch (err) {
+              setErrorMsg(exhibitorUploadError(err));
+            }
+          }}
+          onUploadProjectLogo={async (f) => {
+            try {
+              const url = await exhibitorUploadBoothLogo(f);
+              setProjectLogoUrl(url);
+              const r = await persist({ projectLogoUrl: url }, 'Project logo');
               setStatusMsg(r.message);
             } catch (err) {
               setErrorMsg(exhibitorUploadError(err));

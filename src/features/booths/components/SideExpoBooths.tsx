@@ -22,6 +22,7 @@ export type LuxuryBoothProps = {
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  projectLogoUrl?: string;
   wallLogoLeftUrl?: string;
   wallLogoRightUrl?: string;
   sideWallLeftImageUrl?: string;
@@ -39,6 +40,7 @@ export type LuxuryBoothProps = {
   unitLayouts?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
   floorPlanUrl?: string;
   floorPlans?: import('@/features/shared/data/boothLayouts').UnitLayoutItem[];
+  faqUrl?: string;
   siteMapUrls?: string[];
   media?: import('@/features/shared/data/boothLayouts').MediaItem[];
   company?: import('@/features/shared/data/boothLayouts').CompanyProfile;
@@ -110,6 +112,7 @@ export function SideExpoBooths({
           videoUrl={b.videoUrl}
           stageScreenUrl={b.stageScreenUrl}
           headerLogoUrl={b.headerLogoUrl}
+          projectLogoUrl={b.projectLogoUrl}
           headerBranding={b.headerBranding}
           wallLogoLeftUrl={b.wallLogoLeftUrl}
           wallLogoRightUrl={b.wallLogoRightUrl}

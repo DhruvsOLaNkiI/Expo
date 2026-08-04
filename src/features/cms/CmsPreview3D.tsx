@@ -32,6 +32,7 @@ export type PreviewProps = {
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl: string;
+  projectLogoUrl?: string;
   headerBranding?: BoothHeaderBranding;
   company?: CompanyProfile;
   wallLogoLeftUrl?: string;
@@ -148,6 +149,7 @@ function PreviewHeaderLogo({ url, accent, tagline }: { url: string; accent: stri
 /* ─── Booth geometry ─── */
 function BoothScene({
   boothId, name, color, accent, counterColor, videoUrl, stageScreenUrl, headerLogoUrl,
+  projectLogoUrl,
   headerBranding, company,
   wallLogoLeftUrl, wallLogoRightUrl,
   sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
@@ -192,7 +194,16 @@ function BoothScene({
             accent={accent}
             counterColor={counterColor}
             headerLogoUrl={safeLogoUrl || undefined}
+            projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
             headerBranding={headerBranding}
+            wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(wallLogoLeftUrl) || undefined}
+            wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(wallLogoRightUrl) || undefined}
+            sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(sideWallLeftImageUrl) || undefined}
+            sideWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(sideWallRightImageUrl) || undefined}
+            exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(exteriorWallLeftImageUrl) || undefined}
+            exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(exteriorWallRightImageUrl) || undefined}
+            counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(counterFrontImageUrl) || undefined}
+            wallPlacementAdjustments={wallPlacementAdjustments}
             company={company}
             videoUrl={videoUrl}
             lighting={lighting}

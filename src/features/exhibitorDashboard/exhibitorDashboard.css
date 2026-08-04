@@ -10,6 +10,7 @@
 .exb-booth-panel { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 40; border: 1px solid rgba(59,130,246,0.35); border-radius: 16px; background: #0b1220; box-shadow: 0 16px 40px rgba(0,0,0,0.45); overflow: hidden; }
 .exb-booth-panel-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 11px; color: #94a3b8; border-bottom: 1px solid rgba(255,255,255,0.06); text-transform: uppercase; letter-spacing: 0.06em; }
 .exb-booth-scroll { max-height: 280px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; }
+.exb-hall-scroll { max-height: 200px; }
 .exb-booth-scroll::-webkit-scrollbar { width: 6px; }
 .exb-booth-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.35); border-radius: 999px; }
 .exb-booth-option { all: unset; cursor: pointer; width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; transition: background 0.12s; }

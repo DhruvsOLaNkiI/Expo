@@ -97,13 +97,13 @@ export type CustomFaqQuestion = {
   options: CustomFaqOption[];
 };
 
-/** Fixed zones on the booth header fascia — logo (left), project name (center), RERA (right). */
+/** Fixed zones on the booth header fascia — developer logo (left), project name (center), project logo (right). */
 export type BoothHeaderBranding = {
   /** Center fascia title — defaults to booth name */
   projectName?: string;
   /** Line under project name — defaults to company tagline */
   projectSubtitle?: string;
-  /** RERA registration shown on the right of the fascia */
+  /** RERA registration shown on the right of the fascia when no project logo is set */
   reraNumber?: string;
   /** Header logo size on the top fascia (0.5 = small, 1 = default, 2.5 = large). */
   logoScale?: number;
@@ -202,6 +202,8 @@ export type BoothLayoutConfig = {
   /** Main stage screen (large back-wall LED) — image or video URL */
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  /** Right fascia slot — project / secondary logo (left of RERA when both set). */
+  projectLogoUrl?: string;
   /** Back-wall logos flanking the main LED screen */
   wallLogoLeftUrl?: string;
   wallLogoRightUrl?: string;

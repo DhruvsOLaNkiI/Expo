@@ -65,6 +65,18 @@ export function resolveExhibitorBoothId(): string {
   return fromQuery || DEFAULT_EXHIBITOR_BOOTH_ID;
 }
 
+/** Hall from `?hall=hall-2` (also accepts `2` / `Hall 2`). */
+export function resolveExhibitorHallIdFromUrl(fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const raw = new URLSearchParams(window.location.search).get('hall')?.trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (/^hall-\d+$/.test(lower)) return lower;
+  const num = lower.match(/^(?:hall\s*)?(\d+)$/)?.[1];
+  if (num) return `hall-${num}`;
+  return fallback;
+}
+
 export function boothDisplayCode(boothId: string): string {
   const map: Record<string, string> = {
     'vertex-elite': 'VE-09',
