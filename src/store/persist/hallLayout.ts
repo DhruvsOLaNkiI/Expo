@@ -84,7 +84,7 @@ function saveLoungeRotation(
 /**
  * Saves the current transform of an object to the store and localStorage.
  */
-export function persistHallLayoutTransform(selection: string, obj: THREE.Object3D): boolean {
+export function persistHallLayoutTransform(selection: string, obj: THREE.Object3D): boolean | Promise<boolean> {
   if (!selection || !obj) return false;
   const storeState = useStore.getState();
   const { patchSceneOverride, patchBoothOverride } = storeState;
@@ -157,12 +157,11 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
 
   if (selection.startsWith('booth-root-')) {
     const id = selection.slice('booth-root-'.length);
-    void patchBoothOverride(id, {
+    return patchBoothOverride(id, {
       position: [obj.position.x, obj.position.y, obj.position.z],
       rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
       scale: [obj.scale.x, obj.scale.y, obj.scale.z],
     });
-    return true;
   }
 
   const display = parseBoothDisplayObjectName(selection);
@@ -182,8 +181,7 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
         scale: [obj.scale.x, obj.scale.y, obj.scale.z],
       },
     };
-    void patchBoothOverride(boothId, { displayLayout: next });
-    return true;
+    return patchBoothOverride(boothId, { displayLayout: next });
   }
 
   const reg = mergeRegistrationLayout(get().sceneOverrides.registrationLayout);
@@ -291,9 +289,9 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
 
 /**
  * Finds the object in the scene and saves its transform.
- * Returns true if successful.
+ * Returns true if successful (may return a Promise for booth saves).
  */
-export function commitHallLayoutTransform(): boolean {
+export function commitHallLayoutTransform(): boolean | Promise<boolean> {
   const sel = useStore.getState().hallLayoutSelection ?? activeSelection;
   if (!sel) return false;
 

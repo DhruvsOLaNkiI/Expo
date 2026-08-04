@@ -110,7 +110,7 @@ export function HallLayoutEditHud() {
     flashSaveHint('✓ Entry placement saved from your position');
   };
 
-  const saveAndStay = () => {
+  const saveAndStay = async () => {
     if (!sel) {
       flashSaveHint('Pick an object or click it in the 3D scene');
       return;
@@ -120,8 +120,9 @@ export function HallLayoutEditHud() {
       flashSaveHint(`Not found in scene: ${sel}`);
       return;
     }
-    const ok = persistHallLayoutTransform(sel, obj);
-    flashSaveHint(ok ? `✓ Saved` : `Failed to save ${sel}`);
+    const result = persistHallLayoutTransform(sel, obj);
+    const ok = result instanceof Promise ? await result : result;
+    flashSaveHint(ok ? '✓ Saved for all visitors' : `⚠ Server save failed for ${sel} — saved locally only`);
   };
 
   const finishEdit = () => {
@@ -204,7 +205,7 @@ export function HallLayoutEditHud() {
     return () => window.clearInterval(id);
   }, [edit, sel, syncCoordsFromSelection]);
 
-  const applyCoordinates = () => {
+  const applyCoordinates = async () => {
     if (!sel) return;
     const obj = findLayoutObject(sel);
     if (!obj) {
@@ -220,10 +221,11 @@ export function HallLayoutEditHud() {
       Math.max(0.1, parseCoord(scaleZ, 1)),
     );
     obj.updateMatrixWorld(true);
-    const ok = persistHallLayoutTransform(sel, obj);
+    const result = persistHallLayoutTransform(sel, obj);
+    const ok = result instanceof Promise ? await result : result;
     coordTypingRef.current = false;
     syncCoordsFromSelection();
-    flashSaveHint(ok ? '✓ Coordinates saved' : `Failed to save ${sel}`);
+    flashSaveHint(ok ? '✓ Saved for all visitors' : `⚠ Server save failed for ${sel} — saved locally only`);
   };
 
   const addImportedModel = (url: string, label: string) => {

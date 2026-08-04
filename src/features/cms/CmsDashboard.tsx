@@ -669,6 +669,29 @@ export function CmsDashboard() {
     showToast('Exported JSON');
   };
 
+  const [syncing, setSyncing] = useState(false);
+  const handleSyncToServer = async () => {
+    setSyncing(true);
+    const st = useStore.getState();
+    const hallId = st.activeHallId;
+    try {
+      const boothRes = await fetch('/api/booth-cms/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await import('@/features/admin')).getAdminApiHeaders() },
+        body: JSON.stringify({ hallId, booths: st.boothOverrides, scene: st.sceneOverrides }),
+      });
+      const data = await boothRes.json();
+      if (data?.ok) {
+        showToast(`✓ All booths + scene synced to server for ${getExpoHallMeta(hallId)?.label ?? hallId} — all visitors will see your layout`);
+      } else {
+        showToast(`⚠ Server sync failed: ${data?.error || `HTTP ${boothRes.status}`} — check admin key`);
+      }
+    } catch (e) {
+      showToast(`⚠ Server sync failed: ${e instanceof Error ? e.message : 'Network error'}`);
+    }
+    setSyncing(false);
+  };
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
@@ -885,6 +908,13 @@ export function CmsDashboard() {
           </button>
         </div>
         <div className="space-y-1 border-t border-white/[0.06] p-3">
+          <button
+            className="w-full rounded-lg bg-emerald-500/15 px-3 py-2 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25 transition-colors disabled:opacity-40"
+            onClick={() => void handleSyncToServer()}
+            disabled={syncing}
+          >
+            {syncing ? '⏳ Syncing…' : '↑ Sync All to Server'}
+          </button>
           <button className="w-full rounded-lg bg-[#d4af37]/10 px-3 py-2 text-[11px] font-semibold text-[#d4af37] hover:bg-[#d4af37]/20 transition-colors" onClick={handleExport}>
             Export JSON
           </button>

@@ -1136,6 +1136,7 @@ export const useStore = create<AppState>((set, get) => ({
     const localOk = await persistBoothOverridesWithFallback(nextAll, hallId);
 
     let remoteOk = false;
+    let remoteError = '';
     try {
       const res = await fetch('/api/booth-cms/patch', {
         method: 'POST',
@@ -1144,11 +1145,15 @@ export const useStore = create<AppState>((set, get) => ({
       });
       const data = await res.json();
       remoteOk = !!data?.ok;
-    } catch {
+      if (!remoteOk) remoteError = data?.error || `HTTP ${res.status}`;
+    } catch (e) {
       remoteOk = false;
+      remoteError = e instanceof Error ? e.message : 'Network error';
     }
-    // Colors/images live in browser storage — local save must succeed for the expo to show them.
-    return localOk || remoteOk;
+    if (!remoteOk) {
+      console.warn(`[booth-cms] Server save failed for ${id} (${hallId}): ${remoteError} — saved locally only, visitors won't see this change`);
+    }
+    return remoteOk;
   },
 
   resetBoothOverride: async (id) => {
@@ -1254,11 +1259,15 @@ export const useStore = create<AppState>((set, get) => ({
       sceneOverridesByHall: { ...get().sceneOverridesByHall, [hallId]: next },
     });
 
-    void fetch('/api/scene/patch', {
+    fetch('/api/scene/patch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAdminApiHeaders() },
       body: JSON.stringify({ hallId, patch: next }),
-    }).catch(() => { /* API may be unavailable */ });
+    }).then((res) => {
+      if (!res.ok) console.warn(`[scene-cms] Server save failed (HTTP ${res.status}) — scene changes saved locally only, visitors won't see them`);
+    }).catch((e) => {
+      console.warn(`[scene-cms] Server save failed: ${e instanceof Error ? e.message : 'Network error'} — scene changes saved locally only`);
+    });
   },
 
   resetSceneOverrides: () => {
