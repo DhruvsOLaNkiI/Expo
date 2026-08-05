@@ -1,7 +1,7 @@
 import { Html, Text, Box, Cylinder, useGLTF, useTexture } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useStore } from '@/store';
-import { Suspense, useRef, useMemo, useLayoutEffect, useEffect, useState } from 'react';
+import { Suspense, useRef, useMemo, useLayoutEffect, useEffect, useState, Component, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
@@ -1837,9 +1837,11 @@ export function BoothStandee({
           <meshStandardMaterial color={accent} metalness={0.9} roughness={0.2} />
         </mesh>
         {posterUrl ? (
-          <Suspense fallback={null}>
-            <StandeePoster url={posterUrl} maxW={w - 0.08} maxH={h - 0.08} />
-          </Suspense>
+          <StandeePosterErrorBoundary key={posterUrl}>
+            <Suspense fallback={null}>
+              <StandeePoster url={posterUrl} maxW={w - 0.08} maxH={h - 0.08} />
+            </Suspense>
+          </StandeePosterErrorBoundary>
         ) : (
           <Text
             position={[0, 0.22, 0.02]}
@@ -1859,9 +1861,30 @@ export function BoothStandee({
   );
 }
 
+/**
+ * A failed poster texture must never unmount the whole Canvas — without this the
+ * booth (and every booth after it) disappears and the expo renders blank.
+ */
+class StandeePosterErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
+}
+
 /** Standee poster artwork — fits inside the roll-up frame, preserving aspect ratio. */
 function StandeePoster({ url, maxW, maxH }: { url: string; maxW: number; maxH: number }) {
-  const tex = useTexture(url);
+  const tex = useTexture(url, undefined, (loader) => {
+    if (/^https?:\/\//i.test(url.trim())) {
+      (loader as THREE.ImageLoader).setCrossOrigin?.('anonymous');
+    }
+  });
   useLayoutEffect(() => {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;

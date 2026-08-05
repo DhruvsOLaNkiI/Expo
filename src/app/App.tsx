@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { KeyboardControls } from '@react-three/drei';
-import { lazy, Suspense, useState, useEffect, useMemo, useCallback } from 'react';
+import { Component, lazy, Suspense, useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
 import { useStore } from '@/store';
 import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
 import { getRenderQualityPreset } from '@/features/shared/data/renderQuality';
@@ -38,6 +38,29 @@ import {
 import { BuyerQuestionnairePopup, isQuestionnaireDone, markQuestionnaireDone } from '@/features/questionnaire';
 import { getDashboardPublicUrl, useVisitorTracking } from '@/dashboard';
 
+/**
+ * A single booth texture / GLB failure must not blank the whole expo.
+ * Keeps hall + player alive so visitors still see the floor and can walk.
+ */
+class ExpoSceneErrorBoundary extends Component<
+  { children: ReactNode; label?: string },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error(`[expo-scene] ${this.props.label ?? 'scene'} crashed:`, error);
+  }
+
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
+}
 function openAnalyticsDashboard(setCmsPage: (page: 'analytics') => void) {
   const external = getDashboardPublicUrl();
   if (external) {
@@ -373,13 +396,25 @@ export default function App() {
             ) : (
               <>
                 <ExpoHall showVideos={showVideos} />
-                <Booths showVideos={showVideos} />
-                {showRoamingExecutive && <RoamingExecutive />}
+                <Suspense fallback={null}>
+                  <ExpoSceneErrorBoundary label="booths">
+                    <Booths showVideos={showVideos} />
+                  </ExpoSceneErrorBoundary>
+                </Suspense>
+                {showRoamingExecutive && (
+                  <ExpoSceneErrorBoundary label="roaming-executive">
+                    <RoamingExecutive />
+                  </ExpoSceneErrorBoundary>
+                )}
                 {showBallroom && (
-                  <Ballroom
-                    showVideos={showVideos}
-                    stageScreenUrl={sceneConfig.ballroomStageScreenUrl}
-                  />
+                  <Suspense fallback={null}>
+                    <ExpoSceneErrorBoundary label="ballroom">
+                      <Ballroom
+                        showVideos={showVideos}
+                        stageScreenUrl={sceneConfig.ballroomStageScreenUrl}
+                      />
+                    </ExpoSceneErrorBoundary>
+                  </Suspense>
                 )}
               </>
             )}
