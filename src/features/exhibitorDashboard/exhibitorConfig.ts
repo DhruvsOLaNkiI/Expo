@@ -87,6 +87,11 @@ export function boothDisplayCode(boothId: string): string {
     'builder-6': 'B-06',
     'builder-8': 'B-08',
     'builder-9': 'B-09',
+    'side-west-aurum': 'B-02W',
+    'side-west-crown': 'B-04W',
+    'side-east-monarch': 'B-05E',
+    'side-east-horizon': 'B-06E',
+    'side-east-aurum': 'B-02E',
   };
   return map[boothId] ?? boothId.replace(/^builder-/, 'B-').toUpperCase();
 }

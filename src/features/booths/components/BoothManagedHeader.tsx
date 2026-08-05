@@ -7,7 +7,7 @@ import {
   type BoothHeaderBranding,
 } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
-import { BoothFasciaLogo } from './BoothSignageFascia';
+import { BoothFasciaLogo, BoothNumberBadge } from './BoothSignageFascia';
 
 const FONT =
   'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
@@ -180,6 +180,14 @@ export function BoothManagedHeader({
           ) : null}
         </group>
       ) : null}
+
+      <BoothNumberBadge
+        boothId={boothId}
+        accent={accent}
+        position={[0, -6.05, 3.11]}
+        rotation={[0, Math.PI, 0]}
+        scale={1.15}
+      />
     </group>
   );
 }

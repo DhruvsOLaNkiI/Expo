@@ -8,9 +8,70 @@ import {
   type BoothHeaderBranding,
 } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
+import { boothDisplayCode } from '@/features/exhibitorDashboard/exhibitorConfig';
 
 const FONT =
   'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
+
+/**
+ * Gold number plate showing only the booth number, e.g. 08 or 09.
+ */
+export function BoothNumberBadge({
+  boothId,
+  accent = '#d4af37',
+  position = [0, 0, 0] as [number, number, number],
+  rotation = [0, 0, 0] as [number, number, number],
+  scale = 1,
+}: {
+  boothId: string;
+  accent?: string;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: number;
+}) {
+  const code = boothDisplayCode(boothId).match(/\d+/)?.[0] ?? boothDisplayCode(boothId);
+  const plateW = 0.62 * scale;
+  const plateH = 0.52 * scale;
+  const fontSize = 0.28 * scale;
+
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh position={[0, 0, 0]}>
+        <planeGeometry args={[plateW + 0.06, plateH + 0.06]} />
+        <meshStandardMaterial
+          color={accent}
+          metalness={0.85}
+          roughness={0.22}
+          emissive={accent}
+          emissiveIntensity={0.25}
+        />
+      </mesh>
+      <mesh position={[0, 0, 0.01]}>
+        <planeGeometry args={[plateW, plateH]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.45} metalness={0.15} />
+      </mesh>
+      <Text
+        position={[0, 0, 0.03]}
+        fontSize={fontSize}
+        color={accent}
+        anchorX="center"
+        anchorY="middle"
+        font={FONT}
+        letterSpacing={0.06}
+      >
+        {code}
+        <meshStandardMaterial
+          attach="material"
+          color={accent}
+          emissive={accent}
+          emissiveIntensity={0.4}
+          metalness={0.4}
+          roughness={0.35}
+        />
+      </Text>
+    </group>
+  );
+}
 
 function FasciaLogoPlaceholder() {
   return (
@@ -119,6 +180,7 @@ export function BoothFasciaLogo({
 }
 
 export function BoothSignageFascia({
+  boothId,
   boothName,
   accent = '#d4af37',
   headerLogoUrl,
@@ -132,6 +194,7 @@ export function BoothSignageFascia({
   depth = 0.72,
   position = [0, 6.5, -3.64] as [number, number, number],
 }: {
+  boothId?: string;
   boothName: string;
   accent?: string;
   headerLogoUrl?: string;
@@ -293,6 +356,16 @@ export function BoothSignageFascia({
             </Text>
           ) : null}
         </group>
+      ) : null}
+
+      {boothId ? (
+        <BoothNumberBadge
+          boothId={boothId}
+          accent={accent}
+          position={[0, -6.05, 3.11]}
+          rotation={[0, Math.PI, 0]}
+          scale={1.15}
+        />
       ) : null}
     </group>
   );

@@ -3,6 +3,7 @@ import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
+import { BoothNumberBadge } from './BoothSignageFascia';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
@@ -193,6 +194,13 @@ export function HorizonVistasBooth({
           <meshStandardMaterial attach="material" color={platinum} roughness={0.5} metalness={0.15} />
         </Text>
       )}
+      <BoothNumberBadge
+        boothId={id}
+        accent={uiGlow}
+        position={[0, 0.45, -0.53]}
+        rotation={[0, Math.PI, 0]}
+        scale={1.15}
+      />
 
       {/* Reception desk */}
       <group position={[0, 0.5, 0]}>

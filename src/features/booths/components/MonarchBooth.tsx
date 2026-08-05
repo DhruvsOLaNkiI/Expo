@@ -190,6 +190,7 @@ export function MonarchBooth({
       </mesh>
 
       <BoothSignageFascia
+        boothId={id}
         boothName={name}
         accent={trim}
         headerLogoUrl={safeHeaderLogo || undefined}

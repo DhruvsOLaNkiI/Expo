@@ -7,7 +7,7 @@ import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/Skeleto
 import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
-import { BoothFasciaLogo, BoothSignageFascia } from './BoothSignageFascia';
+import { BoothFasciaLogo, BoothNumberBadge, BoothSignageFascia } from './BoothSignageFascia';
 import {
   resolveBoothHeaderBranding,
   resolveFasciaLayout,
@@ -1006,6 +1006,7 @@ export function StandardLuxuryBooth({
 
       {/* Header fascia — fixed logo / project name / RERA zones */}
       <BoothSignageFascia
+        boothId={id}
         boothName={name}
         accent={glow}
         headerLogoUrl={headerLogoUrl}
@@ -1285,6 +1286,7 @@ export function EcoEdenBooth({
       </mesh>
 
       <BoothSignageFascia
+        boothId={id}
         boothName={name}
         accent={darkGreen}
         headerLogoUrl={headerLogoUrl}
@@ -1642,6 +1644,13 @@ export function VertexEliteBooth({
           </group>
         </Suspense>
       ) : null}
+      <BoothNumberBadge
+        boothId={id}
+        accent={glow}
+        position={[0, 0.45, -0.53]}
+        rotation={[0, Math.PI, 0]}
+        scale={1.15}
+      />
 
       <BoothDisplayEditable
         boothId={id}
