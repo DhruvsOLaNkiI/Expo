@@ -220,7 +220,10 @@ export function BoothSignageFascia({
   const logoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
   const rightLogoUrl = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
   const logoScale = resolveHeaderLogoScale(headerBranding);
-  const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(headerBranding);
+  const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(
+    headerBranding,
+    Boolean(rightLogoUrl),
+  );
   const showRightLogo = Boolean(rightLogoUrl) && !centerLogo;
   const showRightRera = showRera && !showRightLogo;
 

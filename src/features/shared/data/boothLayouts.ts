@@ -117,13 +117,20 @@ export type BoothHeaderBranding = {
   hideRera?: boolean;
 };
 
-export function resolveFasciaLayout(headerBranding?: BoothHeaderBranding): {
+export function resolveFasciaLayout(
+  headerBranding?: BoothHeaderBranding,
+  hasProjectLogo = false,
+): {
   centerLogo: boolean;
   hideCenterText: boolean;
   showRera: boolean;
 } {
-  const centerLogo = headerBranding?.centerHeaderLogo === true;
-  const hideCenterText = centerLogo || headerBranding?.hideCenterText === true;
+  // Two uploaded logos always use the standard three-zone fascia:
+  // developer logo (left), project name (center), project logo (right).
+  // This also repairs older saved configs where "center logo" hid the project name.
+  const centerLogo = !hasProjectLogo && headerBranding?.centerHeaderLogo === true;
+  const hideCenterText =
+    !hasProjectLogo && (centerLogo || headerBranding?.hideCenterText === true);
   const hasRera = Boolean(headerBranding?.reraNumber?.trim());
   const showRera =
     headerBranding?.hideRera !== true &&

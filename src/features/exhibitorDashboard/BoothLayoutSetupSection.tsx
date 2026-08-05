@@ -111,7 +111,10 @@ export function BoothLayoutSetupSection({
   const managedCopy = resolveManagedHeaderCopy({ headerBranding, companyTagline });
   const logoScale = resolveHeaderLogoScale(headerBranding);
   const previewLogoMaxH = Math.round(44 * logoScale);
-  const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(headerBranding);
+  const { centerLogo, hideCenterText, showRera } = resolveFasciaLayout(
+    headerBranding,
+    Boolean(projectLogoUrl.trim()),
+  );
   const previewTitle = usesManagedHeader ? managedCopy.title : resolved.projectName;
   const previewSubtitle = usesManagedHeader ? managedCopy.subtitle : resolved.projectSubtitle;
 
