@@ -1047,18 +1047,7 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
     },
     makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, zNorth], [0, BOOTH_YAW_EAST, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
     makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, zCenter], [0, BOOTH_YAW_EAST, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
-    {
-      ...makeDefaultBooth(
-        'builder-6',
-        'HORIZON VISTAS',
-        [BOOTH_ROW_X_EAST, 0, zSouth],
-        [0, BOOTH_YAW_EAST, 0],
-        HORIZON_ROYAL_THEME.color,
-        PROJECT_VIDEOS[5],
-      ),
-      accent: HORIZON_ROYAL_THEME.accent,
-      counterColor: HORIZON_ROYAL_THEME.counterColor,
-    },
+    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, zSouth], [0, BOOTH_YAW_EAST, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
     {
       ...makeDefaultBooth(
         'builder-8',

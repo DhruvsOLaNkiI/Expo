@@ -50,7 +50,6 @@ import {
   REGISTRATION_LOBBY_DESTINATION,
 } from '@/features/shared/data/expoTeleportDestinations';
 import { MonarchBooth } from './MonarchBooth';
-import { HorizonVistasBooth } from './HorizonVistasBooth';
 import { CrownEstatesBooth } from './CrownEstatesBooth';
 import { useModelCompression } from '@/hooks/useModelCompression';
 import { usePerformanceBoost } from '@/hooks/usePerformanceBoost';
@@ -582,48 +581,6 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
               standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               wallPlacementAdjustments={b.wallPlacementAdjustments}
-              lighting={b.lighting}
-              placedImages={b.placedImages}
-              brochureUrl={b.brochureUrl}
-              priceListUrl={b.priceListUrl}
-              unitLayoutUrl={b.unitLayoutUrl}
-              unitLayouts={b.unitLayouts}
-              floorPlanUrl={b.floorPlanUrl}
-              floorPlans={b.floorPlans}
-              faqUrl={b.faqUrl}
-              siteMapUrls={siteMapUrlsFromConfig({ siteMapUrl: b.siteMapUrl, siteMapGallery: b.siteMapGallery })}
-              media={b.media}
-              company={b.company}
-              hostessQuickReplies={b.hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES}
-              showVideos={showVideos}
-              displayLayout={b.displayLayout}
-            />
-          );
-        } else if (b.id === 'builder-6') {
-          return (
-            <HorizonVistasBooth
-              key={b.id}
-              position={b.position}
-              rotation={b.rotation}
-              boothScale={b.scale}
-              id={b.id}
-              name={b.name}
-              color={b.color}
-              accent={b.accent}
-              counterColor={b.counterColor}
-              videoUrl={b.videoUrl}
-              stageScreenUrl={b.stageScreenUrl}
-              headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
-              headerBranding={b.headerBranding}
-              wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
-              wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
-              sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallLeftImageUrl) || undefined}
-              sideWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallRightImageUrl) || undefined}
-              exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
-              exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
-              counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
-              wallPlacementAdjustments={b.wallPlacementAdjustments}
-              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
