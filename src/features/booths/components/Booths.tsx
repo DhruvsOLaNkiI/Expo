@@ -1880,11 +1880,7 @@ class StandeePosterErrorBoundary extends Component<{ children: ReactNode }, { fa
 
 /** Standee poster artwork — fits inside the roll-up frame, preserving aspect ratio. */
 function StandeePoster({ url, maxW, maxH }: { url: string; maxW: number; maxH: number }) {
-  const tex = useTexture(url, undefined, (loader) => {
-    if (/^https?:\/\//i.test(url.trim())) {
-      (loader as THREE.ImageLoader).setCrossOrigin?.('anonymous');
-    }
-  });
+  const tex = useTexture(url);
   useLayoutEffect(() => {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;

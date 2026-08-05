@@ -129,6 +129,8 @@ type SharedVideoEntry = {
   ctx?: CanvasRenderingContext2D;
   lastTexUpdate: number;
   tierKey: string;
+  /** Set once a frame upload fails (CORS-tainted / decode error) so we stop retrying every frame. */
+  uploadFailed?: boolean;
 };
 
 const sharedVideos = new Map<string, SharedVideoEntry>();
@@ -177,8 +179,10 @@ function acquireSharedVideo(url: string, tier: ReturnType<typeof getVideoPlaybac
   let entry = sharedVideos.get(url);
   if (!entry) {
     const video = document.createElement('video');
-    video.src = url;
+    // crossOrigin must be set BEFORE src — otherwise the fetch starts without CORS and
+    // every canvas draw taints it, throwing SecurityError on each frame's texture upload.
     video.crossOrigin = 'anonymous';
+    video.src = url;
     video.loop = true;
     video.muted = true;
     video.playsInline = true;
@@ -221,6 +225,8 @@ export function SharedVideoTextureUpdater() {
     const now = state.clock.elapsedTime * 1000;
     for (const entry of sharedVideos.values()) {
       if (entry.refs <= 0) continue;
+      // A tainted/undecodable source throws on every upload — freeze on the last frame instead.
+      if (entry.uploadFailed) continue;
       bindTextureToTier(entry, tier);
       const { video } = entry;
 
@@ -232,7 +238,16 @@ export function SharedVideoTextureUpdater() {
 
       if (entry.ctx && entry.canvas) {
         if (tier.textureUpdateMs > 0 && now - entry.lastTexUpdate < tier.textureUpdateMs) continue;
-        entry.ctx.drawImage(video, 0, 0, entry.canvas.width, entry.canvas.height);
+        try {
+          entry.ctx.drawImage(video, 0, 0, entry.canvas.width, entry.canvas.height);
+        } catch (e) {
+          entry.uploadFailed = true;
+          console.warn(
+            `[led-video] Frame upload disabled for ${video.currentSrc || video.src} — cross-origin video without CORS headers.`,
+            e,
+          );
+          continue;
+        }
         entry.texture.needsUpdate = true;
         entry.lastTexUpdate = now;
       } else if (entry.texture instanceof THREE.VideoTexture) {

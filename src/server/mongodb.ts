@@ -489,37 +489,55 @@ const BOOTH_LAYOUT_PATCH_KEYS = ['position', 'rotation', 'scale', 'displayLayout
 
 /** One booth per hall — global unique boothId blocked hall-2..6 writes. */
 async function ensureBoothCollectionIndexes(col: Collection<BoothOverrideDocument>): Promise<void> {
-  // Legacy rows often have hallId set but slotId missing/null. A unique compound index then
-  // fails with E11000 (many docs share { hallId: "hall-1", slotId: null }) and blocks ALL saves.
+  // Legacy rows may miss slotId, or two rows may claim the same hall + slot. Either case makes
+  // the unique index fail to build (E11000), which breaks every CMS save. Normalise then dedupe.
   try {
-    const broken = await col
-      .find({
-        $or: [{ slotId: null }, { slotId: { $exists: false } }, { slotId: '' }],
-      })
-      .toArray();
-    for (const doc of broken) {
-      const legacySlot = (doc.boothId ?? '').trim();
-      if (legacySlot) {
-        await col.updateOne(
-          { _id: doc._id },
-          {
-            $set: {
-              slotId: legacySlot,
-              boothId: legacySlot,
-              hallId: doc.hallId?.trim() || LEGACY_EXPO_HALL_ID,
-            },
-          },
-        );
-      } else {
+    const all = await col.find({}).toArray();
+    const byKey = new Map<string, BoothOverrideDocument[]>();
+
+    for (const doc of all) {
+      const slot = (doc.slotId ?? '').trim() || (doc.boothId ?? '').trim();
+      if (!slot) {
         await col.deleteOne({ _id: doc._id });
         console.warn(`Removed orphan booths doc without slotId/boothId: ${String(doc._id)}`);
+        continue;
+      }
+      const hall = doc.hallId?.trim() || LEGACY_EXPO_HALL_ID;
+      const key = `${hall}::${slot}`;
+      byKey.set(key, [...(byKey.get(key) ?? []), { ...doc, hallId: hall, slotId: slot }]);
+    }
+
+    for (const [key, docs] of byKey) {
+      // Newest wins, older patches fill gaps — never silently drop an exhibitor's data.
+      const ordered = [...docs].sort(
+        (a, b) => (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0),
+      );
+      const [keep, ...extras] = ordered;
+      const mergedPatch = ordered
+        .slice()
+        .reverse()
+        .reduce<Record<string, unknown>>((acc, d) => ({ ...acc, ...(d.patch ?? {}) }), {});
+
+      await col.updateOne(
+        { _id: keep._id },
+        {
+          $set: {
+            patch: mergedPatch,
+            hallId: keep.hallId,
+            slotId: keep.slotId,
+            boothId: keep.slotId,
+            updatedAt: keep.updatedAt ?? new Date(),
+          },
+        },
+      );
+
+      if (extras.length) {
+        await col.deleteMany({ _id: { $in: extras.map((d) => d._id) } });
+        console.log(`Merged ${extras.length} duplicate booths doc(s) for ${key}`);
       }
     }
-    if (broken.length) {
-      console.log(`Repaired ${broken.length} booths doc(s) missing slotId`);
-    }
   } catch (e) {
-    console.warn('Could not repair booths docs missing slotId:', e);
+    console.warn('Could not normalise booths collection:', e);
   }
 
   try {
