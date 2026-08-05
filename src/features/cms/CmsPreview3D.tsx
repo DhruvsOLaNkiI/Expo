@@ -42,6 +42,7 @@ export type PreviewProps = {
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: import('@/features/booths/components/boothWallMetrics').BoothWallPlacementAdjustments;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -153,6 +154,7 @@ function BoothScene({
   headerBranding, company,
   wallLogoLeftUrl, wallLogoRightUrl,
   sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
+  standeeImageUrl,
   wallPlacementAdjustments, lighting,
   placedImages, placingImageUrl, onSurfaceClick, selectedImageId, onSelectImage, onDragImage,
   brochureUrl = '',
@@ -203,6 +205,7 @@ function BoothScene({
             exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(exteriorWallLeftImageUrl) || undefined}
             exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(exteriorWallRightImageUrl) || undefined}
             counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(counterFrontImageUrl) || undefined}
+            standeeImageUrl={sanitizeBoothLogoUrlForWebGL(standeeImageUrl) || undefined}
             wallPlacementAdjustments={wallPlacementAdjustments}
             company={company}
             videoUrl={videoUrl}

@@ -227,6 +227,8 @@ export type BoothLayoutConfig = {
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  /** Roll-up standee poster beside the desk — replaces the printed booth name when set. */
+  standeeImageUrl?: string;
   /** When true, sideWall* = inside and exteriorWall* = outside (legacy configs omit this). */
   wallPlacementV2?: boolean;
   /** Per-slot shift / scale for wall poster images (exhibitor Booth Setup). */

@@ -69,6 +69,7 @@ export function MonarchBooth({
   exteriorWallLeftImageUrl,
   exteriorWallRightImageUrl,
   counterFrontImageUrl,
+  standeeImageUrl,
   wallPlacementAdjustments,
   lighting,
   placedImages,
@@ -106,6 +107,7 @@ export function MonarchBooth({
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: BoothWallPlacementAdjustments;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -304,7 +306,15 @@ export function MonarchBooth({
       <PooledBoothLight kind="point" position={[-4, 4, -3]} intensity={20} color="#ffedd6" distance={8} range={BOOTH_ACCENT_LIGHT_RANGE} />
       <PooledBoothLight kind="point" position={[4, 4, -3]} intensity={20} color="#ffedd6" distance={8} range={BOOTH_ACCENT_LIGHT_RANGE} />
 
-      <BoothStandee name={name} accent={trim} boothId={id} displayLayout={displayLayout} />
+      <BoothStandee
+        name={name}
+        accent={trim}
+        boothId={id}
+        displayLayout={displayLayout}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        standeeImageUrl={standeeImageUrl}
+      />
 
       <VertexEliteProximityPanels
         boothId={id}

@@ -486,6 +486,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
               exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
               counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               wallPlacementAdjustments={b.wallPlacementAdjustments}
               company={b.company}
               videoUrl={b.videoUrl}
@@ -579,6 +580,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
               exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
               counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               wallPlacementAdjustments={b.wallPlacementAdjustments}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -612,6 +614,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              headerBranding={b.headerBranding}
+              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               lighting={b.lighting}
               placedImages={b.placedImages}
               brochureUrl={b.brochureUrl}
@@ -653,6 +657,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
               exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
               counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               wallPlacementAdjustments={b.wallPlacementAdjustments}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -695,6 +700,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
               exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
               counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               wallPlacementAdjustments={b.wallPlacementAdjustments}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -921,6 +927,7 @@ export function StandardLuxuryBooth({
   showVideos = true,
   displayLayout,
   projectLogoUrl,
+  standeeImageUrl,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
@@ -942,6 +949,7 @@ export function StandardLuxuryBooth({
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: import('./boothWallMetrics').BoothWallPlacementAdjustments;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
@@ -1105,7 +1113,15 @@ export function StandardLuxuryBooth({
         range={BOOTH_ACCENT_LIGHT_RANGE}
       />
 
-      <BoothStandee name={name} accent={accent} boothId={id} displayLayout={displayLayout} />
+      <BoothStandee
+        name={name}
+        accent={accent}
+        boothId={id}
+        displayLayout={displayLayout}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        standeeImageUrl={standeeImageUrl}
+      />
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -1465,6 +1481,7 @@ export function VertexEliteBooth({
   exteriorWallLeftImageUrl,
   exteriorWallRightImageUrl,
   counterFrontImageUrl,
+  standeeImageUrl,
   wallPlacementAdjustments,
   videoUrl, stageScreenUrl, lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', customFaqQuestions = [], siteMapUrls,
   media = [],
@@ -1494,6 +1511,7 @@ export function VertexEliteBooth({
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: import('@/features/booths/components/boothWallMetrics').BoothWallPlacementAdjustments;
   videoUrl: string;
   stageScreenUrl?: string;
@@ -1691,7 +1709,15 @@ export function VertexEliteBooth({
         />
       </Suspense>
 
-      <BoothStandee name={name} accent={glow} boothId={id} displayLayout={displayLayout} />
+      <BoothStandee
+        name={name}
+        accent={glow}
+        boothId={id}
+        displayLayout={displayLayout}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        standeeImageUrl={standeeImageUrl}
+      />
 
       <VertexEliteProximityPanels
         boothId={id}
@@ -1739,11 +1765,17 @@ export function BoothStandee({
   accent,
   boothId,
   displayLayout,
+  headerBranding,
+  companyTagline,
+  standeeImageUrl,
 }: {
   name: string;
   accent: string;
   boothId: string;
   displayLayout?: BoothDisplayLayout;
+  headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
+  companyTagline?: string;
+  standeeImageUrl?: string;
 }) {
   const showBoothStandee = useStore(
     (s) => mergeSceneConfig(s.sceneOverrides).showBoothStandee,
@@ -1753,6 +1785,9 @@ export function BoothStandee({
   const w = 1.45;
   const h = 2.4;
   const frameT = 0.05;
+  const posterUrl = sanitizeBoothLogoUrlForWebGL(standeeImageUrl);
+  // Standee follows the project name set in Booth Setup, not the built-in booth name.
+  const standeeTitle = resolveBoothHeaderBranding({ name, headerBranding, companyTagline }).projectName;
   return (
     <BoothDisplayEditable
       boothId={boothId}
@@ -1792,20 +1827,55 @@ export function BoothStandee({
           <boxGeometry args={[frameT, h, 0.02]} />
           <meshStandardMaterial color={accent} metalness={0.9} roughness={0.2} />
         </mesh>
-        <Text
-          position={[0, 0.22, 0.02]}
-          fontSize={0.16}
-          color="#1a1a1a"
-          anchorX="center"
-          anchorY="middle"
-          maxWidth={w - 0.12}
-          textAlign="center"
-          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-        >
-          {name}
-        </Text>
+        {posterUrl ? (
+          <Suspense fallback={null}>
+            <StandeePoster url={posterUrl} maxW={w - 0.08} maxH={h - 0.08} />
+          </Suspense>
+        ) : (
+          <Text
+            position={[0, 0.22, 0.02]}
+            fontSize={0.16}
+            color="#1a1a1a"
+            anchorX="center"
+            anchorY="middle"
+            maxWidth={w - 0.12}
+            textAlign="center"
+            font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
+          >
+            {standeeTitle}
+          </Text>
+        )}
       </group>
     </BoothDisplayEditable>
+  );
+}
+
+/** Standee poster artwork — fits inside the roll-up frame, preserving aspect ratio. */
+function StandeePoster({ url, maxW, maxH }: { url: string; maxW: number; maxH: number }) {
+  const tex = useTexture(url);
+  useLayoutEffect(() => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+  }, [tex]);
+
+  const { planeW, planeH } = useMemo(() => {
+    const img = tex.image as { width?: number; height?: number } | undefined;
+    const aspect = img?.width && img?.height && img.height > 0 ? img.width / img.height : maxW / maxH;
+    let h = maxH;
+    let w = h * aspect;
+    if (w > maxW) {
+      w = maxW;
+      h = w / aspect;
+    }
+    return { planeW: w, planeH: h };
+  }, [tex, maxW, maxH]);
+
+  return (
+    <mesh position={[0, 0, 0.02]}>
+      <planeGeometry args={[planeW, planeH]} />
+      <meshStandardMaterial map={tex} transparent alphaTest={0.05} toneMapped={false} side={THREE.DoubleSide} />
+    </mesh>
   );
 }
 

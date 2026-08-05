@@ -18,6 +18,7 @@ export const SHARED_BOOTH_DOC_KEYS = [
   'exteriorWallLeftImageUrl',
   'exteriorWallRightImageUrl',
   'counterFrontImageUrl',
+  'standeeImageUrl',
   'faqUrl',
   'unitLayouts',
   'floorPlanUrl',

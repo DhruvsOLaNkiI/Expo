@@ -51,6 +51,7 @@ export function CrownEstatesBooth({
   exteriorWallLeftImageUrl,
   exteriorWallRightImageUrl,
   counterFrontImageUrl,
+  standeeImageUrl,
   wallPlacementAdjustments,
   placedImages,
   brochureUrl = '',
@@ -87,6 +88,7 @@ export function CrownEstatesBooth({
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: BoothWallPlacementAdjustments;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -294,7 +296,15 @@ export function CrownEstatesBooth({
         range={BOOTH_ACCENT_LIGHT_RANGE}
       />
 
-      <BoothStandee name={name} accent={champagneGold} boothId={id} displayLayout={displayLayout} />
+      <BoothStandee
+        name={name}
+        accent={champagneGold}
+        boothId={id}
+        displayLayout={displayLayout}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        standeeImageUrl={standeeImageUrl}
+      />
 
       <VertexEliteProximityPanels
         boothId={id}

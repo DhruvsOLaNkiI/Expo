@@ -116,6 +116,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
   const [exteriorWallLeftImageUrl, setExteriorWallLeftImageUrl] = useState('');
   const [exteriorWallRightImageUrl, setExteriorWallRightImageUrl] = useState('');
   const [counterFrontImageUrl, setCounterFrontImageUrl] = useState('');
+  const [standeeImageUrl, setStandeeImageUrl] = useState('');
   const [wallPlacementAdjustments, setWallPlacementAdjustments] = useState<BoothWallPlacementAdjustments>({});
   const [headerBranding, setHeaderBranding] = useState<BoothHeaderBranding>({});
   const [unitLayouts, setUnitLayouts] = useState<UnitLayoutItem[]>([newUnitLayout()]);
@@ -146,6 +147,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     setSideWallRightImageUrl(loadLocalImageUrl(rawSideRight));
     const rawCounter = booth.counterFrontImageUrl ?? '';
     setCounterFrontImageUrl(loadLocalImageUrl(rawCounter));
+    setStandeeImageUrl(loadLocalImageUrl(booth.standeeImageUrl ?? ''));
     setWallPlacementAdjustments({ ...(booth.wallPlacementAdjustments ?? {}) });
     if (
       isRemoteBoothLogoUrl(rawLogo) ||
@@ -198,6 +200,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
         exteriorWallLeftImageUrl: patchPlacementImageUrl(exteriorWallLeftImageUrl),
         exteriorWallRightImageUrl: patchPlacementImageUrl(exteriorWallRightImageUrl),
         counterFrontImageUrl: patchPlacementImageUrl(counterFrontImageUrl),
+        standeeImageUrl: patchPlacementImageUrl(standeeImageUrl),
         wallPlacementAdjustments: compactWallPlacementAdjustments(wallPlacementAdjustments),
         wallPlacementV2: true,
         headerBranding,
@@ -232,6 +235,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     wallLogoRightUrl,
     sideWallLeftImageUrl,
     sideWallRightImageUrl,
+    standeeImageUrl,
     persist,
     siteMapUrl,
     unitLayouts,
@@ -509,6 +513,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           projectLogoUrl={projectLogoUrl}
           wallLogoLeftUrl={wallLogoLeftUrl}
           wallLogoRightUrl={wallLogoRightUrl}
+          standeeImageUrl={standeeImageUrl}
           headerBranding={headerBranding}
           onLogoUrl={(url) => {
             setHeaderLogoUrl(url);
@@ -520,6 +525,10 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           }}
           onWallLogoLeftUrl={setWallLogoLeftUrl}
           onWallLogoRightUrl={setWallLogoRightUrl}
+          onStandeeImageUrl={(url) => {
+            setStandeeImageUrl(url);
+            if (!url) void persist({ standeeImageUrl: null }, 'Standee poster removed');
+          }}
           onBrandingChange={(patch) => {
             setHeaderBranding((prev) => {
               const next = { ...prev, ...patch };
@@ -571,6 +580,16 @@ export function ExhibitorSetupPage({ onNav }: Props) {
               const url = await exhibitorUploadBoothLogo(f);
               setWallLogoRightUrl(url);
               const r = await persist({ wallLogoRightUrl: url }, 'Right wall logo');
+              setStatusMsg(r.message);
+            } catch (err) {
+              setErrorMsg(exhibitorUploadError(err));
+            }
+          }}
+          onUploadStandeeImage={async (f) => {
+            try {
+              const url = await exhibitorUploadPlacementImage(f);
+              setStandeeImageUrl(url);
+              const r = await persist({ standeeImageUrl: url }, 'Standee poster');
               setStatusMsg(r.message);
             } catch (err) {
               setErrorMsg(exhibitorUploadError(err));

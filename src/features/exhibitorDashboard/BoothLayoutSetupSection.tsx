@@ -63,16 +63,19 @@ type Props = {
   projectLogoUrl: string;
   wallLogoLeftUrl: string;
   wallLogoRightUrl: string;
+  standeeImageUrl: string;
   headerBranding: BoothHeaderBranding;
   onLogoUrl: (url: string) => void;
   onProjectLogoUrl: (url: string) => void;
   onWallLogoLeftUrl: (url: string) => void;
   onWallLogoRightUrl: (url: string) => void;
+  onStandeeImageUrl: (url: string) => void;
   onBrandingChange: (patch: Partial<BoothHeaderBranding>) => void;
   onUploadLogo: (file: File) => Promise<void>;
   onUploadProjectLogo: (file: File) => Promise<void>;
   onUploadWallLogoLeft: (file: File) => Promise<void>;
   onUploadWallLogoRight: (file: File) => Promise<void>;
+  onUploadStandeeImage: (file: File) => Promise<void>;
 };
 
 export function BoothLayoutSetupSection({
@@ -85,16 +88,19 @@ export function BoothLayoutSetupSection({
   projectLogoUrl,
   wallLogoLeftUrl,
   wallLogoRightUrl,
+  standeeImageUrl,
   headerBranding,
   onLogoUrl,
   onProjectLogoUrl,
   onWallLogoLeftUrl,
   onWallLogoRightUrl,
+  onStandeeImageUrl,
   onBrandingChange,
   onUploadLogo,
   onUploadProjectLogo,
   onUploadWallLogoLeft,
   onUploadWallLogoRight,
+  onUploadStandeeImage,
 }: Props) {
   const usesManagedHeader = boothId ? MANAGED_HEADER_BOOTH_IDS.has(boothId) : false;
   const resolved = resolveBoothHeaderBranding({
@@ -297,6 +303,43 @@ export function BoothLayoutSetupSection({
           onUrl={onWallLogoRightUrl}
           onUpload={onUploadWallLogoRight}
         />
+
+        <div className="exb-booth-layout-field">
+          <span className="exb-booth-layout-label">Standee poster · roll-up beside the desk</span>
+          <div className="exb-asset-logo-row">
+            {standeeImageUrl ? (
+              <img src={standeeImageUrl} alt="" className="exb-asset-logo-preview" />
+            ) : (
+              <div className="exb-asset-logo-placeholder">ST</div>
+            )}
+            <div className="exb-booth-layout-actions">
+              <label className="exb-btn">
+                <Upload size={14} />
+                Upload poster
+                <input
+                  type="file"
+                  className="exb-hidden-input"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    void onUploadStandeeImage(f);
+                  }}
+                />
+              </label>
+              {standeeImageUrl ? (
+                <button type="button" className="exb-btn" onClick={() => onStandeeImageUrl('')}>
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <p className="exb-muted exb-logo-scale-hint">
+            Tall portrait artwork (roughly 3:5) fills the whole standee. With no poster, the standee
+            prints your project name — “{resolved.projectName}”.
+          </p>
+        </div>
 
         <label className="exb-booth-layout-field exb-booth-layout-checkbox">
           <input

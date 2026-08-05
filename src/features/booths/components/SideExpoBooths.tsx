@@ -30,6 +30,7 @@ export type LuxuryBoothProps = {
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: import('./boothWallMetrics').BoothWallPlacementAdjustments;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
@@ -121,6 +122,7 @@ export function SideExpoBooths({
           exteriorWallLeftImageUrl={b.exteriorWallLeftImageUrl}
           exteriorWallRightImageUrl={b.exteriorWallRightImageUrl}
           counterFrontImageUrl={b.counterFrontImageUrl}
+          standeeImageUrl={b.standeeImageUrl}
           wallPlacementAdjustments={b.wallPlacementAdjustments}
           lighting={b.lighting}
           placedImages={b.placedImages}

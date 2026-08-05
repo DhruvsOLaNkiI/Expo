@@ -37,6 +37,8 @@ export function HorizonVistasBooth({
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
+  headerBranding,
+  standeeImageUrl,
   placedImages,
   brochureUrl = '',
   priceListUrl = '',
@@ -63,6 +65,8 @@ export function HorizonVistasBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
+  standeeImageUrl?: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -251,7 +255,15 @@ export function HorizonVistasBooth({
         </group>
       </BoothDisplayEditable>
 
-      <BoothStandee name={name} accent={uiGlow} boothId={id} displayLayout={displayLayout} />
+      <BoothStandee
+        name={name}
+        accent={uiGlow}
+        boothId={id}
+        displayLayout={displayLayout}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        standeeImageUrl={standeeImageUrl}
+      />
 
       <VertexEliteProximityPanels
         boothId={id}

@@ -56,6 +56,7 @@ export function ExhibitorBoothPreview() {
         exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(booth.exteriorWallLeftImageUrl) ?? ''}
         exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(booth.exteriorWallRightImageUrl) ?? ''}
         counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(booth.counterFrontImageUrl) ?? ''}
+        standeeImageUrl={sanitizeBoothLogoUrlForWebGL(booth.standeeImageUrl) ?? ''}
         lighting={booth.lighting}
         placedImages={booth.placedImages ?? []}
         placingImageUrl={null}
