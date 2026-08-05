@@ -109,6 +109,8 @@ export type BoothHeaderBranding = {
   logoScale?: number;
   /** Hide center project name + subtitle on the fascia beam. */
   hideCenterText?: boolean;
+  /** Hide only the subtitle line under the project name (e.g. “LUXURY RESIDENCES”). */
+  hideSubtitle?: boolean;
   /** Move header logo from the left slot to the center (implies hideCenterText). */
   centerHeaderLogo?: boolean;
   /** Hide the RERA block on the right of the header beam. */
@@ -146,13 +148,20 @@ export function resolveBoothHeaderBranding(params: {
   headerBranding?: BoothHeaderBranding;
   companyTagline?: string;
 }): { projectName: string; projectSubtitle: string; reraNumber: string } {
+  const hb = params.headerBranding;
+  // Explicit empty subtitle (or hideSubtitle) must stay empty — do not fall back to "LUXURY RESIDENCES".
+  let projectSubtitle = '';
+  if (hb?.hideSubtitle === true) {
+    projectSubtitle = '';
+  } else if (hb?.projectSubtitle !== undefined) {
+    projectSubtitle = hb.projectSubtitle.trim();
+  } else {
+    projectSubtitle = params.companyTagline?.trim() || '';
+  }
   return {
-    projectName: params.headerBranding?.projectName?.trim() || params.name,
-    projectSubtitle:
-      params.headerBranding?.projectSubtitle?.trim() ||
-      params.companyTagline?.trim() ||
-      'LUXURY RESIDENCES',
-    reraNumber: params.headerBranding?.reraNumber?.trim() || '',
+    projectName: hb?.projectName?.trim() || params.name,
+    projectSubtitle,
+    reraNumber: hb?.reraNumber?.trim() || '',
   };
 }
 
@@ -174,7 +183,11 @@ export function resolveManagedHeaderCopy(params: {
   }
   const title = params.headerBranding?.projectName?.trim() || '';
   const subtitle =
-    params.headerBranding?.projectSubtitle?.trim() || params.companyTagline?.trim() || '';
+    params.headerBranding?.hideSubtitle === true
+      ? ''
+      : params.headerBranding?.projectSubtitle !== undefined
+        ? params.headerBranding.projectSubtitle.trim()
+        : params.companyTagline?.trim() || '';
   return {
     showTitle: Boolean(title),
     showSubtitle: Boolean(subtitle),

@@ -329,6 +329,24 @@ export function BoothLayoutSetupSection({
           </span>
         </label>
 
+        <label className="exb-booth-layout-field exb-booth-layout-checkbox">
+          <input
+            type="checkbox"
+            checked={headerBranding.hideSubtitle === true}
+            disabled={hideCenterText}
+            onChange={(e) =>
+              onBrandingChange({
+                hideSubtitle: e.target.checked,
+                ...(e.target.checked ? { projectSubtitle: '' } : {}),
+              })
+            }
+          />
+          <span>
+            <strong>Hide subtitle</strong> — remove the “LUXURY RESIDENCES” line under the project
+            name; keep the title.
+          </span>
+        </label>
+
         <label className="exb-booth-layout-field">
           <span className="exb-booth-layout-label">Project name · center slot</span>
           <input
@@ -343,9 +361,15 @@ export function BoothLayoutSetupSection({
           <span className="exb-booth-layout-label">Subtitle · under project name</span>
           <input
             className="exb-field"
-            placeholder={companyTagline || 'LUXURY RESIDENCES'}
-            value={headerBranding.projectSubtitle ?? ''}
-            onChange={(e) => onBrandingChange({ projectSubtitle: e.target.value })}
+            placeholder={companyTagline || 'Optional — leave blank to hide'}
+            value={headerBranding.hideSubtitle ? '' : (headerBranding.projectSubtitle ?? '')}
+            disabled={headerBranding.hideSubtitle === true || hideCenterText}
+            onChange={(e) =>
+              onBrandingChange({
+                projectSubtitle: e.target.value,
+                hideSubtitle: false,
+              })
+            }
           />
         </label>
 

@@ -221,7 +221,7 @@ export function BoothSignageFascia({
       {!hideCenterText ? (
         <>
           <Text
-            position={[0, 0.12, zFace]}
+            position={[0, branding.projectSubtitle ? 0.12 : 0.02, zFace]}
             fontSize={titleSize}
             color={accent}
             anchorX="center"
@@ -241,19 +241,21 @@ export function BoothSignageFascia({
               roughness={0.35}
             />
           </Text>
-          <Text
-            position={[0, -0.18, zFace]}
-            fontSize={subSize}
-            color={subtitleColor}
-            anchorX="center"
-            anchorY="middle"
-            letterSpacing={0.12}
-            maxWidth={width * 0.38}
-            textAlign="center"
-            font={FONT}
-          >
-            {branding.projectSubtitle}
-          </Text>
+          {branding.projectSubtitle ? (
+            <Text
+              position={[0, -0.18, zFace]}
+              fontSize={subSize}
+              color={subtitleColor}
+              anchorX="center"
+              anchorY="middle"
+              letterSpacing={0.12}
+              maxWidth={width * 0.38}
+              textAlign="center"
+              font={FONT}
+            >
+              {branding.projectSubtitle}
+            </Text>
+          ) : null}
         </>
       ) : null}
 

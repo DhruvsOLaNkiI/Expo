@@ -1398,9 +1398,11 @@ export function EcoEdenBooth({
               <Text position={[0, 0.8, 0.01]} fontSize={0.12} color={darkGreen} maxWidth={1} textAlign="center">
                 {name}
               </Text>
-              <Text position={[0, 0.65, 0.01]} fontSize={0.06} color={leafGreen} maxWidth={1} textAlign="center">
-                {company?.tagline?.trim() || 'LUXURY RESIDENCES'}
-              </Text>
+              {company?.tagline?.trim() ? (
+                <Text position={[0, 0.65, 0.01]} fontSize={0.06} color={leafGreen} maxWidth={1} textAlign="center">
+                  {company.tagline.trim()}
+                </Text>
+              ) : null}
               <mesh position={[0, -0.1, 0.01]}>
                 <planeGeometry args={[0.4, 0.4]} />
                 <meshStandardMaterial color={leafGreen} transparent opacity={0.8} />
@@ -1801,18 +1803,6 @@ export function BoothStandee({
           font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
         >
           {name}
-        </Text>
-        <Text
-          position={[0, -0.52, 0.02]}
-          fontSize={0.075}
-          color={accent}
-          anchorX="center"
-          anchorY="middle"
-          maxWidth={w - 0.12}
-          textAlign="center"
-          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-        >
-          LUXURY RESIDENCES
         </Text>
       </group>
     </BoothDisplayEditable>
