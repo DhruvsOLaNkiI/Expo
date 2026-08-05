@@ -176,6 +176,7 @@ export function resolveBoothHeaderBranding(params: {
 export function resolveManagedHeaderCopy(params: {
   headerBranding?: BoothHeaderBranding;
   companyTagline?: string;
+  hasProjectLogo?: boolean;
 }): {
   showTitle: boolean;
   showSubtitle: boolean;
@@ -183,7 +184,10 @@ export function resolveManagedHeaderCopy(params: {
   subtitle: string;
   reraNumber: string;
 } {
-  const { hideCenterText, showRera } = resolveFasciaLayout(params.headerBranding);
+  const { hideCenterText, showRera } = resolveFasciaLayout(
+    params.headerBranding,
+    params.hasProjectLogo,
+  );
   const reraNumber = params.headerBranding?.reraNumber?.trim() || '';
   if (hideCenterText) {
     return { showTitle: false, showSubtitle: false, title: '', subtitle: '', reraNumber };

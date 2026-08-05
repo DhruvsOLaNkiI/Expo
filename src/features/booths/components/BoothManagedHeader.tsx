@@ -20,6 +20,7 @@ export function BoothManagedHeader({
   boothId,
   accent = '#d4af37',
   headerLogoUrl,
+  projectLogoUrl,
   headerBranding,
   companyTagline,
   fasciaColor = '#1a1a1a',
@@ -33,6 +34,7 @@ export function BoothManagedHeader({
   boothId: string;
   accent?: string;
   headerLogoUrl?: string;
+  projectLogoUrl?: string;
   headerBranding?: BoothHeaderBranding;
   companyTagline?: string;
   fasciaColor?: string;
@@ -46,14 +48,23 @@ export function BoothManagedHeader({
 }) {
   const zFace = depth / 2 + 0.04;
   const logoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
+  const rightLogoUrl = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
   const logoScale = resolveHeaderLogoScale(headerBranding);
-  const { centerLogo, showRera } = resolveFasciaLayout(headerBranding);
-  const copy = resolveManagedHeaderCopy({ headerBranding, companyTagline });
+  const { centerLogo, showRera } = resolveFasciaLayout(
+    headerBranding,
+    Boolean(rightLogoUrl),
+  );
+  const copy = resolveManagedHeaderCopy({
+    headerBranding,
+    companyTagline,
+    hasProjectLogo: Boolean(rightLogoUrl),
+  });
   const titleSize = Math.min(0.58, width * 0.036);
   const subSize = titleSize * 0.42;
   const headerKey = [
     boothId,
     logoUrl ?? '',
+    rightLogoUrl ?? '',
     centerLogo ? 'c' : 'l',
     copy.showTitle ? copy.title : '',
     copy.showSubtitle ? copy.subtitle : '',
@@ -151,7 +162,11 @@ export function BoothManagedHeader({
         </Text>
       ) : null}
 
-      {showRera ? (
+      {rightLogoUrl ? (
+        <group position={[width * 0.36, 0.02, zFace]}>
+          <BoothFasciaLogo url={rightLogoUrl} scale={logoScale} />
+        </group>
+      ) : showRera ? (
         <group position={[width * 0.36, 0, zFace]}>
           <Text
             position={[0, 0.1, 0]}

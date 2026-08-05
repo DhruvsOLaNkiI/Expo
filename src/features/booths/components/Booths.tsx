@@ -613,6 +613,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
+              projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
               headerFasciaColor={b.headerFasciaColor}
               wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}

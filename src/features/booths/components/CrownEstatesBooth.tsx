@@ -42,6 +42,7 @@ export function CrownEstatesBooth({
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
+  projectLogoUrl,
   headerBranding,
   headerFasciaColor,
   wallLogoLeftUrl,
@@ -79,6 +80,7 @@ export function CrownEstatesBooth({
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
+  projectLogoUrl?: string;
   headerBranding?: BoothHeaderBranding;
   headerFasciaColor?: string;
   wallLogoLeftUrl?: string;
@@ -110,17 +112,24 @@ export function CrownEstatesBooth({
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   
   const safeHeaderLogo = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
+  const safeProjectLogo = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
   const effectiveHeaderBranding = useMemo((): BoothHeaderBranding => {
     const hb = headerBranding ?? {};
-    if (!safeHeaderLogo) return hb;
     return {
       ...hb,
-      centerHeaderLogo: hb.centerHeaderLogo ?? true,
-      hideCenterText: hb.hideCenterText ?? true,
-      hideRera: hb.hideRera ?? true,
+      projectName: hb.projectName?.trim() || name,
+      centerHeaderLogo:
+        safeProjectLogo ? false : (safeHeaderLogo ? (hb.centerHeaderLogo ?? true) : false),
+      hideCenterText:
+        safeProjectLogo ? false : (safeHeaderLogo ? (hb.hideCenterText ?? true) : false),
+      hideRera:
+        safeProjectLogo ? true : (safeHeaderLogo ? (hb.hideRera ?? true) : hb.hideRera),
     };
-  }, [headerBranding, safeHeaderLogo]);
-  const { hideCenterText } = resolveFasciaLayout(effectiveHeaderBranding);
+  }, [headerBranding, name, safeHeaderLogo, safeProjectLogo]);
+  const { hideCenterText } = resolveFasciaLayout(
+    effectiveHeaderBranding,
+    Boolean(safeProjectLogo),
+  );
 
   const champagneGold = accent?.trim() || '#dcb670';
   const glowColor = CROWN_ESTATES_THEME.glow;
@@ -187,6 +196,7 @@ export function CrownEstatesBooth({
         boothId={id}
         accent={champagneGold}
         headerLogoUrl={safeHeaderLogo || undefined}
+        projectLogoUrl={safeProjectLogo || undefined}
         headerBranding={effectiveHeaderBranding}
         companyTagline={company?.tagline}
         fasciaColor={headerFasciaColor?.trim() || CROWN_ESTATES_THEME.gradientMid}
