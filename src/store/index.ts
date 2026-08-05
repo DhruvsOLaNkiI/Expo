@@ -282,6 +282,8 @@ interface AppState {
   ) => Promise<{ ok: boolean; applied: string[] }>;
   setActiveHall: (hallId: string, options?: { teleport?: boolean }) => Promise<void>;
   patchBoothOverride: (id: string, patch: BoothLayoutPatch, hallId?: string) => Promise<boolean>;
+  /** Why the last booth save failed (server vs browser storage), for accurate CMS toasts. */
+  lastBoothSaveError: string | null;
   resetBoothOverride: (id: string) => Promise<void>;
   resetAllBoothOverrides: () => Promise<void>;
   deleteBoothOverride: (id: string) => Promise<void>;
@@ -488,6 +490,7 @@ export const useStore = create<AppState>((set, get) => ({
   sceneOverridesByHall: {},
   boothOverrides: {},
   sceneOverrides: {},
+  lastBoothSaveError: null,
   _boothCmsHydrated: false,
 
   hallLayoutEditMode: false,
@@ -1099,7 +1102,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   patchBoothOverride: async (id, patch, hallIdArg) => {
     if (!get().isAdmin) {
-      set({ adminLoginOpen: true });
+      set({ adminLoginOpen: true, lastBoothSaveError: 'Admin login required' });
       return false;
     }
     const hallId = normalizeHallId(hallIdArg ?? get().activeHallId);
@@ -1132,6 +1135,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       boothOverrides: nextAll,
       overridesByHall: { ...get().overridesByHall, [hallId]: nextAll },
+      lastBoothSaveError: null,
     });
     const localOk = await persistBoothOverridesWithFallback(nextAll, hallId);
 
@@ -1151,9 +1155,19 @@ export const useStore = create<AppState>((set, get) => ({
       remoteError = e instanceof Error ? e.message : 'Network error';
     }
     if (!remoteOk) {
-      console.warn(`[booth-cms] Server save failed for ${id} (${hallId}): ${remoteError} — saved locally only, visitors won't see this change`);
+      const reason = !localOk
+        ? `Browser storage full — clear wall images, then try again. Server also failed: ${remoteError}`
+        : `Server save failed: ${remoteError}`;
+      console.warn(`[booth-cms] ${reason} (${id} / ${hallId})`);
+      set({ lastBoothSaveError: reason });
+      return false;
     }
-    return remoteOk;
+    if (!localOk) {
+      // Mongo succeeded; local cache is best-effort only.
+      console.warn(`[booth-cms] Server saved ${id}, but browser storage is full — visitors will still see the change`);
+    }
+    set({ lastBoothSaveError: null });
+    return true;
   },
 
   resetBoothOverride: async (id) => {

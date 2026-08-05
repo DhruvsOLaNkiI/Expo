@@ -13,7 +13,7 @@ import {
   siteMapUrlsFromConfig,
   unitLayoutsFromConfig,
 } from '@/features/shared/data/boothLayouts';
-
+import { useStore } from '@/store';
 export function exhibitorUploadError(e: unknown): string {
   return e instanceof CmsUploadError ? e.message : e instanceof Error ? e.message : 'Upload failed';
 }
@@ -203,14 +203,17 @@ export function useExhibitorPersist(patchBooth: (p: BoothLayoutPatch) => Promise
       try {
         const ok = await patchBooth(patch);
         if (!ok) {
+          const detail =
+            useStore.getState().lastBoothSaveError?.trim() ||
+            'Server save failed — check admin login and that MongoDB is running.';
           return {
             ok: false,
-            message: `${label} could not be saved. Browser storage may be full — use "Clear all wall images", then try again.`,
+            message: `${label} could not be saved. ${detail}`,
           };
         }
         return {
           ok: true,
-          message: `${label} saved for this booth. Refresh the 3D expo tab (or use Jump to → your booth) to see walls and header update.`,
+          message: `${label} saved — switch to the expo tab to see it live (no full refresh needed).`,
         };
       } catch (e) {
         return { ok: false, message: exhibitorUploadError(e) };

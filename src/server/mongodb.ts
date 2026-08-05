@@ -195,7 +195,12 @@ export async function connectToDatabase(): Promise<Db> {
     await visitorsCollection.createIndex({ createdAt: -1 });
 
     const boothsCollection = db.collection('booths');
-    await ensureBoothCollectionIndexes(boothsCollection);
+    try {
+      await ensureBoothCollectionIndexes(boothsCollection);
+    } catch (e) {
+      // Index repair must never block CMS saves — connection is still usable.
+      console.warn('Booth index ensure failed (continuing with MongoDB):', e);
+    }
 
     const sceneCollection = db.collection('sceneSettings');
     await sceneCollection.createIndex({ configId: 1 }, { unique: true });
@@ -484,6 +489,39 @@ const BOOTH_LAYOUT_PATCH_KEYS = ['position', 'rotation', 'scale', 'displayLayout
 
 /** One booth per hall — global unique boothId blocked hall-2..6 writes. */
 async function ensureBoothCollectionIndexes(col: Collection<BoothOverrideDocument>): Promise<void> {
+  // Legacy rows often have hallId set but slotId missing/null. A unique compound index then
+  // fails with E11000 (many docs share { hallId: "hall-1", slotId: null }) and blocks ALL saves.
+  try {
+    const broken = await col
+      .find({
+        $or: [{ slotId: null }, { slotId: { $exists: false } }, { slotId: '' }],
+      })
+      .toArray();
+    for (const doc of broken) {
+      const legacySlot = (doc.boothId ?? '').trim();
+      if (legacySlot) {
+        await col.updateOne(
+          { _id: doc._id },
+          {
+            $set: {
+              slotId: legacySlot,
+              boothId: legacySlot,
+              hallId: doc.hallId?.trim() || LEGACY_EXPO_HALL_ID,
+            },
+          },
+        );
+      } else {
+        await col.deleteOne({ _id: doc._id });
+        console.warn(`Removed orphan booths doc without slotId/boothId: ${String(doc._id)}`);
+      }
+    }
+    if (broken.length) {
+      console.log(`Repaired ${broken.length} booths doc(s) missing slotId`);
+    }
+  } catch (e) {
+    console.warn('Could not repair booths docs missing slotId:', e);
+  }
+
   try {
     const indexes = await col.indexes();
     for (const idx of indexes) {
@@ -491,12 +529,37 @@ async function ensureBoothCollectionIndexes(col: Collection<BoothOverrideDocumen
         await col.dropIndex(idx.name);
         console.log(`Dropped legacy booths index: ${idx.name}`);
       }
+      // Replace old sparse unique — it treated multiple null slotIds as duplicates.
+      if (idx.name === 'hallId_1_slotId_1' && !idx.partialFilterExpression) {
+        await col.dropIndex(idx.name);
+        console.log(`Dropped sparse booths index: ${idx.name}`);
+      }
     }
   } catch (e) {
     console.warn('Could not drop legacy boothId index:', e);
   }
-  await col.createIndex({ hallId: 1, slotId: 1 }, { unique: true, sparse: true });
-  await col.createIndex({ boothId: 1 }, { sparse: true });
+
+  try {
+    await col.createIndex(
+      { hallId: 1, slotId: 1 },
+      {
+        unique: true,
+        name: 'hallId_1_slotId_1',
+        partialFilterExpression: {
+          hallId: { $type: 'string' },
+          slotId: { $type: 'string' },
+        },
+      },
+    );
+  } catch (e) {
+    console.warn('Could not create hallId+slotId index (saves may still work):', e);
+  }
+
+  try {
+    await col.createIndex({ boothId: 1 }, { sparse: true });
+  } catch (e) {
+    console.warn('Could not create boothId index:', e);
+  }
 }
 
 function pickLayoutPatch(patch: Record<string, unknown>): Record<string, unknown> {
