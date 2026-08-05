@@ -1,9 +1,13 @@
 import { Suspense } from 'react';
 import { Text } from '@react-three/drei';
 import type { CompanyProfile, MediaItem, PlacedImage, BoothLighting, HostessQuickReply, UnitLayoutItem } from '@/features/shared/data/boothLayouts';
+import { resolveHorizonBoothSurfaceColors } from '@/features/shared/data/boothLayouts';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHeaderLogo, BoothHostessGreeter, BoothStandee } from './Booths';
 import { BoothNumberBadge } from './BoothSignageFascia';
+import { BoothWallLogos } from './BoothWallLogos';
+import { BoothPlacementImages } from './BoothPlacementImages';
+import type { BoothWallPlacementAdjustments } from './boothWallMetrics';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
 import { LUXURY_BOOTH_DISPLAY_DEFAULTS, type BoothDisplayLayout } from '@/features/shared/data/boothDisplayLayout';
@@ -35,10 +39,21 @@ export function HorizonVistasBooth({
   boothScale,
   id,
   name,
+  color,
+  accent,
+  counterColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
   headerBranding,
+  wallLogoLeftUrl,
+  wallLogoRightUrl,
+  sideWallLeftImageUrl,
+  sideWallRightImageUrl,
+  exteriorWallLeftImageUrl,
+  exteriorWallRightImageUrl,
+  counterFrontImageUrl,
+  wallPlacementAdjustments,
   standeeImageUrl,
   placedImages,
   brochureUrl = '',
@@ -67,6 +82,14 @@ export function HorizonVistasBooth({
   stageScreenUrl?: string;
   headerLogoUrl?: string;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
+  wallLogoLeftUrl?: string;
+  wallLogoRightUrl?: string;
+  sideWallLeftImageUrl?: string;
+  sideWallRightImageUrl?: string;
+  exteriorWallLeftImageUrl?: string;
+  exteriorWallRightImageUrl?: string;
+  counterFrontImageUrl?: string;
+  wallPlacementAdjustments?: BoothWallPlacementAdjustments;
   standeeImageUrl?: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
@@ -87,14 +110,16 @@ export function HorizonVistasBooth({
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
 
-  // Royal blue palette — deep, saturated, no harsh chrome
-  const royalDeep = '#142454';
-  const royalMid = '#1e3a7a';
-  const royalAccent = '#4a6fd4';
-  const royalSoft = '#8fa8e8';
-  const platinum = '#d4dff5';
-  const iceFloor = '#eef2fc';
-  const uiGlow = '#6b8fd4';
+  // Royal blue by default; exhibitor colour edits drive the whole palette.
+  const surfaces = resolveHorizonBoothSurfaceColors({ color, accent, counterColor });
+  const royalDeep = surfaces.body;
+  const royalMid = surfaces.backWall;
+  const royalAccent = surfaces.accent;
+  const royalSoft = surfaces.accentSoft;
+  const platinum = surfaces.contrast;
+  const iceFloor = surfaces.floor;
+  const uiGlow = surfaces.accent;
+  const deskColor = surfaces.counterColor;
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -118,14 +143,14 @@ export function HorizonVistasBooth({
       {/* Back wall — unified royal blue (no white panel) */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        {royalMat(royalMid, '#2a4a9e', 0.08)}
+        {royalMat(royalMid, royalAccent, 0.08)}
       </mesh>
       {/* Soft center lift behind screen — painted glow, not a light bulb */}
       <mesh position={[0, 3, -3.72]}>
         <planeGeometry args={[7.2, 4.1]} />
         <meshStandardMaterial
           color={royalAccent}
-          emissive="#5a7ee8"
+          emissive={royalAccent}
           emissiveIntensity={0.14}
           roughness={1}
           metalness={0}
@@ -202,11 +227,25 @@ export function HorizonVistasBooth({
         scale={1.15}
       />
 
+      <Suspense fallback={null}>
+        <BoothWallLogos wallLogoLeftUrl={wallLogoLeftUrl} wallLogoRightUrl={wallLogoRightUrl} />
+        <BoothPlacementImages
+          sideWallLeftImageUrl={sideWallLeftImageUrl}
+          sideWallRightImageUrl={sideWallRightImageUrl}
+          exteriorWallLeftImageUrl={exteriorWallLeftImageUrl}
+          exteriorWallRightImageUrl={exteriorWallRightImageUrl}
+          counterFrontImageUrl={counterFrontImageUrl}
+          wallPlacementAdjustments={wallPlacementAdjustments}
+          // Horizon's side panels are thinner (±5.85, 0.3 thick) and stop at z=0 — no entrance wing.
+          wallMetrics={{ innerFaceX: 5.699, innerPosterZ: -2 }}
+        />
+      </Suspense>
+
       {/* Reception desk */}
       <group position={[0, 0.5, 0]}>
         <mesh position={[0, 0, 0]} castShadow receiveShadow>
           <boxGeometry args={[4, 1, 1]} />
-          {royalMat(royalDeep)}
+          {royalMat(deskColor)}
         </mesh>
         <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
           <boxGeometry args={[4.2, 0.1, 1.2]} />

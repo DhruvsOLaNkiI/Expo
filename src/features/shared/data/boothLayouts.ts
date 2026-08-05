@@ -285,6 +285,54 @@ export type BoothLayoutConfig = {
   counterTopColor?: string;
 };
 
+function parseHexColor(hex: string): [number, number, number] | null {
+  const h = hex.trim().replace(/^#/, '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  return [
+    parseInt(full.slice(0, 2), 16),
+    parseInt(full.slice(2, 4), 16),
+    parseInt(full.slice(4, 6), 16),
+  ];
+}
+
+/** Blend `hex` toward `toward` by `amount` (0 = unchanged, 1 = fully `toward`). */
+function mixHexColor(hex: string, toward: string, amount: number): string {
+  const a = parseHexColor(hex);
+  const b = parseHexColor(toward);
+  if (!a || !b) return hex;
+  const t = Math.min(1, Math.max(0, amount));
+  const channel = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t);
+  return `#${[0, 1, 2].map((i) => channel(i).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Resolved surface colors for Horizon Vistas / builder-6.
+ * The booth used to hardcode its royal-blue palette, so exhibitor colour edits did nothing.
+ * Supporting shades are derived from the chosen colours so the booth stays coherent.
+ */
+export function resolveHorizonBoothSurfaceColors(
+  b: Pick<BoothLayoutConfig, 'color' | 'accent' | 'counterColor'>,
+) {
+  const body = b.color?.trim() || HORIZON_ROYAL_THEME.color;
+  const accent = b.accent?.trim() || HORIZON_ROYAL_THEME.accent;
+  return {
+    /** Walls, header fascia, desk body. */
+    body,
+    /** Back wall — slightly lifted from the body so the LED screen reads. */
+    backWall: mixHexColor(body, '#ffffff', 0.12),
+    /** Trims, entrance threshold, proximity glow. */
+    accent,
+    /** Thin secondary trims. */
+    accentSoft: mixHexColor(accent, '#ffffff', 0.35),
+    /** Text + bright trim, readable on the body colour. */
+    contrast: mixHexColor(accent, '#ffffff', 0.72),
+    /** Floor pad. */
+    floor: mixHexColor(body, '#ffffff', 0.88),
+    counterColor: b.counterColor?.trim() || HORIZON_ROYAL_THEME.counterColor,
+  };
+}
+
 /** Resolved surface colors for EcoEden / builder-8 booths. */
 export function resolveEcoBoothSurfaceColors(
   b: Pick<
@@ -883,6 +931,13 @@ export const BOOTH_COLOR_PRESETS: BoothColorPreset[] = [
 ];
 
 /** Luxe Gardens (builder-8) — white + forest green eco palette. */
+/** Horizon Vistas (builder-6) — royal blue palette. */
+export const HORIZON_ROYAL_THEME = {
+  color: '#142454',
+  accent: '#4a6fd4',
+  counterColor: '#142454',
+} as const;
+
 export const BUILDER_8_GREEN_THEME = {
   color: '#ffffff',
   accent: '#164e2f',
@@ -992,7 +1047,18 @@ export function buildDefaultBoothLayoutList(): BoothLayoutConfig[] {
     },
     makeDefaultBooth('builder-4', 'CROWN ESTATES', [BOOTH_ROW_X_EAST, 0, zNorth], [0, BOOTH_YAW_EAST, 0], '#fcfaf5', PROJECT_VIDEOS[3]),
     makeDefaultBooth('builder-5', 'THE MONARCH', [BOOTH_ROW_X_EAST, 0, zCenter], [0, BOOTH_YAW_EAST, 0], '#fcf9f2', PROJECT_VIDEOS[4]),
-    makeDefaultBooth('builder-6', 'HORIZON VISTAS', [BOOTH_ROW_X_EAST, 0, zSouth], [0, BOOTH_YAW_EAST, 0], '#fdfbf5', PROJECT_VIDEOS[5]),
+    {
+      ...makeDefaultBooth(
+        'builder-6',
+        'HORIZON VISTAS',
+        [BOOTH_ROW_X_EAST, 0, zSouth],
+        [0, BOOTH_YAW_EAST, 0],
+        HORIZON_ROYAL_THEME.color,
+        PROJECT_VIDEOS[5],
+      ),
+      accent: HORIZON_ROYAL_THEME.accent,
+      counterColor: HORIZON_ROYAL_THEME.counterColor,
+    },
     {
       ...makeDefaultBooth(
         'builder-8',

@@ -1,8 +1,15 @@
 import { BoothFixedImageSlot, BoothFixedImageSlotFront } from './BoothFixedImageSlot';
 import { BOOTH_WALL, resolveBoothWallPlacementUrls, type BoothWallPlacementInput } from './boothWallMetrics';
 
-export function BoothPlacementImages(props: BoothWallPlacementInput) {
-  const w = BOOTH_WALL;
+/** Booths whose side walls differ from the shared metrics (e.g. Horizon has no entrance wing). */
+type WallMetricsOverride = Partial<
+  Record<'innerFaceX' | 'innerPosterZ' | 'outerFaceX' | 'exteriorPosterZ', number>
+>;
+
+export function BoothPlacementImages(
+  props: BoothWallPlacementInput & { wallMetrics?: WallMetricsOverride },
+) {
+  const w = { ...BOOTH_WALL, ...props.wallMetrics };
   const adj = props.wallPlacementAdjustments ?? {};
   const {
     interiorLeft: sideWallLeftImageUrl,
