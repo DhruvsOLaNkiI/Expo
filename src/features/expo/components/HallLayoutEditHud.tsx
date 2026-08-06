@@ -158,11 +158,16 @@ export function HallLayoutEditHud() {
     const slots: BoothDisplaySlot[] = ['main', 'counter', 'standee', 'signage', 'kiosk'];
     return boothLayouts.flatMap((b) =>
       slots
-        .filter((slot) => slot !== 'signage' || b.id === 'builder-8')
+        // EcoEden standing board is now the standee slot (signage was legacy).
+        .filter((slot) => slot !== 'signage')
         .filter((slot) => slot !== 'kiosk' || b.id === 'vertex-elite')
         .map((slot) => ({
           id: `booth-display-${b.id}__${slot}`,
-          label: `${b.name} · ${BOOTH_DISPLAY_SLOT_LABELS[slot]}`,
+          label: `${b.name} · ${
+            b.id === 'builder-8' && slot === 'standee'
+              ? 'Standing signage board'
+              : BOOTH_DISPLAY_SLOT_LABELS[slot]
+          }`,
         })),
     );
   }, [boothLayouts]);

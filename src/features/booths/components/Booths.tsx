@@ -536,6 +536,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               exteriorWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallLeftImageUrl) || undefined}
               exteriorWallRightImageUrl={sanitizeBoothLogoUrlForWebGL(b.exteriorWallRightImageUrl) || undefined}
               counterFrontImageUrl={sanitizeBoothLogoUrlForWebGL(b.counterFrontImageUrl) || undefined}
+              standeeImageUrl={sanitizeBoothLogoUrlForWebGL(b.standeeImageUrl) || undefined}
               wallPlacementAdjustments={b.wallPlacementAdjustments}
               lighting={b.lighting}
               placedImages={b.placedImages}
@@ -1140,6 +1141,7 @@ export function EcoEdenBooth({
   backWallColor, tvWallColor, headerFasciaColor, counterTopColor,
   videoUrl, stageScreenUrl, headerLogoUrl, headerBranding, projectLogoUrl, wallLogoLeftUrl, wallLogoRightUrl,
   sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
+  standeeImageUrl,
   wallPlacementAdjustments,
   lighting, placedImages, brochureUrl, priceListUrl, unitLayoutUrl, unitLayouts = [], floorPlanUrl = '', floorPlans = [], faqUrl = '', siteMapUrls,
   signageImageUrl,
@@ -1173,6 +1175,8 @@ export function EcoEdenBooth({
   exteriorWallLeftImageUrl?: string;
   exteriorWallRightImageUrl?: string;
   counterFrontImageUrl?: string;
+  /** Same dashboard “Standee poster” field other booths use — drives this standing board. */
+  standeeImageUrl?: string;
   wallPlacementAdjustments?: import('./boothWallMetrics').BoothWallPlacementAdjustments;
   lighting: import('@/features/shared/data/boothLayouts').BoothLighting;
   placedImages: PlacedImage[];
@@ -1207,6 +1211,19 @@ export function EcoEdenBooth({
   /** Standing signage screen — fixed so wall-color themes do not repaint this panel. */
   const signageScreenColor = '#fafaf8';
   const glow = leafGreen;
+  // Dashboard “Standee poster” + legacy signageImageUrl both drive this board.
+  const standingPosterUrl = sanitizeBoothLogoUrlForWebGL(standeeImageUrl || signageImageUrl);
+  const standingTitle = resolveBoothHeaderBranding({
+    name,
+    headerBranding,
+    companyTagline: company?.tagline,
+  }).projectName;
+  // Prefer standee slot (Edit layout → Roll-up standee); keep old signage transforms if saved.
+  const standingLayout: BoothDisplayLayout | undefined = displayLayout?.standee
+    ? displayLayout
+    : displayLayout?.signage
+      ? { ...displayLayout, standee: displayLayout.signage }
+      : displayLayout;
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -1352,11 +1369,11 @@ export function EcoEdenBooth({
         />
       </Suspense>
 
-      {/* Elegant Standing Digital Signage Board (Right Side) */}
+      {/* Standing board — same Edit-layout + standee-poster controls as other booths */}
       <BoothDisplayEditable
         boothId={id}
-        slot="signage"
-        layout={displayLayout}
+        slot="standee"
+        layout={standingLayout}
         defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.signage}
       >
         <mesh position={[0, 1.2, 0]} castShadow>
@@ -1367,20 +1384,19 @@ export function EcoEdenBooth({
           <boxGeometry args={[1.4, 0.1, 0.4]} />
           <meshStandardMaterial color="#222" />
         </mesh>
-        {/* Signage Content */}
         <group position={[0, 1.2, 0.06]}>
           <mesh>
             <planeGeometry args={[1.1, 2.3]} />
             <meshStandardMaterial color={signageScreenColor} />
           </mesh>
-          {signageImageUrl ? (
+          {standingPosterUrl ? (
             <Suspense fallback={null}>
-              <EcoSignageImage url={signageImageUrl} />
+              <EcoSignageImage url={standingPosterUrl} />
             </Suspense>
           ) : (
             <>
               <Text position={[0, 0.8, 0.01]} fontSize={0.12} color={darkGreen} maxWidth={1} textAlign="center">
-                {name}
+                {standingTitle}
               </Text>
               {company?.tagline?.trim() ? (
                 <Text position={[0, 0.65, 0.01]} fontSize={0.06} color={leafGreen} maxWidth={1} textAlign="center">
