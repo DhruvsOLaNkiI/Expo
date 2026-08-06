@@ -129,14 +129,11 @@ export function BoothColorThemeSection({
 }: Props) {
   const isEcoBooth = boothId === 'builder-8';
   const isCrownBooth = boothId === 'builder-4';
-  /** Attached top fascia bar color — Eco + Crown use a dedicated field; others fall back to side wall. */
-  const showHeaderFasciaControl = isEcoBooth || isCrownBooth;
   const effectiveBack = backWallColor.trim() || color;
   const effectiveHeaderText = headerTextColor.trim() || accent;
   const multiHeader = Boolean(headerTextColor.trim()) && normalizeHex(headerTextColor) !== normalizeHex(accent);
-  const previewHeaderBg = showHeaderFasciaControl
-    ? headerFasciaColor.trim() || (isCrownBooth ? '#a690f0' : '#fcfcfc')
-    : '#ffffff';
+  const previewHeaderBg =
+    headerFasciaColor.trim() || (isCrownBooth ? '#a690f0' : isEcoBooth ? '#fcfcfc' : color);
 
   const activePresetId =
     BOOTH_COLOR_PRESETS.find((p) =>
@@ -162,21 +159,17 @@ export function BoothColorThemeSection({
           <strong>Jump to → {boothLabel}</strong> to stand in front of your booth and see walls + header.
         </p>
         <p className="exb-booth-color-scope-hall">
-          Use <strong>dual tone</strong>: set Side wall and Back wall to different colors. Header board text can{' '}
-          <strong>match Accent</strong> (one color) or use a separate <strong>Header text</strong> color
-          (multi-color). Pale accents auto-darken on the white hanging board so the name stays readable.
-          {isCrownBooth
-            ? ' The purple top fascia bar on this booth uses Header fascia color (separate from wall color).'
-            : ''}
+          Use <strong>dual tone</strong>: set Side wall and Back wall to different colors. The top logo /
+          project-name bar uses <strong>Header fascia</strong> (separate from walls). Header text can{' '}
+          <strong>match Accent</strong> or use its own color. Pale accents auto-darken on the white hanging
+          board so the name stays readable.
         </p>
       </div>
       <p className="exb-muted">
         Pick a ready-made theme or use <strong>Custom</strong> to set colors.
         {isEcoBooth
-          ? ' Eldeco (B-08) also has TV bay, header fascia background, and counter top controls.'
-          : isCrownBooth
-            ? ' Crown / Legacy (B-04): use Header fascia to recolor the purple top bar behind the logos.'
-            : ' Colors save automatically when you adjust a picker.'}
+          ? ' Eldeco (B-08) also has TV bay and counter top controls.'
+          : ' Colors save automatically when you adjust a picker. Use Header fascia to recolor the logo bar.'}
       </p>
 
       <p className="exb-booth-color-presets-label">Theme presets</p>
@@ -271,6 +264,16 @@ export function BoothColorThemeSection({
         />
       </div>
 
+      <h4 className="exb-placement-group-title">Logo / project name bar</h4>
+      <div className="exb-booth-color-grid">
+        <ColorField
+          label="Header fascia bg"
+          hint="Top bar behind logos + project name (not the hanging board)"
+          value={headerFasciaColor.trim() || previewHeaderBg}
+          onChange={onHeaderFasciaColor}
+        />
+      </div>
+
       <h4 className="exb-placement-group-title">Header board text</h4>
       <p className="exb-muted" style={{ marginBottom: 8 }}>
         {multiHeader
@@ -297,38 +300,22 @@ export function BoothColorThemeSection({
         </div>
       </div>
 
-      {showHeaderFasciaControl ? (
+      {isEcoBooth ? (
         <>
-          <h4 className="exb-placement-group-title">
-            {isEcoBooth ? 'Eldeco B-08 surfaces' : 'Top fascia bar'}
-          </h4>
-          <div className={`exb-booth-color-grid${isEcoBooth ? ' exb-booth-color-grid-eco' : ''}`}>
-            {isEcoBooth ? (
-              <ColorField
-                label="TV wall color"
-                hint="Panel behind main LED screen"
-                value={tvWallColor}
-                onChange={onTvWallColor}
-              />
-            ) : null}
+          <h4 className="exb-placement-group-title">Eldeco B-08 surfaces</h4>
+          <div className="exb-booth-color-grid exb-booth-color-grid-eco">
             <ColorField
-              label="Header fascia bg"
-              hint={
-                isCrownBooth
-                  ? 'Purple top bar behind logos (attached header — not the hanging board)'
-                  : 'Legacy fascia background (if used)'
-              }
-              value={headerFasciaColor}
-              onChange={onHeaderFasciaColor}
+              label="TV wall color"
+              hint="Panel behind main LED screen"
+              value={tvWallColor}
+              onChange={onTvWallColor}
             />
-            {isEcoBooth ? (
-              <ColorField
-                label="Counter top"
-                hint="Green trim bar on desk"
-                value={counterTopColor}
-                onChange={onCounterTopColor}
-              />
-            ) : null}
+            <ColorField
+              label="Counter top"
+              hint="Green trim bar on desk"
+              value={counterTopColor}
+              onChange={onCounterTopColor}
+            />
           </div>
         </>
       ) : null}

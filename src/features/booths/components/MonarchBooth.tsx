@@ -62,6 +62,7 @@ export function MonarchBooth({
   counterColor,
   backWallColor,
   headerTextColor,
+  headerFasciaColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
@@ -102,6 +103,7 @@ export function MonarchBooth({
   counterColor: string;
   backWallColor?: string;
   headerTextColor?: string;
+  headerFasciaColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
@@ -212,7 +214,7 @@ export function MonarchBooth({
         projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
-        fasciaColor={wallDark}
+        fasciaColor={headerFasciaColor?.trim() || wallDark}
         subtitleColor="#d4c4a8"
         width={12.5}
         height={1.5}

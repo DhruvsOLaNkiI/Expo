@@ -114,6 +114,7 @@ export function SideExpoBooths({
           counterColor={b.counterColor}
           backWallColor={b.backWallColor}
           headerTextColor={b.headerTextColor}
+          headerFasciaColor={b.headerFasciaColor}
           videoUrl={b.videoUrl}
           stageScreenUrl={b.stageScreenUrl}
           headerLogoUrl={b.headerLogoUrl}

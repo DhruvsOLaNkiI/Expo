@@ -478,6 +478,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               backWallColor={b.backWallColor}
               headerTextColor={b.headerTextColor}
+              headerFasciaColor={b.headerFasciaColor}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
               projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
@@ -574,6 +575,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               backWallColor={b.backWallColor}
               headerTextColor={b.headerTextColor}
+              headerFasciaColor={b.headerFasciaColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
@@ -619,12 +621,12 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               backWallColor={b.backWallColor}
               headerTextColor={b.headerTextColor}
+              headerFasciaColor={b.headerFasciaColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
               projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
-              headerFasciaColor={b.headerFasciaColor}
               wallLogoLeftUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoLeftUrl) || undefined}
               wallLogoRightUrl={sanitizeBoothLogoUrlForWebGL(b.wallLogoRightUrl) || undefined}
               sideWallLeftImageUrl={sanitizeBoothLogoUrlForWebGL(b.sideWallLeftImageUrl) || undefined}
@@ -665,6 +667,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               counterColor={b.counterColor}
               backWallColor={b.backWallColor}
               headerTextColor={b.headerTextColor}
+              headerFasciaColor={b.headerFasciaColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
@@ -878,6 +881,7 @@ export function StandardLuxuryBooth({
   counterColor,
   backWallColor,
   headerTextColor,
+  headerFasciaColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
@@ -918,6 +922,7 @@ export function StandardLuxuryBooth({
   counterColor: string;
   backWallColor?: string;
   headerTextColor?: string;
+  headerFasciaColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
@@ -1003,7 +1008,7 @@ export function StandardLuxuryBooth({
         projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
-        fasciaColor={wallColor}
+        fasciaColor={headerFasciaColor?.trim() || wallColor}
         width={12.5}
         height={1.5}
         depth={0.72}
@@ -1482,6 +1487,7 @@ export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
   backWallColor,
   headerTextColor,
+  headerFasciaColor,
   headerLogoUrl,
   headerBranding,
   projectLogoUrl,
@@ -1514,6 +1520,7 @@ export function VertexEliteBooth({
   counterColor: string;
   backWallColor?: string;
   headerTextColor?: string;
+  headerFasciaColor?: string;
   headerLogoUrl?: string;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   projectLogoUrl?: string;
@@ -1607,7 +1614,7 @@ export function VertexEliteBooth({
         projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
-        fasciaColor={wallColor}
+        fasciaColor={headerFasciaColor?.trim() || wallColor}
         width={12.5}
         height={1.5}
         depth={0.72}

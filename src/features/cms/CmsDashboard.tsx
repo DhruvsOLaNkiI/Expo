@@ -412,6 +412,7 @@ export function CmsDashboard() {
   const [counterColor, setCounterColor] = useState('');
   const [backWallColor, setBackWallColor] = useState('');
   const [headerTextColor, setHeaderTextColor] = useState('');
+  const [headerFasciaColor, setHeaderFasciaColor] = useState('');
   const [videoUrl, setVideoUrl] = useState(''); const [headerLogoUrl, setHeaderLogoUrl] = useState('');
   const [stageScreenUrl, setStageScreenUrl] = useState('');
   const [description, setDescription] = useState('');
@@ -453,6 +454,7 @@ export function CmsDashboard() {
     setName(b.name); setColor(b.color); setAccent(b.accent); setCounterColor(b.counterColor);
     setBackWallColor(b.backWallColor ?? '');
     setHeaderTextColor(b.headerTextColor ?? '');
+    setHeaderFasciaColor(b.headerFasciaColor ?? '');
     setVideoUrl(b.videoUrl); setHeaderLogoUrl(b.headerLogoUrl ?? '');
     setStageScreenUrl(b.stageScreenUrl ?? '');
     setDescription(b.description);
@@ -624,6 +626,7 @@ export function CmsDashboard() {
       counterColor: counterColor.trim() || undefined,
       backWallColor: backWallColor.trim() || null,
       headerTextColor: headerTextColor.trim() || null,
+      headerFasciaColor: headerFasciaColor.trim() || null,
       videoUrl: videoUrl.trim() || undefined,
       stageScreenUrl: stageScreenUrl.trim() || undefined,
       headerLogoUrl: headerLogoUrl.trim() || undefined,
@@ -1223,6 +1226,8 @@ export function CmsDashboard() {
                   setBackWallColor={setBackWallColor}
                   headerTextColor={headerTextColor}
                   setHeaderTextColor={setHeaderTextColor}
+                  headerFasciaColor={headerFasciaColor}
+                  setHeaderFasciaColor={setHeaderFasciaColor}
                   stageScreenUrl={stageScreenUrl}
                   setStageScreenUrl={setStageScreenUrl}
                   headerLogoUrl={headerLogoUrl}
@@ -2042,6 +2047,7 @@ function HostessQuickRepliesEditor({
 function BrandingTab({
   name, setName, color, setColor, accent, setAccent, counterColor, setCounterColor,
   backWallColor, setBackWallColor, headerTextColor, setHeaderTextColor,
+  headerFasciaColor, setHeaderFasciaColor,
   stageScreenUrl, setStageScreenUrl, headerLogoUrl, setHeaderLogoUrl, description, setDescription,
   hostessQuickReplies, setHostessQuickReplies, boothId, toastUploadResult, persistDocumentField, showUploadError,
 }: {
@@ -2049,6 +2055,7 @@ function BrandingTab({
   counterColor: string; setCounterColor: (v: string) => void;
   backWallColor: string; setBackWallColor: (v: string) => void;
   headerTextColor: string; setHeaderTextColor: (v: string) => void;
+  headerFasciaColor: string; setHeaderFasciaColor: (v: string) => void;
   stageScreenUrl: string; setStageScreenUrl: (v: string) => void;
   headerLogoUrl: string; setHeaderLogoUrl: (v: string) => void; description: string; setDescription: (v: string) => void;
   hostessQuickReplies: HostessQuickReply[];
@@ -2073,13 +2080,18 @@ function BrandingTab({
       <HostessQuickRepliesEditor items={hostessQuickReplies} setItems={setHostessQuickReplies} />
       <SectionTitle>Dual tone colors</SectionTitle>
       <p className="mb-2 text-[10px] leading-relaxed text-white/40">
-        Side wall and back wall can differ. Header text can match Accent or use its own color.
+        Side wall and back wall can differ. Header fascia is the top logo / project-name bar (separate from walls).
       </p>
       <div className="grid grid-cols-2 gap-3">
         <CmsColor label="Side wall" value={color} onChange={setColor} />
         <CmsColor label="Back wall" value={backWallColor || color} onChange={setBackWallColor} />
         <CmsColor label="Accent / trim" value={accent} onChange={setAccent} />
         <CmsColor label="Counter" value={counterColor} onChange={setCounterColor} />
+        <CmsColor
+          label="Header fascia"
+          value={headerFasciaColor || color}
+          onChange={setHeaderFasciaColor}
+        />
         <CmsColor label="Header text" value={headerTextColor || accent} onChange={setHeaderTextColor} />
       </div>
       <button
