@@ -116,8 +116,12 @@ export type BoothHeaderBranding = {
   /** Hide the RERA block on the right of the header beam. */
   hideRera?: boolean;
   /**
+   * Hanging ceiling board title — independent from fascia {@link projectName}.
+   * Falls back to projectName, then booth name, when empty.
+   */
+  hangingBoardName?: string;
+  /**
    * Hanging ceiling board title size (0.7 = smaller, 1 = default, 1.8 = large).
-   * Custom project name uses this scale on the white hanging board.
    */
   hangingTitleScale?: number;
 };
@@ -175,6 +179,17 @@ export function resolveBoothHeaderBranding(params: {
     projectSubtitle,
     reraNumber: hb?.reraNumber?.trim() || '',
   };
+}
+
+/** Title for the white hanging ceiling board (may differ from fascia project name). */
+export function resolveHangingBoardName(params: {
+  name: string;
+  headerBranding?: BoothHeaderBranding;
+}): string {
+  const hb = params.headerBranding;
+  const hanging = hb?.hangingBoardName?.trim();
+  if (hanging) return hanging;
+  return hb?.projectName?.trim() || params.name;
 }
 
 /** CMS managed header (B-04 / Crown Estates) — never falls back to booth name when center text is hidden. */

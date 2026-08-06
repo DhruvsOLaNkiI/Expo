@@ -180,8 +180,14 @@
   border: 1px solid rgba(148,163,184,0.2);
 }
 .exb-booth-color-preview-wall {
-  border-radius: 10px; min-height: 72px; padding: 10px; border: 1px solid rgba(0,0,0,0.08);
-  display: grid; gap: 8px; align-content: end;
+  border-radius: 10px; min-height: 72px; border: 1px solid rgba(0,0,0,0.08);
+  display: grid; grid-template-columns: 28% 1fr; overflow: hidden; position: relative;
+}
+.exb-booth-color-preview-side {
+  min-height: 72px; border-right: 2px solid rgba(0,0,0,0.12);
+}
+.exb-booth-color-preview-main {
+  padding: 10px; display: grid; gap: 8px; align-content: end; min-width: 0;
 }
 .exb-booth-color-preview-trim { height: 6px; border-radius: 3px; width: 100%; }
 .exb-booth-color-preview-counter {

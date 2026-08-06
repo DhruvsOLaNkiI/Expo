@@ -168,7 +168,10 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     setCounterColor(booth.counterColor || '#ffffff');
     setBackWallColor(booth.backWallColor || booth.color || '#fcfaf5');
     setTvWallColor(booth.tvWallColor || BUILDER_8_GREEN_THEME.tvWallColor);
-    setHeaderFasciaColor(booth.headerFasciaColor || BUILDER_8_GREEN_THEME.headerFasciaColor);
+    setHeaderFasciaColor(
+      booth.headerFasciaColor ||
+        (boothId === 'builder-4' ? '#a690f0' : BUILDER_8_GREEN_THEME.headerFasciaColor),
+    );
     setCounterTopColor(booth.counterTopColor || booth.accent || BUILDER_8_GREEN_THEME.counterTopColor);
     setHeaderTextColor(booth.headerTextColor || '');
     setHeaderBranding({ ...(booth.headerBranding ?? {}) });
@@ -192,7 +195,10 @@ export function ExhibitorSetupPage({ onNav }: Props) {
         backWallColor: patchThemeColor(backWallColor) ?? null,
         headerTextColor: patchThemeColor(headerTextColor) ?? null,
         tvWallColor: boothId === 'builder-8' ? tvWallColor.trim() || undefined : undefined,
-        headerFasciaColor: boothId === 'builder-8' ? headerFasciaColor.trim() || undefined : undefined,
+        headerFasciaColor:
+          boothId === 'builder-8' || boothId === 'builder-4'
+            ? headerFasciaColor.trim() || undefined
+            : undefined,
         counterTopColor: boothId === 'builder-8' ? counterTopColor.trim() || undefined : undefined,
         headerLogoUrl: patchPlacementImageUrl(headerLogoUrl),
         projectLogoUrl: patchPlacementImageUrl(projectLogoUrl),
@@ -289,6 +295,8 @@ export function ExhibitorSetupPage({ onNav }: Props) {
         setTvWallColor(preset.tvWallColor ?? BUILDER_8_GREEN_THEME.tvWallColor);
         setHeaderFasciaColor(preset.headerFasciaColor ?? BUILDER_8_GREEN_THEME.headerFasciaColor);
         setCounterTopColor(preset.counterTopColor ?? preset.accent);
+      } else if (boothId === 'builder-4') {
+        setHeaderFasciaColor(preset.headerFasciaColor ?? '#a690f0');
       }
       const r = await persist(
         {
@@ -303,7 +311,11 @@ export function ExhibitorSetupPage({ onNav }: Props) {
                 headerFasciaColor: preset.headerFasciaColor ?? headerFasciaColor,
                 counterTopColor: preset.counterTopColor ?? preset.accent,
               }
-            : {}),
+            : boothId === 'builder-4'
+              ? {
+                  headerFasciaColor: preset.headerFasciaColor ?? headerFasciaColor,
+                }
+              : {}),
         },
         `Theme: ${preset.label}`,
       );
@@ -494,7 +506,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           }}
           onHeaderFasciaColor={(v) => {
             setHeaderFasciaColor(v);
-            if (boothId !== 'builder-8') return;
+            if (boothId !== 'builder-8' && boothId !== 'builder-4') return;
             const c = patchThemeColor(v);
             if (c) scheduleColorPersist({ headerFasciaColor: c });
             else if (!v.trim()) scheduleColorPersist({ headerFasciaColor: null });
@@ -519,7 +531,9 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           boothId={boothId}
           boothName={booth.name}
           companyTagline={company.tagline}
-          headerFasciaColor={boothId === 'builder-8' ? headerFasciaColor : color}
+          headerFasciaColor={
+            boothId === 'builder-8' || boothId === 'builder-4' ? headerFasciaColor : color
+          }
           accentColor={accent}
           headerLogoUrl={headerLogoUrl}
           projectLogoUrl={projectLogoUrl}

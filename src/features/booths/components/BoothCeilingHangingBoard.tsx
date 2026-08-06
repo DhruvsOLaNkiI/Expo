@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import {
-  resolveBoothHeaderBranding,
+  resolveHangingBoardName,
   HALL_HEIGHT,
   type BoothHeaderBranding,
 } from '@/features/shared/data/boothLayouts';
@@ -22,7 +22,6 @@ const _worldScale = new THREE.Vector3();
 export function BoothCeilingHangingBoard({
   boothName,
   headerBranding,
-  companyTagline,
   accent = '#d4af37',
   /** Title + underline color — defaults to accent; set separately for multi-color branding. */
   textColor,
@@ -33,6 +32,7 @@ export function BoothCeilingHangingBoard({
 }: {
   boothName: string;
   headerBranding?: BoothHeaderBranding;
+  /** Kept for call-site compatibility; hanging board no longer uses tagline. */
   companyTagline?: string;
   accent?: string;
   textColor?: string;
@@ -45,12 +45,12 @@ export function BoothCeilingHangingBoard({
   const rodMeshRefs = useRef<(THREE.Mesh | null)[]>([null, null]);
   const mountRefs = useRef<(THREE.Mesh | null)[]>([null, null]);
 
-  const branding = resolveBoothHeaderBranding({
+  const title = resolveHangingBoardName({
     name: boothName,
     headerBranding,
-    companyTagline,
-  });
-  const title = (branding.projectName || boothName).trim().toUpperCase();
+  })
+    .trim()
+    .toUpperCase();
   const titleColor = (textColor ?? accent).trim() || accent;
   const zFace = depth / 2 + 0.02;
   const frameT = 0.1;

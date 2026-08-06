@@ -128,9 +128,15 @@ export function BoothColorThemeSection({
   onApplyPreset,
 }: Props) {
   const isEcoBooth = boothId === 'builder-8';
+  const isCrownBooth = boothId === 'builder-4';
+  /** Attached top fascia bar color — Eco + Crown use a dedicated field; others fall back to side wall. */
+  const showHeaderFasciaControl = isEcoBooth || isCrownBooth;
   const effectiveBack = backWallColor.trim() || color;
   const effectiveHeaderText = headerTextColor.trim() || accent;
   const multiHeader = Boolean(headerTextColor.trim()) && normalizeHex(headerTextColor) !== normalizeHex(accent);
+  const previewHeaderBg = showHeaderFasciaControl
+    ? headerFasciaColor.trim() || (isCrownBooth ? '#a690f0' : '#fcfcfc')
+    : '#ffffff';
 
   const activePresetId =
     BOOTH_COLOR_PRESETS.find((p) =>
@@ -159,13 +165,18 @@ export function BoothColorThemeSection({
           Use <strong>dual tone</strong>: set Side wall and Back wall to different colors. Header board text can{' '}
           <strong>match Accent</strong> (one color) or use a separate <strong>Header text</strong> color
           (multi-color). Pale accents auto-darken on the white hanging board so the name stays readable.
+          {isCrownBooth
+            ? ' The purple top fascia bar on this booth uses Header fascia color (separate from wall color).'
+            : ''}
         </p>
       </div>
       <p className="exb-muted">
         Pick a ready-made theme or use <strong>Custom</strong> to set colors.
         {isEcoBooth
           ? ' Eldeco (B-08) also has TV bay, header fascia background, and counter top controls.'
-          : ' Colors save automatically when you adjust a picker.'}
+          : isCrownBooth
+            ? ' Crown / Legacy (B-04): use Header fascia to recolor the purple top bar behind the logos.'
+            : ' Colors save automatically when you adjust a picker.'}
       </p>
 
       <p className="exb-booth-color-presets-label">Theme presets</p>
@@ -201,44 +212,34 @@ export function BoothColorThemeSection({
       </div>
 
       <div className="exb-booth-color-preview" aria-hidden>
-        <div className="exb-booth-color-preview-wall" style={{ background: effectiveBack }}>
-          {isEcoBooth ? (
-            <div className="exb-booth-color-preview-tv" style={{ background: tvWallColor }}>
-              <span>TV</span>
-            </div>
-          ) : null}
-          <div className="exb-booth-color-preview-trim" style={{ background: accent }} />
+        <div className="exb-booth-color-preview-wall">
+          <div className="exb-booth-color-preview-side" style={{ background: color }} title="Side wall" />
+          <div className="exb-booth-color-preview-main" style={{ background: effectiveBack }}>
+            {isEcoBooth ? (
+              <div className="exb-booth-color-preview-tv" style={{ background: tvWallColor }}>
+                <span>TV</span>
+              </div>
+            ) : null}
+            <div className="exb-booth-color-preview-trim" style={{ background: accent }} />
           <div
             className="exb-booth-color-preview-header"
             style={{
-              background: isEcoBooth ? headerFasciaColor : '#ffffff',
+              background: previewHeaderBg,
               color: effectiveHeaderText,
               border: `2px solid ${accent}`,
             }}
           >
             Header
           </div>
-          <div className="exb-booth-color-preview-counter" style={{ background: counterColor }}>
-            <span
-              className="exb-booth-color-preview-counter-top"
-              style={{ background: isEcoBooth ? counterTopColor : accent }}
-            >
-              Top
-            </span>
+            <div className="exb-booth-color-preview-counter" style={{ background: counterColor }}>
+              <span
+                className="exb-booth-color-preview-counter-top"
+                style={{ background: isEcoBooth ? counterTopColor : accent }}
+              >
+                Top
+              </span>
+            </div>
           </div>
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: '28%',
-              background: color,
-              opacity: 0.95,
-              borderRight: `2px solid ${accent}`,
-            }}
-            title="Side wall"
-          />
         </div>
       </div>
 
@@ -296,28 +297,38 @@ export function BoothColorThemeSection({
         </div>
       </div>
 
-      {isEcoBooth ? (
+      {showHeaderFasciaControl ? (
         <>
-          <h4 className="exb-placement-group-title">Eldeco B-08 surfaces</h4>
-          <div className="exb-booth-color-grid exb-booth-color-grid-eco">
-            <ColorField
-              label="TV wall color"
-              hint="Panel behind main LED screen"
-              value={tvWallColor}
-              onChange={onTvWallColor}
-            />
+          <h4 className="exb-placement-group-title">
+            {isEcoBooth ? 'Eldeco B-08 surfaces' : 'Top fascia bar'}
+          </h4>
+          <div className={`exb-booth-color-grid${isEcoBooth ? ' exb-booth-color-grid-eco' : ''}`}>
+            {isEcoBooth ? (
+              <ColorField
+                label="TV wall color"
+                hint="Panel behind main LED screen"
+                value={tvWallColor}
+                onChange={onTvWallColor}
+              />
+            ) : null}
             <ColorField
               label="Header fascia bg"
-              hint="Legacy fascia background (if used)"
+              hint={
+                isCrownBooth
+                  ? 'Purple top bar behind logos (attached header — not the hanging board)'
+                  : 'Legacy fascia background (if used)'
+              }
               value={headerFasciaColor}
               onChange={onHeaderFasciaColor}
             />
-            <ColorField
-              label="Counter top"
-              hint="Green trim bar on desk"
-              value={counterTopColor}
-              onChange={onCounterTopColor}
-            />
+            {isEcoBooth ? (
+              <ColorField
+                label="Counter top"
+                hint="Green trim bar on desk"
+                value={counterTopColor}
+                onChange={onCounterTopColor}
+              />
+            ) : null}
           </div>
         </>
       ) : null}

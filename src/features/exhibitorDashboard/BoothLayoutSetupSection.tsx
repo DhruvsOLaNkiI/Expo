@@ -405,15 +405,25 @@ export function BoothLayoutSetupSection({
         </label>
 
         <label className="exb-booth-layout-field">
-          <span className="exb-booth-layout-label">Project name · hanging board + fascia</span>
+          <span className="exb-booth-layout-label">Project name · fascia (top bar)</span>
           <input
             className="exb-field"
             placeholder={boothName}
             value={headerBranding.projectName ?? ''}
             onChange={(e) => onBrandingChange({ projectName: e.target.value })}
           />
+        </label>
+
+        <label className="exb-booth-layout-field">
+          <span className="exb-booth-layout-label">Hanging board name</span>
+          <input
+            className="exb-field"
+            placeholder={headerBranding.projectName?.trim() || boothName}
+            value={headerBranding.hangingBoardName ?? ''}
+            onChange={(e) => onBrandingChange({ hangingBoardName: e.target.value })}
+          />
           <span className="exb-muted" style={{ display: 'block', marginTop: 4, fontSize: 11 }}>
-            This custom name shows on the white hanging ceiling board.
+            Separate from fascia. Leave blank to reuse the project name above.
           </span>
         </label>
 
