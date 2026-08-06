@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import * as THREE from 'three';
 import { useStore } from '@/store';
-import { isLayoutTransformDragging } from '@/store/persist/hallLayout';
 import { registerLayoutObject, unregisterLayoutObject } from '@/features/shared/layoutRegistry';
 
 type Props = {
@@ -16,7 +15,8 @@ type Props = {
 /**
  * Wraps any editable layout object.
  * - Registers the group in the global layout registry for instant lookup.
- * - Applies saved transforms from props ONLY when not being actively edited.
+ * - Applies saved transforms from props when the gizmo is not mid-drag.
+ *   Selecting an object in Edit Layout must NOT block CMS Hall Map updates.
  */
 export function LayoutEditableGroup({
   name,
@@ -26,9 +26,9 @@ export function LayoutEditableGroup({
   children,
 }: Props) {
   const ref = useRef<THREE.Group>(null);
-  const edit = useStore((s) => s.hallLayoutEditMode);
   const sel = useStore((s) => s.hallLayoutSelection);
-  const isEditing = (edit && sel === name) || (sel === name && isLayoutTransformDragging());
+  const dragging = useStore((s) => s.hallLayoutDragging);
+  const isDraggingThis = sel === name && dragging;
 
   // Register immediately in the layout phase (fires before useEffect)
   useLayoutEffect(() => {
@@ -54,12 +54,12 @@ export function LayoutEditableGroup({
   // Apply saved transforms when not actively being dragged by the gizmo.
   useLayoutEffect(() => {
     const g = ref.current;
-    if (!g || isEditing) return;
+    if (!g || isDraggingThis) return;
 
     g.position.set(position[0], position[1], position[2]);
     g.rotation.set(rotation[0], rotation[1], rotation[2]);
     if (scale) g.scale.set(scale[0], scale[1], scale[2]);
-  }, [isEditing, position, rotation, scale]);
+  }, [isDraggingThis, position, rotation, scale]);
 
   return (
     <group ref={ref}>

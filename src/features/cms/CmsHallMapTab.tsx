@@ -7,6 +7,8 @@ import {
   HELP_DESK_RADIUS,
   BOOTH_ROW_X_WEST,
   BOOTH_ROW_X_EAST,
+  BOOTH_YAW_WEST,
+  BOOTH_YAW_EAST,
   EXPO_AISLE_WEST_X,
   EXPO_AISLE_EAST_X,
   defaultEntranceLobbyZ,
@@ -433,18 +435,25 @@ export function CmsHallMapTab({
 
   const alignRow = useCallback((side: 'west' | 'east') => {
     const targetX = side === 'west' ? BOOTH_ROW_X_WEST : BOOTH_ROW_X_EAST;
+    const targetYaw = side === 'west' ? BOOTH_YAW_WEST : BOOTH_YAW_EAST;
     const rowBooths = booths.filter((b) =>
       side === 'west' ? b.position[0] < 0 : b.position[0] > 0,
     );
     for (const b of rowBooths) {
-      if (Math.abs(b.position[0] - targetX) > 0.01) {
-        void onPatchBooth(b.id, { position: [targetX, b.position[1], b.position[2]] });
+      const needsX = Math.abs(b.position[0] - targetX) > 0.01;
+      const needsYaw = Math.abs(b.rotation[1] - targetYaw) > 0.01;
+      if (needsX || needsYaw) {
+        void onPatchBooth(b.id, {
+          position: [targetX, b.position[1], b.position[2]],
+          rotation: [b.rotation[0], targetYaw, b.rotation[2]],
+        });
       }
     }
   }, [booths, onPatchBooth]);
 
   const distributeRow = useCallback((side: 'west' | 'east') => {
     const targetX = side === 'west' ? BOOTH_ROW_X_WEST : BOOTH_ROW_X_EAST;
+    const targetYaw = side === 'west' ? BOOTH_YAW_WEST : BOOTH_YAW_EAST;
     const rowBooths = booths
       .filter((b) => (side === 'west' ? b.position[0] < 0 : b.position[0] > 0))
       .sort((a, b) => a.position[2] - b.position[2]);
@@ -456,6 +465,7 @@ export function CmsHallMapTab({
       const newZ = snapEnabled ? snap(minZ + spacing * i, snapSize) : minZ + spacing * i;
       void onPatchBooth(rowBooths[i].id, {
         position: [targetX, rowBooths[i].position[1], newZ],
+        rotation: [rowBooths[i].rotation[0], targetYaw, rowBooths[i].rotation[2]],
       });
     }
   }, [booths, onPatchBooth, snapEnabled, snapSize]);

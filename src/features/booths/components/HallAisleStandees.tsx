@@ -11,8 +11,11 @@ const STANDEE_TARGET_HEIGHT = 3.15;
 const ROW_TOLERANCE = 5;
 /** Minimum center-to-center spacing before placing a standee in the gap. */
 const MIN_STANDEE_GAP = 4;
-/** Nudge standee toward hall center so it sits in the aisle-facing gap. */
-const AISLE_INSET = 1.2;
+/**
+ * Slight nudge toward the aisle so the face is visible — keep small so standees
+ * sit in the gap between booths, not in the middle of the walkway.
+ */
+const AISLE_INSET = 0.35;
 
 export type StandeePlacement = {
   id: string;

@@ -381,7 +381,8 @@ export function CmsScenePanel() {
         <span>
           <span className="block text-[11px] font-medium text-white/80">Show aisle digital standees (GLB)</span>
           <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
-            Tall phone-style displays between booth rows (Sketchfab GLB). Off by default — heavy on GPU.
+            Tall displays in the gaps between booths on a row. They auto-move when you reposition
+            booths. Turn off if you do not want them in the walkway. Off by default (heavy on GPU).
           </span>
         </span>
       </label>

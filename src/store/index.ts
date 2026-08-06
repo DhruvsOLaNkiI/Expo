@@ -36,6 +36,7 @@ import {
   normalizeHallId,
   type ExpoHallMeta,
 } from '@/features/shared/data/expoHalls';
+import { parseStandeeGapBoothIds } from '@/features/booths/components/HallAisleStandees';
 import {
   CAMERA_MODE_ORDER,
   type CameraMode,
@@ -307,6 +308,9 @@ interface AppState {
   /** Object `name` in the R3F scene, e.g. `hall-entrance-lobby`, `booth-root-vertex-elite`. */
   hallLayoutSelection: string | null;
   setHallLayoutSelection: (id: string | null) => void;
+  /** True while TransformControls is mid-drag (blocks prop→mesh writes). */
+  hallLayoutDragging: boolean;
+  setHallLayoutDragging: (on: boolean) => void;
   /** Move, rotate, or scale in layout editor gizmo. */
   hallLayoutGizmoMode: 'translate' | 'rotate' | 'scale';
   setHallLayoutGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
@@ -511,7 +515,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (typeof document !== 'undefined' && document.pointerLockElement) {
       document.exitPointerLock();
     }
-    set({ hallLayoutEditMode: on });
+    set({ hallLayoutEditMode: on, hallLayoutDragging: on ? get().hallLayoutDragging : false });
   },
   hallLayoutSelection: null,
   setHallLayoutSelection: (id) => {
@@ -521,6 +525,8 @@ export const useStore = create<AppState>((set, get) => ({
     }
     set({ hallLayoutSelection: id });
   },
+  hallLayoutDragging: false,
+  setHallLayoutDragging: (on) => set({ hallLayoutDragging: on }),
   hallLayoutGizmoMode: 'translate',
   setHallLayoutGizmoMode: (mode) => set({ hallLayoutGizmoMode: mode }),
   hallLayoutRotationAxis: 'E',
@@ -806,6 +812,12 @@ export const useStore = create<AppState>((set, get) => ({
       sceneOverridesByHall: { ...get().sceneOverridesByHall, [hallId]: sceneMerged },
       _boothCmsHydrated: true,
     });
+
+    // Returning visitors may already be in the expo before the async CMS config
+    // arrives. Move them once config is hydrated so they use the CMS ENTRY marker.
+    if (get().expoPhase === 'expo' && !get().isAdmin) {
+      get().teleportPlayer(resolveMainExpoSpawn(mergeHallLayout(sceneMerged.hallLayout)));
+    }
   },
 
   setVisitorLandingHallId: async (hallId) => {
@@ -1107,7 +1119,11 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (options?.teleport !== false && get().expoPhase === 'expo') {
       const meta = getExpoHallMeta(nextHall) ?? get().expoHalls.find((h) => h.hallId === nextHall);
-      const spawn = meta?.spawn ?? resolveMainExpoSpawn(mergeHallLayout(get().sceneOverrides.hallLayout));
+      // Hall Map's green ENTRY marker saves `mainExpoSpawn`. It must take
+      // priority over the static registry spawn so visitors land where CMS set it.
+      const spawn =
+        resolveMainExpoSpawn(mergeHallLayout(get().sceneOverrides.hallLayout)) ??
+        meta?.spawn;
       get().teleportPlayer(spawn);
     }
   },
@@ -1202,6 +1218,32 @@ export const useStore = create<AppState>((set, get) => ({
       console.warn(`[booth-cms] Server saved ${id}, but browser storage is full — visitors will still see the change`);
     }
     set({ lastBoothSaveError: null });
+
+    // Booth moved — drop absolute aisle-standee transforms for gaps touching this booth
+    // so they re-anchor between the new booth positions (not left floating in the old aisle).
+    if (definedPatch.position) {
+      const hall = mergeHallLayout(get().sceneOverrides.hallLayout);
+      const prevTransforms = hall.aisleStandeeTransforms ?? {};
+      const nextTransforms: typeof prevTransforms = {};
+      let removed = false;
+      for (const [gapId, t] of Object.entries(prevTransforms)) {
+        const pair = parseStandeeGapBoothIds(gapId);
+        if (pair && (pair[0] === id || pair[1] === id)) {
+          removed = true;
+          continue;
+        }
+        // Legacy ids like standee-east-builder-4-builder-5
+        if (!pair && gapId.includes(id)) {
+          removed = true;
+          continue;
+        }
+        nextTransforms[gapId] = t;
+      }
+      if (removed) {
+        get().patchSceneOverride({ hallLayout: { aisleStandeeTransforms: nextTransforms } });
+      }
+    }
+
     return true;
   },
 

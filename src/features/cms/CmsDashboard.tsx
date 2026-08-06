@@ -1328,6 +1328,10 @@ export function CmsDashboard() {
                   <>
                   <div className="text-xs font-semibold text-white/60 uppercase tracking-wider pt-1">Rotation (Y-axis)</div>
                   <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
+                    <p className="text-[10px] text-white/40 leading-snug">
+                      East row booths should face the aisle at <strong className="text-white/55">-90°</strong>.
+                      West row at <strong className="text-white/55">90°</strong>. Yaw 0° faces along the hall and looks wrong.
+                    </p>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-white/40 w-8">Yaw</span>
                       <input

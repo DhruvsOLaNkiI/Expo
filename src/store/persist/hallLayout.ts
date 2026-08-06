@@ -24,6 +24,11 @@ let transformDragging = false;
 
 export function setLayoutTransformDragging(active: boolean): void {
   transformDragging = active;
+  try {
+    useStore.getState().setHallLayoutDragging(active);
+  } catch {
+    /* store may not be ready during SSR / early init */
+  }
 }
 
 export function isLayoutTransformDragging(): boolean {
