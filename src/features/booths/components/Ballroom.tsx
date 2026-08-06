@@ -22,8 +22,12 @@ const MAIN_SCREEN = {
   height: 5.5,
 };
 
-const LED_PANEL: [number, number] = [MAIN_SCREEN.width - 0.25, MAIN_SCREEN.height - 0.25];
+const LED_PANEL: [number, number] = [MAIN_SCREEN.width - 0.45, MAIN_SCREEN.height - 0.45];
 const BACKDROP_Z = 0.06;
+/** Hall gold trim — matches vertical pillars so the monitor frame reads clearly. */
+const FRAME_GOLD = '#d4af37';
+const FRAME_GOLD_DARK = '#8a7020';
+const FRAME_T = 0.16;
 
 function BallroomLedDisplay({
   showVideos,
@@ -34,38 +38,112 @@ function BallroomLedDisplay({
 }) {
   const [w, h] = LED_PANEL;
   const screenUrl = resolveBoothLedScreenUrl(stageScreenUrl, BALLROOM_LED.videoUrl, showVideos);
+  const outerW = MAIN_SCREEN.width + 0.12;
+  const outerH = MAIN_SCREEN.height + 0.12;
+  const zFrame = 0.04;
+  const zScreen = 0.08;
+  const innerBezelT = 0.12;
 
   return (
     <group position={MAIN_SCREEN.position}>
-      {/* Deep housing behind panel */}
-      <mesh position={[0, 0, -0.06]}>
-        <boxGeometry args={[MAIN_SCREEN.width + 0.2, MAIN_SCREEN.height + 0.2, 0.14]} />
+      {/* Deep housing behind panel (stays behind the LED) */}
+      <mesh position={[0, 0, -0.12]}>
+        <boxGeometry args={[outerW + 0.08, outerH + 0.08, 0.16]} />
         <meshStandardMaterial color="#0a0a0a" roughness={0.35} metalness={0.75} />
       </mesh>
-      {/* Black bezel frame */}
-      <mesh position={[0, 0, -0.02]}>
-        <boxGeometry args={[MAIN_SCREEN.width + 0.1, MAIN_SCREEN.height + 0.1, 0.06]} />
-        <meshStandardMaterial color="#0c0c0c" metalness={0.85} roughness={0.25} />
+
+      {/* Inner charcoal frame only — not a solid plate (that was covering the video) */}
+      <mesh position={[0, MAIN_SCREEN.height / 2 - innerBezelT / 2, 0]}>
+        <boxGeometry args={[MAIN_SCREEN.width, innerBezelT, 0.06]} />
+        <meshStandardMaterial color="#121212" metalness={0.7} roughness={0.3} />
       </mesh>
-      {/* Active LED surface */}
+      <mesh position={[0, -(MAIN_SCREEN.height / 2 - innerBezelT / 2), 0]}>
+        <boxGeometry args={[MAIN_SCREEN.width, innerBezelT, 0.06]} />
+        <meshStandardMaterial color="#121212" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[-(MAIN_SCREEN.width / 2 - innerBezelT / 2), 0, 0]}>
+        <boxGeometry args={[innerBezelT, MAIN_SCREEN.height - innerBezelT * 2, 0.06]} />
+        <meshStandardMaterial color="#121212" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[MAIN_SCREEN.width / 2 - innerBezelT / 2, 0, 0]}>
+        <boxGeometry args={[innerBezelT, MAIN_SCREEN.height - innerBezelT * 2, 0.06]} />
+        <meshStandardMaterial color="#121212" metalness={0.7} roughness={0.3} />
+      </mesh>
+
+      {/* Gold outer border — four rails */}
+      <mesh position={[0, outerH / 2 - FRAME_T / 2, zFrame]}>
+        <boxGeometry args={[outerW, FRAME_T, 0.1]} />
+        <meshStandardMaterial
+          color={FRAME_GOLD}
+          metalness={0.9}
+          roughness={0.22}
+          emissive={FRAME_GOLD}
+          emissiveIntensity={0.18}
+        />
+      </mesh>
+      <mesh position={[0, -(outerH / 2 - FRAME_T / 2), zFrame]}>
+        <boxGeometry args={[outerW, FRAME_T, 0.1]} />
+        <meshStandardMaterial
+          color={FRAME_GOLD}
+          metalness={0.9}
+          roughness={0.22}
+          emissive={FRAME_GOLD}
+          emissiveIntensity={0.22}
+        />
+      </mesh>
+      <mesh position={[-(outerW / 2 - FRAME_T / 2), 0, zFrame]}>
+        <boxGeometry args={[FRAME_T, outerH - FRAME_T * 2, 0.1]} />
+        <meshStandardMaterial color={FRAME_GOLD} metalness={0.88} roughness={0.24} />
+      </mesh>
+      <mesh position={[outerW / 2 - FRAME_T / 2, 0, zFrame]}>
+        <boxGeometry args={[FRAME_T, outerH - FRAME_T * 2, 0.1]} />
+        <meshStandardMaterial color={FRAME_GOLD} metalness={0.88} roughness={0.24} />
+      </mesh>
+
+      {/* Corner accents */}
+      {(
+        [
+          [-1, 1],
+          [1, 1],
+          [-1, -1],
+          [1, -1],
+        ] as const
+      ).map(([sx, sy]) => (
+        <mesh
+          key={`c-${sx}-${sy}`}
+          position={[(outerW / 2 - FRAME_T * 0.55) * sx, (outerH / 2 - FRAME_T * 0.55) * sy, zFrame + 0.02]}
+        >
+          <boxGeometry args={[FRAME_T * 1.35, FRAME_T * 1.35, 0.06]} />
+          <meshStandardMaterial color={FRAME_GOLD_DARK} metalness={0.92} roughness={0.2} />
+        </mesh>
+      ))}
+
+      {/* Active LED surface — in front of frame rails */}
       <Suspense fallback={<LedScreenSuspenseFallback args={LED_PANEL} />}>
         {screenUrl ? (
-          <LedScreenSurface args={LED_PANEL} url={screenUrl} position={[0, 0, 0.02]} />
+          <LedScreenSurface args={LED_PANEL} url={screenUrl} position={[0, 0, zScreen]} />
         ) : (
-          <mesh position={[0, 0, 0.02]}>
+          <mesh position={[0, 0, zScreen]}>
             <planeGeometry args={LED_PANEL} />
             <meshStandardMaterial color="#050505" metalness={0.6} roughness={0.35} />
           </mesh>
         )}
       </Suspense>
-      {/* Bottom bezel lip */}
-      <mesh position={[0, -h / 2 - 0.06, 0.03]}>
-        <boxGeometry args={[w * 0.92, 0.05, 0.03]} />
-        <meshStandardMaterial color="#080808" metalness={0.8} roughness={0.3} />
+
+      {/* Thin gold lip under screen */}
+      <mesh position={[0, -h / 2 - 0.04, zFrame]}>
+        <boxGeometry args={[w * 0.98, 0.04, 0.05]} />
+        <meshStandardMaterial
+          color={FRAME_GOLD}
+          metalness={0.9}
+          roughness={0.2}
+          emissive={FRAME_GOLD}
+          emissiveIntensity={0.15}
+        />
       </mesh>
-      {/* LED backlight glow effect */}
+
       <pointLight
-        position={[0, 0, -0.1]}
+        position={[0, 0, -0.15]}
         intensity={18}
         distance={6}
         decay={2}
