@@ -1087,6 +1087,7 @@ export function StandardLuxuryBooth({
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         standeeImageUrl={standeeImageUrl}
+        projectLogoUrl={projectLogoUrl}
       />
 
       <VertexEliteProximityPanels
@@ -1209,8 +1210,8 @@ export function EcoEdenBooth({
   /** Standing signage screen — fixed so wall-color themes do not repaint this panel. */
   const signageScreenColor = '#fafaf8';
   const glow = leafGreen;
-  // Dashboard “Standee poster” + legacy signageImageUrl both drive this board.
-  const standingPosterUrl = sanitizeBoothLogoUrlForWebGL(standeeImageUrl || signageImageUrl);
+  // Dashboard “Standee poster” + project logo + legacy signageImageUrl drive this board.
+  const standingPosterUrl = sanitizeBoothLogoUrlForWebGL(standeeImageUrl || projectLogoUrl || signageImageUrl);
   const standingTitle = resolveBoothHeaderBranding({
     name,
     headerBranding,
@@ -1652,6 +1653,7 @@ export function VertexEliteBooth({
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         standeeImageUrl={standeeImageUrl}
+        projectLogoUrl={projectLogoUrl}
       />
 
       <VertexEliteProximityPanels
@@ -1703,6 +1705,7 @@ export function BoothStandee({
   headerBranding,
   companyTagline,
   standeeImageUrl,
+  projectLogoUrl,
 }: {
   name: string;
   accent: string;
@@ -1711,6 +1714,8 @@ export function BoothStandee({
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   companyTagline?: string;
   standeeImageUrl?: string;
+  /** Used on the standee when no dedicated standee poster is uploaded. */
+  projectLogoUrl?: string;
 }) {
   const showBoothStandee = useStore(
     (s) => mergeSceneConfig(s.sceneOverrides).showBoothStandee,
@@ -1720,7 +1725,8 @@ export function BoothStandee({
   const w = 1.45;
   const h = 2.4;
   const frameT = 0.05;
-  const posterUrl = sanitizeBoothLogoUrlForWebGL(standeeImageUrl);
+  // Prefer dedicated standee art; otherwise show the project logo on every booth standee.
+  const posterUrl = sanitizeBoothLogoUrlForWebGL(standeeImageUrl || projectLogoUrl);
   // Standee follows the project name set in Booth Setup, not the built-in booth name.
   const standeeTitle = resolveBoothHeaderBranding({ name, headerBranding, companyTagline }).projectName;
   return (

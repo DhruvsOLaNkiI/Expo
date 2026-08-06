@@ -55,6 +55,7 @@ export function HorizonVistasBooth({
   counterFrontImageUrl,
   wallPlacementAdjustments,
   standeeImageUrl,
+  projectLogoUrl,
   placedImages,
   brochureUrl = '',
   priceListUrl = '',
@@ -91,6 +92,7 @@ export function HorizonVistasBooth({
   counterFrontImageUrl?: string;
   wallPlacementAdjustments?: BoothWallPlacementAdjustments;
   standeeImageUrl?: string;
+  projectLogoUrl?: string;
   lighting: BoothLighting;
   placedImages: PlacedImage[];
   brochureUrl?: string;
@@ -310,6 +312,7 @@ export function HorizonVistasBooth({
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         standeeImageUrl={standeeImageUrl}
+        projectLogoUrl={projectLogoUrl}
       />
 
       <VertexEliteProximityPanels

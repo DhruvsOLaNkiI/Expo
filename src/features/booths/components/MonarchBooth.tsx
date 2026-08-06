@@ -13,7 +13,6 @@ import {
   resolveBoothHeaderBranding,
   resolveFasciaLayout,
 } from '@/features/shared/data/boothLayouts';
-import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
 import { PooledBoothLight } from './BoothLightPool';
@@ -311,6 +310,7 @@ export function MonarchBooth({
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         standeeImageUrl={standeeImageUrl}
+        projectLogoUrl={projectLogoUrl}
       />
 
       <VertexEliteProximityPanels

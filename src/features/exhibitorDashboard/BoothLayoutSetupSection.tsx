@@ -317,8 +317,8 @@ export function BoothLayoutSetupSection({
         <div className="exb-booth-layout-field">
           <span className="exb-booth-layout-label">
             {boothId === 'builder-8'
-              ? 'Standing signage board · poster beside the desk'
-              : 'Standee poster · roll-up beside the desk'}
+              ? 'Standing signage board · poster beside the desk (uses project logo if empty)'
+              : 'Standee poster · roll-up beside the desk (uses project logo if empty)'}
           </span>
           <div className="exb-asset-logo-row">
             {standeeImageUrl ? (

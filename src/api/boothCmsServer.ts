@@ -11,6 +11,7 @@ export const SHARED_BOOTH_DOC_KEYS = [
   'siteMapUrl',
   'siteMapGallery',
   'headerLogoUrl',
+  'projectLogoUrl',
   'wallLogoLeftUrl',
   'wallLogoRightUrl',
   'sideWallLeftImageUrl',

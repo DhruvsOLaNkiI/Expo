@@ -299,6 +299,7 @@ export function CrownEstatesBooth({
         headerBranding={headerBranding}
         companyTagline={company?.tagline}
         standeeImageUrl={standeeImageUrl}
+        projectLogoUrl={projectLogoUrl}
       />
 
       <VertexEliteProximityPanels
