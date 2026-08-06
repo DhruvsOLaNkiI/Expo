@@ -442,6 +442,8 @@ export type HallLayoutConfig = {
   entranceLobbyOffset: [number, number, number];
   /** Added to default banner anchor `[0, 6, -4.5]` inside the lobby group. */
   receptionBannerOffset: [number, number, number];
+  /** Absolute yaw (radians) of the entrance wall TV set via Edit Layout rotate — undefined = auto-face the spawn point. */
+  receptionBannerRotationY?: number;
   /** Decorative tree world positions (up to four in Edit layout). */
   plantPositions: [number, number, number][];
   plantScales: number[];
@@ -770,6 +772,8 @@ export type SceneConfig = {
   ballroomStageScreenUrl?: string;
   /** Center suspended LED ring (help desk canopy) — MP4/WebM or image. Empty = default expo video. */
   hallCanopyScreenUrl?: string;
+  /** Entrance / spawn-facing wall LED — MP4/WebM or image. Empty = default expo video. */
+  entranceWallScreenUrl?: string;
   /** Show roaming executive animated model. */
   showRoamingExecutive: boolean;
   /** Show video planes (expensive video decoding). */
@@ -836,6 +840,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showBallroom: true,
   ballroomStageScreenUrl: '',
   hallCanopyScreenUrl: '',
+  entranceWallScreenUrl: '',
   showRoamingExecutive: false,
   showVideos: true,
   showHallCanopy: true,

@@ -403,6 +403,7 @@ export function CmsDashboard() {
 
   const [hallBallroomUrl, setHallBallroomUrl] = useState('');
   const [hallCanopyUrl, setHallCanopyUrl] = useState('');
+  const [hallEntranceUrl, setHallEntranceUrl] = useState('');
 
   const [px, setPx] = useState('0'); const [py, setPy] = useState('0'); const [pz, setPz] = useState('0');
   const [rxDeg, setRxDeg] = useState('0'); const [ryDeg, setRyDeg] = useState('0'); const [rzDeg, setRzDeg] = useState('0');
@@ -434,7 +435,13 @@ export function CmsDashboard() {
     if (!isHallDisplay) return;
     setHallBallroomUrl(sceneConfig.ballroomStageScreenUrl ?? '');
     setHallCanopyUrl(sceneConfig.hallCanopyScreenUrl ?? '');
-  }, [isHallDisplay, sceneConfig.ballroomStageScreenUrl, sceneConfig.hallCanopyScreenUrl]);
+    setHallEntranceUrl(sceneConfig.entranceWallScreenUrl ?? '');
+  }, [
+    isHallDisplay,
+    sceneConfig.ballroomStageScreenUrl,
+    sceneConfig.hallCanopyScreenUrl,
+    sceneConfig.entranceWallScreenUrl,
+  ]);
 
   const loadForm = useCallback((b: BoothLayoutConfig) => {
     setPx(String(b.position[0])); setPy(String(b.position[1])); setPz(String(b.position[2]));
@@ -544,7 +551,11 @@ export function CmsDashboard() {
   );
 
   const persistHallDisplayField = useCallback(
-    async (field: 'ballroomStageScreenUrl' | 'hallCanopyScreenUrl', url: string, label: string) => {
+    async (
+      field: 'ballroomStageScreenUrl' | 'hallCanopyScreenUrl' | 'entranceWallScreenUrl',
+      url: string,
+      label: string,
+    ) => {
       patchScene({ [field]: url.trim() });
       showToast(`${label} saved`);
     },
@@ -590,6 +601,7 @@ export function CmsDashboard() {
       patchScene({
         ballroomStageScreenUrl: hallBallroomUrl.trim(),
         hallCanopyScreenUrl: hallCanopyUrl.trim(),
+        entranceWallScreenUrl: hallEntranceUrl.trim(),
       });
       showToast('Hall display saved');
       return;
@@ -1024,9 +1036,10 @@ export function CmsDashboard() {
               type="button"
               className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[11px] text-white/50 hover:bg-white/[0.05] transition-colors"
               onClick={() => {
-                patchScene({ ballroomStageScreenUrl: '', hallCanopyScreenUrl: '' });
+                patchScene({ ballroomStageScreenUrl: '', hallCanopyScreenUrl: '', entranceWallScreenUrl: '' });
                 setHallBallroomUrl('');
                 setHallCanopyUrl('');
+                setHallEntranceUrl('');
                 showToast('Hall displays reset to defaults');
               }}
             >
@@ -1166,6 +1179,11 @@ export function CmsDashboard() {
                   setCanopyUrl={(url) => {
                     setHallCanopyUrl(url);
                     patchScene({ hallCanopyScreenUrl: url.trim() });
+                  }}
+                  entranceUrl={hallEntranceUrl}
+                  setEntranceUrl={(url) => {
+                    setHallEntranceUrl(url);
+                    patchScene({ entranceWallScreenUrl: url.trim() });
                   }}
                 />
               ) : (
@@ -1586,7 +1604,11 @@ function AllDisplaysPanel({
 }: {
   booths: BoothLayoutConfig[];
   sceneConfig: SceneConfig;
-  patchScene: (patch: { ballroomStageScreenUrl?: string; hallCanopyScreenUrl?: string }) => void;
+  patchScene: (patch: {
+    ballroomStageScreenUrl?: string;
+    hallCanopyScreenUrl?: string;
+    entranceWallScreenUrl?: string;
+  }) => void;
   persistBoothDocumentField: (
     boothId: string,
     field: 'videoUrl' | 'stageScreenUrl' | 'signageImageUrl',
@@ -1599,13 +1621,22 @@ function AllDisplaysPanel({
 }) {
   const [ballroomUrl, setBallroomUrl] = useState(sceneConfig.ballroomStageScreenUrl ?? '');
   const [canopyUrl, setCanopyUrl] = useState(sceneConfig.hallCanopyScreenUrl ?? '');
+  const [entranceUrl, setEntranceUrl] = useState(sceneConfig.entranceWallScreenUrl ?? '');
 
   useEffect(() => {
     setBallroomUrl(sceneConfig.ballroomStageScreenUrl ?? '');
     setCanopyUrl(sceneConfig.hallCanopyScreenUrl ?? '');
-  }, [sceneConfig.ballroomStageScreenUrl, sceneConfig.hallCanopyScreenUrl]);
+    setEntranceUrl(sceneConfig.entranceWallScreenUrl ?? '');
+  }, [
+    sceneConfig.ballroomStageScreenUrl,
+    sceneConfig.hallCanopyScreenUrl,
+    sceneConfig.entranceWallScreenUrl,
+  ]);
 
-  const saveHall = (field: 'ballroomStageScreenUrl' | 'hallCanopyScreenUrl', url: string) => {
+  const saveHall = (
+    field: 'ballroomStageScreenUrl' | 'hallCanopyScreenUrl' | 'entranceWallScreenUrl',
+    url: string,
+  ) => {
     patchScene({ [field]: url.trim() });
   };
 
@@ -1618,6 +1649,16 @@ function AllDisplaysPanel({
 
       <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] p-4">
         <h4 className="mb-2 text-xs font-bold text-cyan-200">Hall displays</h4>
+        <HallLedMediaField
+          label="Entrance wall TV (faces spawn)"
+          hint="Large LED in front of the gold entry ring."
+          value={entranceUrl}
+          onChange={(url) => {
+            setEntranceUrl(url);
+            saveHall('entranceWallScreenUrl', url);
+          }}
+          uploadFolder="entrance-wall"
+        />
         <HallLedMediaField
           label="Ballroom stage (east wall)"
           hint="Large LED behind the podium — Fast Travel → Ballroom stage."
@@ -1747,11 +1788,15 @@ function HallBigDisplayPanel({
   setBallroomUrl,
   canopyUrl,
   setCanopyUrl,
+  entranceUrl,
+  setEntranceUrl,
 }: {
   ballroomUrl: string;
   setBallroomUrl: (v: string) => void;
   canopyUrl: string;
   setCanopyUrl: (v: string) => void;
+  entranceUrl: string;
+  setEntranceUrl: (v: string) => void;
 }) {
   return (
     <>
@@ -1759,6 +1804,22 @@ function HallBigDisplayPanel({
       <p className="mb-3 text-[10px] leading-relaxed text-white/40">
         Manage the large hall LED screens — upload an image or video; changes save automatically and preview live on the left.
       </p>
+      <HallLedMediaField
+        label="Entrance wall TV (faces spawn)"
+        hint="Large LED in front of the gold entry ring. Edit Layout → Large LED wall to move it."
+        value={entranceUrl}
+        onChange={setEntranceUrl}
+        uploadFolder="entrance-wall"
+      />
+      {entranceUrl.trim() && (
+        <div className="mb-3 overflow-hidden rounded-lg border border-white/[0.08]">
+          {/\.(mp4|webm)(\?|$)/i.test(entranceUrl.trim()) ? (
+            <video src={entranceUrl.trim()} className="max-h-28 w-full object-contain bg-black" muted playsInline controls />
+          ) : (
+            <img src={entranceUrl.trim()} alt="Entrance TV preview" className="max-h-28 w-full object-contain bg-black" />
+          )}
+        </div>
+      )}
       <HallLedMediaField
         label="Ballroom stage (east wall)"
         hint="Main hall big screen behind the podium. Fast Travel → Ballroom stage."

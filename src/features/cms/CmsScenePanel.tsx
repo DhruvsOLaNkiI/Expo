@@ -310,6 +310,13 @@ export function CmsScenePanel() {
         onChange={(url) => patchScene({ hallCanopyScreenUrl: url })}
         uploadFolder="hall-canopy"
       />
+      <HallLedMediaField
+        label="Entrance wall TV (faces visitor spawn)"
+        hint="Large LED in front of the gold entry ring — Edit Layout → Entrance wall TV to move it."
+        value={cfg.entranceWallScreenUrl ?? ''}
+        onChange={(url) => patchScene({ entranceWallScreenUrl: url })}
+        uploadFolder="entrance-wall"
+      />
       
       <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
         <input

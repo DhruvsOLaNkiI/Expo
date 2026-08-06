@@ -19,7 +19,7 @@ import {
 const HALL_OPTIONS: { id: string; label: string }[] = [
   { id: 'hall-entry-spawn', label: 'Entry spawn (visitor start)' },
   { id: 'hall-entrance-lobby', label: 'Entrance lobby (desk + zone)' },
-  { id: 'hall-reception-banner', label: 'Large LED wall' },
+  { id: 'hall-reception-banner', label: 'Entrance wall TV' },
   { id: 'hall-plant-0', label: 'Tree 1' },
   { id: 'hall-plant-1', label: 'Tree 2' },
   { id: 'hall-plant-2', label: 'Tree 3' },

@@ -18,10 +18,33 @@ import {
 
 /** Main entrance LED — use an asset that exists in /public */
 const RECEPTION_LED_VIDEO = '/13391496_3840_2160_60fps.mp4';
-const RECEPTION_LED_SIZE: [number, number] = [12, 5.5];
+const RECEPTION_LED_SIZE: [number, number] = [10, 4.8];
+/** Preferred distance in front of visitor spawn for the entrance wall TV — clamped to the nearest real wall. */
+const ENTRANCE_TV_FORWARD = 5.2;
+/** Gap kept between the TV back panel and the wall surface it's mounted flush against. */
+const ENTRANCE_TV_WALL_MARGIN = 0.4;
+/** Never place the TV closer than this to spawn, even if a wall is very near. */
+const ENTRANCE_TV_MIN_FORWARD = 2;
 
-/** South-entrance reception desk + building LED — off until re-enabled. */
-const SHOW_ENTRANCE_RECEPTION = false;
+/**
+ * Distance from `origin` to the hall's rectangular perimeter (±halfW × ±halfD)
+ * along `(dirX, dirZ)`. Returns `Infinity` if the ray is parallel to an axis
+ * and never reaches that pair of walls.
+ */
+function distanceToHallWall(
+  originX: number,
+  originZ: number,
+  dirX: number,
+  dirZ: number,
+  halfW: number,
+  halfD: number,
+): number {
+  const EPS = 1e-6;
+  const tX = Math.abs(dirX) > EPS ? ((dirX > 0 ? halfW : -halfW) - originX) / dirX : Infinity;
+  const tZ = Math.abs(dirZ) > EPS ? ((dirZ > 0 ? halfD : -halfD) - originZ) / dirZ : Infinity;
+  const candidates = [tX, tZ].filter((t) => Number.isFinite(t) && t > 0);
+  return candidates.length ? Math.min(...candidates) : ENTRANCE_TV_FORWARD;
+}
 
 /** Cream-whitish convention hall palette (matches live expo look) */
 const HALL_CREAM_WALL = '#f6f3ec';
@@ -49,9 +72,47 @@ export function ExpoHall({ showVideos = false }: { showVideos?: boolean }) {
   const gridLineCountX = Math.floor(hallWidth / gridStep) + 1;
   const gridLineCountZ = Math.floor(hallDepth / gridStep) + 1;
   const [ox, oy, oz] = hallLayout.entranceLobbyOffset;
-  const [bx, by, bz] = hallLayout.receptionBannerOffset;
   const entrySpawn = resolveMainExpoSpawn(hallLayout);
   const entrySpawnYaw = resolveMainExpoSpawnYaw(hallLayout);
+  const entranceScreenUrl =
+    (sceneCfg.entranceWallScreenUrl ?? '').trim() || RECEPTION_LED_VIDEO;
+  // Place TV in front of spawn, facing the visitor (screen normal toward spawn) —
+  // clamp to the nearest real wall so it never ends up outside the hall (invisible).
+  const entranceForwardX = -Math.sin(entrySpawnYaw);
+  const entranceForwardZ = -Math.cos(entrySpawnYaw);
+  const entranceWallDist = distanceToHallWall(
+    entrySpawn[0],
+    entrySpawn[2],
+    entranceForwardX,
+    entranceForwardZ,
+    halfW,
+    halfD,
+  );
+  const entranceForwardDist = Math.max(
+    ENTRANCE_TV_MIN_FORWARD,
+    Math.min(ENTRANCE_TV_FORWARD, entranceWallDist - ENTRANCE_TV_WALL_MARGIN),
+  );
+  const entranceTvDefault: [number, number, number] = [
+    entrySpawn[0] + entranceForwardX * entranceForwardDist,
+    3.1,
+    entrySpawn[2] + entranceForwardZ * entranceForwardDist,
+  ];
+  const [rbx, rby, rbz] = hallLayout.receptionBannerOffset;
+  const hasBannerOverride = Math.abs(rbx) > 0.01 || Math.abs(rby) > 0.01 || Math.abs(rbz) > 0.01;
+  // Offset mode (legacy Edit Layout): add to spawn-relative default.
+  // Absolute mode: if Y is a plausible world height (~1–8m) treat XYZ as world position.
+  const bannerLooksAbsolute = hasBannerOverride && rby > 0.5 && rby < 10;
+  const entranceTvPos: [number, number, number] = bannerLooksAbsolute
+    ? [rbx, rby, rbz]
+    : [
+        entranceTvDefault[0] + rbx,
+        entranceTvDefault[1] + rby,
+        entranceTvDefault[2] + rbz,
+      ];
+  const entranceTvYaw =
+    typeof hallLayout.receptionBannerRotationY === 'number'
+      ? hallLayout.receptionBannerRotationY
+      : entrySpawnYaw + Math.PI;
 
   return (
     <group>
@@ -232,85 +293,75 @@ export function ExpoHall({ showVideos = false }: { showVideos?: boolean }) {
         </Html>
       </LayoutEditableGroup>
 
-      {/* ======= ENTRANCE LOBBY (layout anchors kept; desk + LED hidden) ======= */}
-      <group name="hall-entrance-lobby" position={[ox, oy, entranceZ + oz]}>
-        {SHOW_ENTRANCE_RECEPTION && (
-          <>
-            <group position={[0, 0.4, -2.5]}>
-              <mesh position={[0, 0, 0]} castShadow>
-                <boxGeometry args={[5, 0.8, 0.8]} />
-                <meshStandardMaterial color="#fdfaf5" metalness={0.05} roughness={0.3} />
-              </mesh>
-              <mesh position={[0, 0.45, 0.15]} castShadow>
-                <boxGeometry args={[5.2, 0.15, 1]} />
-                <meshStandardMaterial color="#d4af37" metalness={0.9} roughness={0.1} />
-              </mesh>
-            </group>
-            <group name="hall-reception-banner" position={[bx, 3.2 + by, -2.2 + bz]} rotation={[0, Math.PI, 0]}>
-              <ReceptionLedWall showVideos={showVideos} />
-            </group>
-          </>
-        )}
-      </group>
+      {/* ======= ENTRANCE WALL TV (faces visitor spawn) ======= */}
+      <LayoutEditableGroup
+        name="hall-reception-banner"
+        position={entranceTvPos}
+        rotation={[0, entranceTvYaw, 0]}
+      >
+        <ReceptionLedWall
+          showVideos={showVideos || Boolean((sceneCfg.entranceWallScreenUrl ?? '').trim())}
+          screenUrl={entranceScreenUrl}
+        />
+      </LayoutEditableGroup>
+
+      {/* Entrance lobby anchor kept for Edit layout / map */}
+      <group name="hall-entrance-lobby" position={[ox, oy, entranceZ + oz]} />
       {/* Vertex Elite + luxury stalls are defined in Booths.tsx */}
     </group>
   );
 }
 
 /** Premium LED wall with dark bezel so the panel never blows out to flat white */
-function ReceptionLedWall({ showVideos }: { showVideos: boolean }) {
+function ReceptionLedWall({
+  showVideos,
+  screenUrl,
+}: {
+  showVideos: boolean;
+  screenUrl: string;
+}) {
   const [w, h] = RECEPTION_LED_SIZE;
+  const url = screenUrl.trim() || RECEPTION_LED_VIDEO;
   return (
     <group>
-      <mesh position={[-(w / 2 + 0.35), -h / 2 + 0.2, 0]}>
-        <cylinderGeometry args={[0.08, 0.08, h + 0.4, 12]} />
+      <mesh position={[-(w / 2 + 0.28), 0, 0.02]}>
+        <cylinderGeometry args={[0.07, 0.07, h + 0.35, 12]} />
         <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
       </mesh>
-      <mesh position={[w / 2 + 0.35, -h / 2 + 0.2, 0]}>
-        <cylinderGeometry args={[0.08, 0.08, h + 0.4, 12]} />
+      <mesh position={[w / 2 + 0.28, 0, 0.02]}>
+        <cylinderGeometry args={[0.07, 0.07, h + 0.35, 12]} />
         <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
       </mesh>
 
       {/* Deep housing — always dark */}
-      <mesh position={[0, 0, -0.14]}>
-        <boxGeometry args={[w + 0.5, h + 0.5, 0.22]} />
+      <mesh position={[0, 0, -0.12]}>
+        <boxGeometry args={[w + 0.45, h + 0.45, 0.22]} />
         <meshStandardMaterial color="#0a0a10" metalness={0.85} roughness={0.2} />
       </mesh>
-      <mesh position={[0, 0, -0.06]}>
-        <boxGeometry args={[w + 0.22, h + 0.22, 0.08]} />
+      <mesh position={[0, 0, -0.04]}>
+        <boxGeometry args={[w + 0.2, h + 0.2, 0.08]} />
         <meshStandardMaterial color="#1a1a22" emissive="#d4af37" emissiveIntensity={0.2} metalness={0.9} roughness={0.15} />
       </mesh>
 
-      {showVideos ? (
+      {showVideos || url ? (
         <Suspense fallback={<LedScreenSuspenseFallback args={RECEPTION_LED_SIZE} />}>
-          <LedScreenSurface args={RECEPTION_LED_SIZE} url={RECEPTION_LED_VIDEO} position={[0, 0, -0.02]} />
+          <LedScreenSurface args={RECEPTION_LED_SIZE} url={url} position={[0, 0, 0.01]} />
         </Suspense>
       ) : (
-        <mesh position={[0, 0, -0.02]}>
+        <mesh position={[0, 0, 0.01]}>
           <planeGeometry args={RECEPTION_LED_SIZE} />
           <meshStandardMaterial color="#08080c" metalness={0.7} roughness={0.25} />
         </mesh>
       )}
 
-      <mesh position={[0, 4.6, 0]}>
-        <boxGeometry args={[w + 0.3, 0.2, 0.2]} />
+      <mesh position={[0, h / 2 + 0.18, 0]}>
+        <boxGeometry args={[w + 0.25, 0.16, 0.16]} />
         <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
       </mesh>
-      <mesh position={[0, -4.6, 0]}>
-        <boxGeometry args={[w + 0.3, 0.2, 0.2]} />
+      <mesh position={[0, -(h / 2 + 0.18), 0]}>
+        <boxGeometry args={[w + 0.25, 0.16, 0.16]} />
         <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
       </mesh>
-
-      {/* Soft accent — not a flood (old 95 intensity washed the whole hall white) */}
-      <spotLight
-        position={[0, 3, 2.5]}
-        angle={0.55}
-        penumbra={0.85}
-        intensity={22}
-        color="#ffe8c8"
-        distance={28}
-        decay={2}
-      />
     </group>
   );
 }

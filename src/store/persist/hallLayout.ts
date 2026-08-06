@@ -15,8 +15,6 @@ import {
 import { REG_RECEPTION_Z } from '@/features/shared/data/registrationHall';
 import { getLayoutObject } from '@/features/shared/layoutRegistry';
 
-const BANNER_LOCAL_BASE: [number, number, number] = [0, 6, -4.5];
-
 let sceneRef: THREE.Scene | null = null;
 let activeTarget: THREE.Object3D | null = null;
 let activeSelection: string | null = null;
@@ -118,13 +116,11 @@ export function persistHallLayoutTransform(selection: string, obj: THREE.Object3
   }
 
   if (selection === 'hall-reception-banner') {
+    // Store absolute world position + rotation so the TV stays exactly where/how the admin placed it.
     patchSceneOverride({
       hallLayout: {
-        receptionBannerOffset: [
-          obj.position.x - BANNER_LOCAL_BASE[0],
-          obj.position.y - BANNER_LOCAL_BASE[1],
-          obj.position.z - BANNER_LOCAL_BASE[2],
-        ],
+        receptionBannerOffset: [obj.position.x, obj.position.y, obj.position.z],
+        receptionBannerRotationY: obj.rotation.y,
       },
     });
     return true;
