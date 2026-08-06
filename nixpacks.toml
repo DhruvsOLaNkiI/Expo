@@ -1,6 +1,9 @@
 # Coolify / Nixpacks: run Node after build so /api/* (R2 upload, chat, visitors) works.
+# Coolify often ships Node 22.11 while @vitejs/plugin-react 5.2+ wants >=22.12.
+# Pin plugin-react in package.json + disable engine-strict so install does not abort.
 [variables]
 NIXPACKS_NODE_VERSION = "22"
+NPM_CONFIG_ENGINE_STRICT = "false"
 
 [phases.build]
 cmds = ["npm run build"]
