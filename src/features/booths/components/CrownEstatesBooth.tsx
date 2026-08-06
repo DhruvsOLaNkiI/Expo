@@ -1,5 +1,4 @@
 import { Suspense, useMemo } from 'react';
-import { Text } from '@react-three/drei';
 import type {
   BoothHeaderBranding,
   CompanyProfile,
@@ -9,7 +8,6 @@ import type {
   HostessQuickReply,
   UnitLayoutItem,
 } from '@/features/shared/data/boothLayouts';
-import { resolveFasciaLayout } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
@@ -126,10 +124,6 @@ export function CrownEstatesBooth({
         safeProjectLogo ? true : (safeHeaderLogo ? (hb.hideRera ?? true) : hb.hideRera),
     };
   }, [headerBranding, name, safeHeaderLogo, safeProjectLogo]);
-  const { hideCenterText } = resolveFasciaLayout(
-    effectiveHeaderBranding,
-    Boolean(safeProjectLogo),
-  );
 
   const champagneGold = accent?.trim() || '#dcb670';
   const glowColor = CROWN_ESTATES_THEME.glow;
@@ -222,18 +216,7 @@ export function CrownEstatesBooth({
           {goldMat}
         </mesh>
         
-        {!hideCenterText ? (
-          <Text
-            position={[0, 0, 0.51]}
-            fontSize={0.25}
-            color={champagneGold}
-            anchorX="center"
-            anchorY="middle"
-          >
-            {name}
-            <meshStandardMaterial attach="material" color={champagneGold} metalness={0.9} roughness={0.1} />
-          </Text>
-        ) : null}
+        {/* Desk front branding comes from counter-front image only (no baked-in “CROWN ESTATES”). */}
 
         {/* Counter LED TV */}
         <BoothDisplayEditable
