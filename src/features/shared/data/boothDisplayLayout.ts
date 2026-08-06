@@ -83,7 +83,7 @@ export const LUXURY_BOOTH_DISPLAY_DEFAULTS = {
     rotation: [0, -Math.PI / 6, 0] as [number, number, number],
   },
   ceilingBoard: {
-    position: [0, 7.15, -3.55] as [number, number, number],
+    position: [0, 7.15, -2.75] as [number, number, number],
     rotation: [0, 0, 0] as [number, number, number],
   },
 } satisfies Record<'main' | 'counter' | 'standee' | 'signage' | 'ceilingBoard', BoothDisplayTransform>;

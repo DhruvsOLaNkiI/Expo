@@ -1,16 +1,12 @@
 import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Suspense, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import {
   resolveBoothHeaderBranding,
-  resolveFasciaLayout,
-  resolveHeaderLogoScale,
   HALL_HEIGHT,
   type BoothHeaderBranding,
 } from '@/features/shared/data/boothLayouts';
-import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
-import { BoothFasciaLogo } from './BoothSignageFascia';
 
 const FONT =
   'https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf';
@@ -21,15 +17,12 @@ const _worldScale = new THREE.Vector3();
 /**
  * Ceiling-hung project name board — white face, thick gold frame, two suspension rods
  * that always stretch up to the hall ceiling (even after Edit Layout moves the board).
- * Shows header / project logo when uploaded; falls back to project name text.
+ * Text only — logos stay on the attached booth top fascia bar.
  */
 export function BoothCeilingHangingBoard({
   boothName,
   headerBranding,
   companyTagline,
-  headerLogoUrl,
-  projectLogoUrl,
-  fallbackLogoUrl,
   accent = '#d4af37',
   /** Title + underline color — defaults to accent; set separately for multi-color branding. */
   textColor,
@@ -41,10 +34,6 @@ export function BoothCeilingHangingBoard({
   boothName: string;
   headerBranding?: BoothHeaderBranding;
   companyTagline?: string;
-  headerLogoUrl?: string;
-  projectLogoUrl?: string;
-  /** Used when header/project logos are empty (e.g. wall logo already uploaded). */
-  fallbackLogoUrl?: string;
   accent?: string;
   textColor?: string;
   boardColor?: string;
@@ -68,21 +57,6 @@ export function BoothCeilingHangingBoard({
   const titleSize = Math.min(0.42, width * 0.055);
   const rodXs = useMemo(() => [-width * 0.32, width * 0.32] as const, [width]);
   const underlineW = Math.min(width * 0.42, title.length * titleSize * 0.42);
-
-  const leftLogoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
-  const rightLogoUrl = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
-  const wallFallbackUrl = sanitizeBoothLogoUrlForWebGL(fallbackLogoUrl);
-  const primaryLogoUrl = leftLogoUrl || rightLogoUrl || wallFallbackUrl;
-  const logoScale = resolveHeaderLogoScale(headerBranding);
-  const { centerLogo, hideCenterText } = resolveFasciaLayout(
-    headerBranding,
-    Boolean(rightLogoUrl),
-  );
-  // One logo → center it on the hanging board. Two logos → left + right with title.
-  const showCenterLogo = Boolean(primaryLogoUrl) && (centerLogo || !(leftLogoUrl && rightLogoUrl));
-  const showLeftLogo = Boolean(leftLogoUrl) && !showCenterLogo;
-  const showRightLogo = Boolean(rightLogoUrl) && !showCenterLogo && rightLogoUrl !== leftLogoUrl;
-  const showTitle = !hideCenterText && !showCenterLogo;
 
   // Stretch rods so their tops sit flush under the hall ceiling in world space.
   useFrame(() => {
@@ -182,66 +156,38 @@ export function BoothCeilingHangingBoard({
         </mesh>
       ))}
 
-      {showCenterLogo && primaryLogoUrl ? (
-        <Suspense fallback={null}>
-          <group position={[0, 0, zFace]}>
-            <BoothFasciaLogo url={primaryLogoUrl} scale={logoScale * 1.15} variant="center" />
-          </group>
-        </Suspense>
-      ) : null}
+      <Text
+        position={[0, 0.08, zFace]}
+        fontSize={titleSize}
+        color={titleColor}
+        anchorX="center"
+        anchorY="middle"
+        letterSpacing={0.08}
+        maxWidth={width - 0.6}
+        textAlign="center"
+        font={FONT}
+      >
+        {title}
+        <meshStandardMaterial
+          attach="material"
+          color={titleColor}
+          emissive={titleColor}
+          emissiveIntensity={0.35}
+          metalness={0.45}
+          roughness={0.35}
+        />
+      </Text>
 
-      {showLeftLogo && leftLogoUrl ? (
-        <Suspense fallback={null}>
-          <group position={[-width * 0.32, 0, zFace]}>
-            <BoothFasciaLogo url={leftLogoUrl} scale={logoScale} />
-          </group>
-        </Suspense>
-      ) : null}
-
-      {showRightLogo && rightLogoUrl ? (
-        <Suspense fallback={null}>
-          <group position={[width * 0.32, 0, zFace]}>
-            <BoothFasciaLogo url={rightLogoUrl} scale={logoScale} />
-          </group>
-        </Suspense>
-      ) : null}
-
-      {showTitle ? (
-        <>
-          <Text
-            position={[0, 0.08, zFace]}
-            fontSize={titleSize}
-            color={titleColor}
-            anchorX="center"
-            anchorY="middle"
-            letterSpacing={0.08}
-            maxWidth={width - 0.6}
-            textAlign="center"
-            font={FONT}
-          >
-            {title}
-            <meshStandardMaterial
-              attach="material"
-              color={titleColor}
-              emissive={titleColor}
-              emissiveIntensity={0.35}
-              metalness={0.45}
-              roughness={0.35}
-            />
-          </Text>
-
-          <mesh position={[0, -0.28, zFace]}>
-            <boxGeometry args={[underlineW, 0.028, 0.02]} />
-            <meshStandardMaterial
-              color={titleColor}
-              metalness={0.9}
-              roughness={0.2}
-              emissive={titleColor}
-              emissiveIntensity={0.3}
-            />
-          </mesh>
-        </>
-      ) : null}
+      <mesh position={[0, -0.28, zFace]}>
+        <boxGeometry args={[underlineW, 0.028, 0.02]} />
+        <meshStandardMaterial
+          color={titleColor}
+          metalness={0.9}
+          roughness={0.2}
+          emissive={titleColor}
+          emissiveIntensity={0.3}
+        />
+      </mesh>
     </group>
   );
 }

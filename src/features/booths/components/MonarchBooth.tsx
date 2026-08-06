@@ -13,11 +13,13 @@ import {
   resolveBoothHeaderBranding,
   resolveBoothWallColors,
   resolveFasciaLayout,
+  resolveHeaderTextColor,
 } from '@/features/shared/data/boothLayouts';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
 import { PooledBoothLight } from './BoothLightPool';
 import { BoothSignageFascia } from './BoothSignageFascia';
+import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BoothWallLogos } from './BoothWallLogos';
 import { BoothSideWallAssembly } from './BoothSideWallAssembly';
@@ -150,6 +152,7 @@ export function MonarchBooth({
     headerBranding,
     companyTagline: company?.tagline,
   }).projectName;
+  const headerTitleColor = resolveHeaderTextColor({ accent: trim, headerTextColor });
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -216,6 +219,21 @@ export function MonarchBooth({
         depth={0.72}
         position={[0, 6.5, -3.64]}
       />
+
+      <BoothDisplayEditable
+        boothId={id}
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={trim}
+          textColor={headerTitleColor}
+        />
+      </BoothDisplayEditable>
 
       <mesh position={[0, 5.8, -3.58]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />

@@ -8,6 +8,7 @@ import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveB
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
 import { BoothNumberBadge, BoothSignageFascia } from './BoothSignageFascia';
+import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
 import {
   resolveBoothHeaderBranding,
   resolveBoothWallColors,
@@ -1009,6 +1010,22 @@ export function StandardLuxuryBooth({
         position={[0, 6.5, -3.64]}
       />
 
+      {/* Hanging ceiling name board (project name only) */}
+      <BoothDisplayEditable
+        boothId={id}
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={glow}
+          textColor={headerTitleColor}
+        />
+      </BoothDisplayEditable>
+
       {/* Interactive Concierge Desk */}
       <group position={[0, 0.5, 0]}>
         <mesh position={[0, 0, 0]} castShadow receiveShadow>
@@ -1312,6 +1329,21 @@ export function EcoEdenBooth({
         depth={0.72}
         position={[0, 6.5, -3.64]}
       />
+
+      <BoothDisplayEditable
+        boothId={id}
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={darkGreen}
+          textColor={resolveHeaderTextColor({ accent: darkGreen, headerTextColor })}
+        />
+      </BoothDisplayEditable>
 
       {/* Premium Reception Desk — white body + green top cap (same layout as Luxe Towers gold trim) */}
       <group position={[0, 0.5, 0]}>
@@ -1617,6 +1649,22 @@ export function VertexEliteBooth({
         depth={0.72}
         position={[0, 6.5, -3.64]}
       />
+
+      <BoothDisplayEditable
+        boothId={id}
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={glow}
+          textColor={headerTitleColor}
+        />
+      </BoothDisplayEditable>
+
       <BoothNumberBadge
         boothId={id}
         accent={glow}
