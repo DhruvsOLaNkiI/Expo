@@ -252,45 +252,35 @@ export function ExpoHall({ showVideos = false }: { showVideos?: boolean }) {
           <coneGeometry args={[0.35, 0.7, 3]} />
           <meshBasicMaterial color="#f5e6b8" transparent opacity={hallLayoutEditMode ? 0.9 : 0.35} />
         </mesh>
-        <Html
-          position={[0, 1.35, 0]}
-          center
-          distanceFactor={10}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          <div
-            style={{
-              padding: '8px 12px',
-              borderRadius: 10,
-              background: 'rgba(8,8,16,0.88)',
-              border: '1px solid rgba(212,175,55,0.45)',
-              color: '#f5e6b8',
-              fontSize: 11,
-              fontWeight: 600,
-              textAlign: 'center',
-              maxWidth: 220,
-              lineHeight: 1.35,
-            }}
+        {hallLayoutEditMode && (
+          <Html
+            position={[0, 1.35, 0]}
+            center
+            distanceFactor={10}
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
           >
-            {hallLayoutEditMode ? (
-              <>
-                Visitor entry spawn
-                <br />
-                <span style={{ fontWeight: 400, color: '#94a3b8' }}>
-                  Drag in Edit layout · Save layout — does not open a door
-                </span>
-              </>
-            ) : (
-              <>
-                New visitors start here
-                <br />
-                <span style={{ fontWeight: 400, color: '#94a3b8' }}>
-                  Gold ring is spawn only — use left/right booth buttons to open PDFs
-                </span>
-              </>
-            )}
-          </div>
-        </Html>
+            <div
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                background: 'rgba(8,8,16,0.88)',
+                border: '1px solid rgba(212,175,55,0.45)',
+                color: '#f5e6b8',
+                fontSize: 11,
+                fontWeight: 600,
+                textAlign: 'center',
+                maxWidth: 220,
+                lineHeight: 1.35,
+              }}
+            >
+              Visitor entry spawn
+              <br />
+              <span style={{ fontWeight: 400, color: '#94a3b8' }}>
+                Drag in Edit layout · Save layout — does not open a door
+              </span>
+            </div>
+          </Html>
+        )}
       </LayoutEditableGroup>
 
       {/* ======= ENTRANCE WALL TV (faces visitor spawn) ======= */}
