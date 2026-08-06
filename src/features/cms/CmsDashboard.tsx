@@ -325,6 +325,7 @@ export function CmsDashboard() {
   const overrides = useStore((s) => s.boothOverrides);
   const sceneOverrides = useStore((s) => s.sceneOverrides);
   const activeHallId = useStore((s) => s.activeHallId);
+  const visitorLandingHallId = useStore((s) => s.visitorLandingHallId);
   const expoHalls = useStore((s) => s.expoHalls);
   const overridesByHall = useStore((s) => s.overridesByHall);
   const sceneOverridesByHall = useStore((s) => s.sceneOverridesByHall);
@@ -335,6 +336,7 @@ export function CmsDashboard() {
   const initCms = useStore((s) => s.initBoothCms);
   const loadCmsExpoOverview = useStore((s) => s.loadCmsExpoOverview);
   const setActiveHall = useStore((s) => s.setActiveHall);
+  const setVisitorLandingHallId = useStore((s) => s.setVisitorLandingHallId);
   const applyExpoHallLayoutFrom = useStore((s) => s.applyExpoHallLayoutFrom);
   const applyBoothSlotLayoutFromHall = useStore((s) => s.applyBoothSlotLayoutFromHall);
   const applyBoothSlotsLayoutFromHall = useStore((s) => s.applyBoothSlotsLayoutFromHall);
@@ -631,6 +633,19 @@ export function CmsDashboard() {
     setTab('hallMap');
   }, [setActiveHall]);
 
+  const handleSetVisitorLandingHall = useCallback(
+    async (hallId: string) => {
+      const ok = await setVisitorLandingHallId(hallId);
+      if (ok) {
+        const label = getExpoHallMeta(hallId)?.label ?? hallId;
+        showToast(`Visitor landing hall → ${label}`);
+      } else {
+        showToast('Could not save visitor landing hall — check admin login / server');
+      }
+    },
+    [setVisitorLandingHallId, showToast],
+  );
+
   const handleApplyLayoutFrom = useCallback(
     async (sourceHallId: string) => {
       const result = await applyExpoHallLayoutFrom(sourceHallId);
@@ -849,6 +864,26 @@ export function CmsDashboard() {
           />
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
+          <div className="mx-1 mb-2 rounded-lg border border-[#d4af37]/25 bg-[#d4af37]/08 p-2.5">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[#d4af37]/90">
+              Visitor landing hall
+            </p>
+            <p className="mt-1 text-[10px] leading-snug text-white/45">
+              Visitors open into this hall when they enter the expo.
+            </p>
+            <select
+              className="mt-2 w-full rounded-md border border-white/12 bg-black/30 px-2 py-1.5 text-xs text-white outline-none focus:border-[#d4af37]/50"
+              value={visitorLandingHallId}
+              onChange={(e) => void handleSetVisitorLandingHall(e.target.value)}
+            >
+              {expoHalls.map((h) => (
+                <option key={h.hallId} value={h.hallId}>
+                  {h.label}
+                  {h.hallId === visitorLandingHallId ? ' · active' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-widest text-white/25">Expo halls</p>
           {expoHalls.map((h) => (
             <button
@@ -863,6 +898,11 @@ export function CmsDashboard() {
             >
               <span className={`h-2 w-2 shrink-0 rounded-full ${h.hallId === activeHallId ? 'bg-violet-400' : 'bg-white/20'}`} />
               <span className="truncate text-xs font-semibold">{h.label}</span>
+              {h.hallId === visitorLandingHallId ? (
+                <span className="ml-auto shrink-0 rounded bg-[#d4af37]/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[#d4af37]">
+                  Live
+                </span>
+              ) : null}
             </button>
           ))}
           <div className="my-2 border-t border-white/[0.06]" />

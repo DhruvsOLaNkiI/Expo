@@ -2,9 +2,11 @@ import { MongoClient, Db, type Collection } from 'mongodb';
 import {
   DEFAULT_EXPO_HALLS,
   DEFAULT_EXPO_HALL_ID,
+  DEFAULT_EXPO_GLOBAL_SETTINGS,
   LEGACY_EXPO_HALL_ID,
   dedupeExpoHalls,
   normalizeHallId,
+  type ExpoGlobalSettings,
   type ExpoHallMeta,
 } from '../features/shared/data/expoHalls';
 
@@ -207,6 +209,9 @@ export async function connectToDatabase(): Promise<Db> {
 
     const expoHallsCollection = db.collection('expoHalls');
     await expoHallsCollection.createIndex({ hallId: 1 }, { unique: true });
+
+    const expoSettingsCollection = db.collection('expoSettings');
+    await expoSettingsCollection.createIndex({ settingsId: 1 }, { unique: true });
 
     console.log('Connected to MongoDB successfully');
     return db;
@@ -698,6 +703,46 @@ export async function listExpoHalls(): Promise<ExpoHallMeta[]> {
   return ensureExpoHallsSeeded();
 }
 
+type ExpoSettingsDocument = {
+  settingsId: string;
+  visitorLandingHallId: string;
+  updatedAt: Date;
+  createdAt?: Date;
+};
+
+const EXPO_SETTINGS_ID = 'global';
+
+export async function getExpoGlobalSettings(): Promise<ExpoGlobalSettings> {
+  try {
+    const db = await connectToDatabase();
+    const col = db.collection<ExpoSettingsDocument>('expoSettings');
+    const doc = await col.findOne({ settingsId: EXPO_SETTINGS_ID });
+    if (!doc?.visitorLandingHallId) return { ...DEFAULT_EXPO_GLOBAL_SETTINGS };
+    return {
+      visitorLandingHallId: normalizeHallId(doc.visitorLandingHallId),
+    };
+  } catch (error) {
+    console.error('Error loading expo settings:', error);
+    return { ...DEFAULT_EXPO_GLOBAL_SETTINGS };
+  }
+}
+
+export async function setVisitorLandingHallId(hallId: string): Promise<ExpoGlobalSettings> {
+  const visitorLandingHallId = normalizeHallId(hallId);
+  const db = await connectToDatabase();
+  const col = db.collection<ExpoSettingsDocument>('expoSettings');
+  const now = new Date();
+  await col.updateOne(
+    { settingsId: EXPO_SETTINGS_ID },
+    {
+      $set: { visitorLandingHallId, updatedAt: now },
+      $setOnInsert: { settingsId: EXPO_SETTINGS_ID, createdAt: now },
+    },
+    { upsert: true },
+  );
+  return { visitorLandingHallId };
+}
+
 export async function getBoothOverridesForHall(
   hallId: string,
 ): Promise<Record<string, Record<string, unknown>>> {
@@ -956,13 +1001,14 @@ export async function getFullExpoConfig(hallId: string = DEFAULT_EXPO_HALL_ID): 
 /** CMS: all halls with booth + scene overrides in one request. */
 export async function getCmsExpoOverview(): Promise<{
   halls: ExpoHallMeta[];
+  visitorLandingHallId: string;
   r2PublicBase: string;
   byHall: Record<
     string,
     { booths: Record<string, Record<string, unknown>>; scene: Record<string, unknown> }
   >;
 }> {
-  const halls = await listExpoHalls();
+  const [halls, settings] = await Promise.all([listExpoHalls(), getExpoGlobalSettings()]);
   const byHall: Record<
     string,
     { booths: Record<string, Record<string, unknown>>; scene: Record<string, unknown> }
@@ -975,7 +1021,7 @@ export async function getCmsExpoOverview(): Promise<{
       byHall[hall.hallId] = { booths: cfg.booths, scene: cfg.scene };
     }),
   );
-  return { halls, r2PublicBase, byHall };
+  return { halls, visitorLandingHallId: settings.visitorLandingHallId, r2PublicBase, byHall };
 }
 
 // ─── Buyer Questionnaire ──────────────────────────────────────────────────

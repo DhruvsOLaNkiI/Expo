@@ -30,6 +30,7 @@ import { REG_SPAWN, resolveMainExpoSpawn } from '@/features/shared/data/registra
 import {
   DEFAULT_EXPO_HALL_ID,
   DEFAULT_EXPO_HALLS,
+  DEFAULT_EXPO_GLOBAL_SETTINGS,
   dedupeExpoHalls,
   getExpoHallMeta,
   normalizeHallId,
@@ -254,6 +255,8 @@ interface AppState {
   logoutAdmin: () => void;
 
   activeHallId: string;
+  /** Admin-set hall visitors open into (persisted in Mongo). */
+  visitorLandingHallId: string;
   expoHalls: ExpoHallMeta[];
   /** CMS cache: booth overrides per hall (slotId → patch). */
   overridesByHall: Record<string, Record<string, BoothLayoutPatch>>;
@@ -263,6 +266,8 @@ interface AppState {
   _boothCmsHydrated: boolean;
   initBoothCms: () => Promise<void>;
   loadCmsExpoOverview: () => Promise<void>;
+  /** Admin: set which hall visitors enter by default. */
+  setVisitorLandingHallId: (hallId: string) => Promise<boolean>;
   /** Copy booth positions/rotation/scale (+ hall entry spawn) from source hall to other halls. */
   applyExpoHallLayoutFrom: (
     sourceHallId: string,
@@ -485,6 +490,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   activeHallId: DEFAULT_EXPO_HALL_ID,
+  visitorLandingHallId: DEFAULT_EXPO_GLOBAL_SETTINGS.visitorLandingHallId,
   expoHalls: [...DEFAULT_EXPO_HALLS],
   overridesByHall: {},
   sceneOverridesByHall: {},
@@ -730,20 +736,25 @@ export const useStore = create<AppState>((set, get) => ({
   initBoothCms: async () => {
     if (get()._boothCmsHydrated) return;
 
-    const hallId = normalizeHallId(get().activeHallId);
-    const localBooths = await readPersistedBoothOverrides(hallId);
-    if (Object.keys(localBooths).length > 0) {
-      set({ boothOverrides: mergeHallBoothPatches(get().boothOverrides, localBooths) });
-    }
-
     let halls = [...DEFAULT_EXPO_HALLS];
+    let landingHallId = DEFAULT_EXPO_GLOBAL_SETTINGS.visitorLandingHallId;
     try {
       const hres = await fetch('/api/expo/halls', { cache: 'no-store' });
       if (hres.ok) {
         const hj = await hres.json();
         if (Array.isArray(hj?.halls) && hj.halls.length > 0) halls = dedupeExpoHalls(hj.halls);
+        if (typeof hj?.visitorLandingHallId === 'string' && hj.visitorLandingHallId.trim()) {
+          landingHallId = normalizeHallId(hj.visitorLandingHallId);
+        }
       }
     } catch { /* */ }
+
+    // Visitors always open into the admin-selected landing hall (not the CMS editor hall).
+    const hallId = landingHallId;
+    const localBooths = await readPersistedBoothOverrides(hallId);
+    if (Object.keys(localBooths).length > 0) {
+      set({ boothOverrides: mergeHallBoothPatches(get().boothOverrides, localBooths) });
+    }
 
     let booths: Record<string, BoothLayoutPatch> = {};
     let sceneFromApi: SceneOverridesInput = {};
@@ -787,6 +798,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     set({
       expoHalls: halls,
+      visitorLandingHallId: landingHallId,
       activeHallId: hallId,
       boothOverrides: mergedBooths,
       sceneOverrides: sceneMerged,
@@ -794,6 +806,26 @@ export const useStore = create<AppState>((set, get) => ({
       sceneOverridesByHall: { ...get().sceneOverridesByHall, [hallId]: sceneMerged },
       _boothCmsHydrated: true,
     });
+  },
+
+  setVisitorLandingHallId: async (hallId) => {
+    const next = normalizeHallId(hallId);
+    try {
+      const res = await fetch('/api/expo/visitor-landing-hall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAdminApiHeaders() },
+        body: JSON.stringify({ hallId: next }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.ok) return false;
+      const saved = normalizeHallId(
+        typeof j.visitorLandingHallId === 'string' ? j.visitorLandingHallId : next,
+      );
+      set({ visitorLandingHallId: saved });
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   loadCmsExpoOverview: async () => {
@@ -812,6 +844,9 @@ export const useStore = create<AppState>((set, get) => ({
       if (res.ok) {
         const j = await res.json();
         if (Array.isArray(j?.halls) && j.halls.length > 0) halls = dedupeExpoHalls(j.halls);
+        if (typeof j?.visitorLandingHallId === 'string' && j.visitorLandingHallId.trim()) {
+          set({ visitorLandingHallId: normalizeHallId(j.visitorLandingHallId) });
+        }
         if (typeof j?.r2PublicBase === 'string' && j.r2PublicBase) r2PublicBase = j.r2PublicBase;
         const byHall = j?.byHall as Record<string, { booths?: Record<string, BoothLayoutPatch>; scene?: SceneOverridesInput }> | undefined;
         if (byHall && typeof byHall === 'object') {

@@ -5,6 +5,8 @@ import {
   getFullExpoConfig,
   getCmsExpoOverview,
   listExpoHalls,
+  getExpoGlobalSettings,
+  setVisitorLandingHallId,
   patchBoothOverrideForHall,
   copyBoothLayoutToHall,
   deleteBoothOverrideForHall,
@@ -94,10 +96,36 @@ function attachBoothCmsApi(server: ApiConnectServer) {
     if (url === '/api/expo/halls' && req.method === 'GET') {
       void (async () => {
         try {
-          const halls = await listExpoHalls();
-          sendJson(res, 200, { ok: true, halls });
+          const [halls, settings] = await Promise.all([listExpoHalls(), getExpoGlobalSettings()]);
+          sendJson(res, 200, {
+            ok: true,
+            halls,
+            visitorLandingHallId: settings.visitorLandingHallId,
+          });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : 'Failed to load halls' });
+        }
+      })();
+      return;
+    }
+
+    // ── POST /api/expo/visitor-landing-hall — admin sets which hall visitors open into ──
+    if (url === '/api/expo/visitor-landing-hall' && req.method === 'POST') {
+      void (async () => {
+        if (!rejectUnlessAdmin(req, res)) return;
+        try {
+          const raw = await readBody(req);
+          const body = raw ? JSON.parse(raw) : {};
+          const hallId = normalizeHallId(
+            typeof body?.hallId === 'string' ? body.hallId : body?.visitorLandingHallId,
+          );
+          const settings = await setVisitorLandingHallId(hallId);
+          sendJson(res, 200, { ok: true, ...settings });
+        } catch (e) {
+          sendJson(res, 500, {
+            ok: false,
+            error: e instanceof Error ? e.message : 'Failed to save visitor landing hall',
+          });
         }
       })();
       return;

@@ -42,3 +42,13 @@ export function dedupeExpoHalls(halls: ExpoHallMeta[]): ExpoHallMeta[] {
   }
   return [...byId.values()].sort((a, b) => a.sortOrder - b.sortOrder);
 }
+
+/** Global expo settings (visitor entry hall, etc.). */
+export type ExpoGlobalSettings = {
+  /** Hall visitors enter when they open the expo (admin-set). */
+  visitorLandingHallId: string;
+};
+
+export const DEFAULT_EXPO_GLOBAL_SETTINGS: ExpoGlobalSettings = {
+  visitorLandingHallId: DEFAULT_EXPO_HALL_ID,
+};
