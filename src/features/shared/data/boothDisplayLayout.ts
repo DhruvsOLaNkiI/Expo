@@ -1,5 +1,5 @@
 /** Per-booth LED / standee / kiosk transforms (Edit layout → Displays). */
-export type BoothDisplaySlot = 'main' | 'counter' | 'standee' | 'signage' | 'kiosk';
+export type BoothDisplaySlot = 'main' | 'counter' | 'standee' | 'signage' | 'kiosk' | 'ceilingBoard';
 
 export type BoothDisplayTransform = {
   position: [number, number, number];
@@ -15,6 +15,7 @@ export const BOOTH_DISPLAY_SLOT_LABELS: Record<BoothDisplaySlot, string> = {
   standee: 'Roll-up standee',
   signage: 'Signage board',
   kiosk: 'CTA kiosk',
+  ceilingBoard: 'Ceiling hanging board',
 };
 
 export function boothDisplayObjectName(boothId: string, slot: BoothDisplaySlot): string {
@@ -81,7 +82,11 @@ export const LUXURY_BOOTH_DISPLAY_DEFAULTS = {
     position: [4.5, 0, 1.5] as [number, number, number],
     rotation: [0, -Math.PI / 6, 0] as [number, number, number],
   },
-} satisfies Record<'main' | 'counter' | 'standee' | 'signage', BoothDisplayTransform>;
+  ceilingBoard: {
+    position: [0, 7.15, -3.55] as [number, number, number],
+    rotation: [0, 0, 0] as [number, number, number],
+  },
+} satisfies Record<'main' | 'counter' | 'standee' | 'signage' | 'ceilingBoard', BoothDisplayTransform>;
 
 export const VERTEX_ELITE_DISPLAY_DEFAULTS = {
   main: {

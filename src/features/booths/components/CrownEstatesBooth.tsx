@@ -13,7 +13,7 @@ import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveB
 import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
 import { PooledBoothLight } from './BoothLightPool';
-import { BoothManagedHeader } from './BoothManagedHeader';
+import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BOOTH_WALL, boothSideWallContinuousArgs, type BoothWallPlacementAdjustments } from './boothWallMetrics';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
@@ -186,17 +186,19 @@ export function CrownEstatesBooth({
         {wallMat}
       </mesh>
 
-      <BoothManagedHeader
+      <BoothDisplayEditable
         boothId={id}
-        accent={champagneGold}
-        headerLogoUrl={safeHeaderLogo || undefined}
-        projectLogoUrl={safeProjectLogo || undefined}
-        headerBranding={effectiveHeaderBranding}
-        companyTagline={company?.tagline}
-        fasciaColor={headerFasciaColor?.trim() || CROWN_ESTATES_THEME.gradientMid}
-        subtitleColor="#f5f0ff"
-        position={[0, 6.5, -3.64]}
-      />
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={effectiveHeaderBranding}
+          companyTagline={company?.tagline}
+          accent={champagneGold}
+        />
+      </BoothDisplayEditable>
 
       <mesh position={[0, 5.75, -3.6]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />

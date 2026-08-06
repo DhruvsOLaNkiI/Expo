@@ -7,11 +7,10 @@ import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/Skeleto
 import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
-import { BoothFasciaLogo, BoothNumberBadge, BoothSignageFascia } from './BoothSignageFascia';
+import { BoothNumberBadge } from './BoothSignageFascia';
+import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
 import {
   resolveBoothHeaderBranding,
-  resolveFasciaLayout,
-  resolveHeaderLogoScale,
 } from '@/features/shared/data/boothLayouts';
 import { BOOTH_CMS_PERSIST_EVENT } from '@/store/persist/boothCms';
 import { BoothWallLogos } from './BoothWallLogos';
@@ -971,21 +970,20 @@ export function StandardLuxuryBooth({
         <meshStandardMaterial color={lighting.ledStripColor} emissive={lighting.ledStripColor} emissiveIntensity={lighting.ledStripIntensity} />
       </mesh>
 
-      {/* Header fascia — fixed logo / project name / RERA zones */}
-      <BoothSignageFascia
+      {/* Ceiling hanging name board (all standard luxury booths) */}
+      <BoothDisplayEditable
         boothId={id}
-        boothName={name}
-        accent={glow}
-        headerLogoUrl={headerLogoUrl}
-        projectLogoUrl={projectLogoUrl}
-        headerBranding={headerBranding}
-        companyTagline={company?.tagline}
-        fasciaColor={wallColor}
-        width={12.5}
-        height={1.5}
-        depth={0.72}
-        position={[0, 6.5, -3.64]}
-      />
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={glow}
+        />
+      </BoothDisplayEditable>
 
       {/* Interactive Concierge Desk */}
       <group position={[0, 0.5, 0]}>
@@ -1206,7 +1204,7 @@ export function EcoEdenBooth({
     headerFasciaColor,
     counterTopColor,
   });
-  const { wallColor, backWallColor: rearWallColor, tvWallColor: tvPanelColor, headerFasciaColor: fasciaBg, counterTopColor: deskTopColor, accent: darkGreen, counterColor: deskBodyColor } = surfaces;
+  const { wallColor, backWallColor: rearWallColor, tvWallColor: tvPanelColor, counterTopColor: deskTopColor, accent: darkGreen, counterColor: deskBodyColor } = surfaces;
   const leafGreen = company?.brandPrimary?.trim() || '#3d9a5a';
   /** Standing signage screen — fixed so wall-color themes do not repaint this panel. */
   const signageScreenColor = '#fafaf8';
@@ -1268,21 +1266,19 @@ export function EcoEdenBooth({
         <meshStandardMaterial color="#fff4d6" emissive="#fff4d6" emissiveIntensity={1.5} />
       </mesh>
 
-      <BoothSignageFascia
+      <BoothDisplayEditable
         boothId={id}
-        boothName={name}
-        accent={darkGreen}
-        headerLogoUrl={headerLogoUrl}
-        projectLogoUrl={projectLogoUrl}
-        headerBranding={headerBranding}
-        companyTagline={company?.tagline}
-        fasciaColor={fasciaBg}
-        subtitleColor={leafGreen}
-        width={12.5}
-        height={1.5}
-        depth={0.72}
-        position={[0, 6.5, -3.64]}
-      />
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={darkGreen}
+        />
+      </BoothDisplayEditable>
 
       {/* Premium Reception Desk — white body + green top cap (same layout as Luxe Towers gold trim) */}
       <group position={[0, 0.5, 0]}>
@@ -1526,22 +1522,11 @@ export function VertexEliteBooth({
 }) {
   const glow = accent;
   const wallColor = color?.trim() || '#fcfaf5';
-  const fasciaColor = wallColor;
   const deskBodyColor = counterColor?.trim() || '#ffffff';
   const floorPadColor = '#efede6';
   const hq = hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES;
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
-  const fasciaLogoUrl = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
-  const fasciaProjectLogoUrl = sanitizeBoothLogoUrlForWebGL(projectLogoUrl);
-  const fasciaLogoScale = resolveHeaderLogoScale(headerBranding);
-  const { centerLogo, hideCenterText } = resolveFasciaLayout(headerBranding);
-  const showRightProjectLogo = Boolean(fasciaProjectLogoUrl) && !centerLogo;
-  const fasciaTitle = resolveBoothHeaderBranding({
-    name,
-    headerBranding,
-    companyTagline: company?.tagline,
-  }).projectName;
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -1572,60 +1557,19 @@ export function VertexEliteBooth({
         <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.25} />
       </mesh>
 
-      <mesh position={[0, 6.5, -4]} castShadow>
-        <boxGeometry args={[12.5, 1.5, 0.8]} />
-        <meshStandardMaterial color={fasciaColor} roughness={0.55} metalness={0.18} />
-      </mesh>
-      <mesh position={[0, 6.5, -3.58]}>
-        <boxGeometry args={[12.5, 1.42, 0.04]} />
-        <meshStandardMaterial color={glow} metalness={0.75} roughness={0.25} />
-      </mesh>
-      <mesh position={[0, 6.5, -3.56]}>
-        <boxGeometry args={[12.08, 1.22, 0.02]} />
-        <meshStandardMaterial color={fasciaColor} roughness={0.55} metalness={0.1} />
-      </mesh>
-      {fasciaLogoUrl && !centerLogo ? (
-        <Suspense fallback={null}>
-          <group position={[-4.25, 6.5, -3.5]}>
-            <BoothFasciaLogo url={fasciaLogoUrl} scale={fasciaLogoScale} />
-          </group>
-        </Suspense>
-      ) : null}
-      {fasciaLogoUrl && centerLogo ? (
-        <Suspense fallback={null}>
-          <group position={[0, 6.5, -3.52]}>
-            <BoothFasciaLogo url={fasciaLogoUrl} scale={fasciaLogoScale} variant="center" />
-          </group>
-        </Suspense>
-      ) : null}
-      {!hideCenterText ? (
-        <Text
-          position={[0, 6.5, -3.52]}
-          fontSize={0.72}
-          color={glow}
-          anchorX="center"
-          anchorY="middle"
-          letterSpacing={0.04}
-          font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf"
-        >
-          {fasciaTitle}
-          <meshStandardMaterial
-            attach="material"
-            color={glow}
-            emissive={glow}
-            emissiveIntensity={0.55}
-            metalness={0.3}
-            roughness={0.45}
-          />
-        </Text>
-      ) : null}
-      {showRightProjectLogo ? (
-        <Suspense fallback={null}>
-          <group position={[4.25, 6.5, -3.5]}>
-            <BoothFasciaLogo url={fasciaProjectLogoUrl!} scale={fasciaLogoScale} />
-          </group>
-        </Suspense>
-      ) : null}
+      <BoothDisplayEditable
+        boothId={id}
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={glow}
+        />
+      </BoothDisplayEditable>
       <BoothNumberBadge
         boothId={id}
         accent={glow}

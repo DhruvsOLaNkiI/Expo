@@ -17,7 +17,7 @@ import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhi
 import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
 import { PooledBoothLight } from './BoothLightPool';
-import { BoothSignageFascia } from './BoothSignageFascia';
+import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BoothWallLogos } from './BoothWallLogos';
 import { BoothSideWallAssembly } from './BoothSideWallAssembly';
@@ -135,14 +135,12 @@ export function MonarchBooth({
   const trim = accent?.trim() || MONARCH_DEFAULT.trim;
   const floorPad = wallColor === MONARCH_DEFAULT.wall ? MONARCH_DEFAULT.floor : wallColor;
   const deskBody = counterColor?.trim() || wallColor;
-  const fasciaColor = wallDark;
   const { hideCenterText } = resolveFasciaLayout(headerBranding);
   const headerTitle = resolveBoothHeaderBranding({
     name,
     headerBranding,
     companyTagline: company?.tagline,
   }).projectName;
-  const safeHeaderLogo = sanitizeBoothLogoUrlForWebGL(headerLogoUrl);
 
   return (
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
@@ -189,21 +187,19 @@ export function MonarchBooth({
         <meshStandardMaterial color={trim} metalness={0.8} roughness={0.2} />
       </mesh>
 
-      <BoothSignageFascia
+      <BoothDisplayEditable
         boothId={id}
-        boothName={name}
-        accent={trim}
-        headerLogoUrl={safeHeaderLogo || undefined}
-        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
-        headerBranding={headerBranding}
-        companyTagline={company?.tagline}
-        fasciaColor={fasciaColor}
-        subtitleColor="#d4c4a8"
-        width={12.5}
-        height={1.5}
-        depth={0.72}
-        position={[0, 6.5, -3.64]}
-      />
+        slot="ceilingBoard"
+        layout={displayLayout}
+        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
+      >
+        <BoothCeilingHangingBoard
+          boothName={name}
+          headerBranding={headerBranding}
+          companyTagline={company?.tagline}
+          accent={trim}
+        />
+      </BoothDisplayEditable>
 
       <mesh position={[0, 5.8, -3.58]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />

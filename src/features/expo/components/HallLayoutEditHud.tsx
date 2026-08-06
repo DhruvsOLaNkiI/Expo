@@ -155,7 +155,7 @@ export function HallLayoutEditHud() {
   );
 
   const boothDisplayOptions = useMemo(() => {
-    const slots: BoothDisplaySlot[] = ['main', 'counter', 'standee', 'signage', 'kiosk'];
+    const slots: BoothDisplaySlot[] = ['main', 'counter', 'standee', 'signage', 'kiosk', 'ceilingBoard'];
     return boothLayouts.flatMap((b) =>
       slots
         // EcoEden standing board is now the standee slot (signage was legacy).
