@@ -11,12 +11,13 @@ import type {
 } from '@/features/shared/data/boothLayouts';
 import {
   resolveBoothHeaderBranding,
+  resolveBoothWallColors,
   resolveFasciaLayout,
 } from '@/features/shared/data/boothLayouts';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
 import { PooledBoothLight } from './BoothLightPool';
-import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
+import { BoothSignageFascia } from './BoothSignageFascia';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BoothWallLogos } from './BoothWallLogos';
 import { BoothSideWallAssembly } from './BoothSideWallAssembly';
@@ -31,6 +32,7 @@ import {
 } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteProximityPanels } from './VertexEliteProximityPanels';
 import type { BoothWallPlacementAdjustments } from './boothWallMetrics';
+import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 
 /** Default Monarch palette when exhibitor has not overridden colors. */
 const MONARCH_DEFAULT = {
@@ -56,6 +58,8 @@ export function MonarchBooth({
   color,
   accent,
   counterColor,
+  backWallColor,
+  headerTextColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
@@ -94,6 +98,8 @@ export function MonarchBooth({
   color: string;
   accent: string;
   counterColor: string;
+  backWallColor?: string;
+  headerTextColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
@@ -131,6 +137,10 @@ export function MonarchBooth({
   const wallDark = color?.trim() && color.trim() !== '#fcf9f2' && color.trim() !== '#fcfaf5'
     ? wallColor
     : MONARCH_DEFAULT.wallDark;
+  const { backWallColor: rearWallColor } = resolveBoothWallColors(
+    { color: wallDark, backWallColor },
+    wallDark,
+  );
   const trim = accent?.trim() || MONARCH_DEFAULT.trim;
   const floorPad = wallColor === MONARCH_DEFAULT.wall ? MONARCH_DEFAULT.floor : wallColor;
   const deskBody = counterColor?.trim() || wallColor;
@@ -158,7 +168,7 @@ export function MonarchBooth({
 
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        <meshStandardMaterial color={wallDark} roughness={0.7} metalness={0.2} />
+        <meshStandardMaterial color={rearWallColor} roughness={0.7} metalness={0.2} />
       </mesh>
 
       <mesh position={[-5.8, 3, -3.8]}>
@@ -186,19 +196,26 @@ export function MonarchBooth({
         <meshStandardMaterial color={trim} metalness={0.8} roughness={0.2} />
       </mesh>
 
-      <BoothDisplayEditable
+      <BoothSignageFascia
         boothId={id}
-        slot="ceilingBoard"
-        layout={displayLayout}
-        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
-      >
-        <BoothCeilingHangingBoard
-          boothName={name}
-          headerBranding={headerBranding}
-          companyTagline={company?.tagline}
-          accent={trim}
-        />
-      </BoothDisplayEditable>
+        boothName={name}
+        accent={trim}
+        headerLogoUrl={
+          sanitizeBoothLogoUrlForWebGL(headerLogoUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoLeftUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoRightUrl) ||
+          undefined
+        }
+        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={wallDark}
+        subtitleColor="#d4c4a8"
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
 
       <mesh position={[0, 5.8, -3.58]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />

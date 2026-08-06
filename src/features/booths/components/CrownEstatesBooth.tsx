@@ -10,10 +10,11 @@ import type {
 } from '@/features/shared/data/boothLayouts';
 import { sanitizeBoothLogoUrlForWebGL } from '@/features/exhibitorDashboard/exhibitorLogo';
 import { isScreenImageUrl, LedScreenSurface, LedScreenSuspenseFallback, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
+import { resolveBoothWallColors } from '@/features/shared/data/boothLayouts';
 import { BoothHostessGreeter, BoothStandee } from './Booths';
 import { BOOTH_ACCENT_LIGHT_RANGE } from './ProximityLight';
 import { PooledBoothLight } from './BoothLightPool';
-import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
+import { BoothManagedHeader } from './BoothManagedHeader';
 import { BoothPlacementImages } from './BoothPlacementImages';
 import { BOOTH_WALL, boothSideWallContinuousArgs, type BoothWallPlacementAdjustments } from './boothWallMetrics';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
@@ -43,6 +44,8 @@ export function CrownEstatesBooth({
   projectLogoUrl,
   headerBranding,
   headerFasciaColor,
+  backWallColor,
+  headerTextColor,
   wallLogoLeftUrl,
   wallLogoRightUrl,
   sideWallLeftImageUrl,
@@ -81,6 +84,8 @@ export function CrownEstatesBooth({
   projectLogoUrl?: string;
   headerBranding?: BoothHeaderBranding;
   headerFasciaColor?: string;
+  backWallColor?: string;
+  headerTextColor?: string;
   wallLogoLeftUrl?: string;
   wallLogoRightUrl?: string;
   sideWallLeftImageUrl?: string;
@@ -127,11 +132,22 @@ export function CrownEstatesBooth({
 
   const champagneGold = accent?.trim() || '#dcb670';
   const glowColor = CROWN_ESTATES_THEME.glow;
+  const { sideWallColor, backWallColor: rearWallColor } = resolveBoothWallColors(
+    { color, backWallColor },
+    CROWN_ESTATES_THEME.gradientMid,
+  );
 
   /** Solid wall color — one piece per side (no panel seam at the entrance wing). */
   const wallMat = (
     <meshStandardMaterial
-      color={CROWN_ESTATES_THEME.gradientMid}
+      color={sideWallColor}
+      roughness={0.18}
+      metalness={0.1}
+    />
+  );
+  const backWallMat = (
+    <meshStandardMaterial
+      color={rearWallColor}
       roughness={0.18}
       metalness={0.1}
     />
@@ -159,7 +175,7 @@ export function CrownEstatesBooth({
       {/* Back wall — slight overlap into sides to hide corner gaps */}
       <mesh position={[0, BOOTH_WALL.wallCenterY, -3.98]} receiveShadow castShadow>
         <boxGeometry args={[12.35, BOOTH_WALL.sideHeight, 0.54]} />
-        {wallMat}
+        {backWallMat}
       </mesh>
 
       {/* Back wall top trim */}
@@ -186,19 +202,22 @@ export function CrownEstatesBooth({
         {wallMat}
       </mesh>
 
-      <BoothDisplayEditable
+      <BoothManagedHeader
         boothId={id}
-        slot="ceilingBoard"
-        layout={displayLayout}
-        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
-      >
-        <BoothCeilingHangingBoard
-          boothName={name}
-          headerBranding={effectiveHeaderBranding}
-          companyTagline={company?.tagline}
-          accent={champagneGold}
-        />
-      </BoothDisplayEditable>
+        accent={champagneGold}
+        headerLogoUrl={
+          safeHeaderLogo ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoLeftUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoRightUrl) ||
+          undefined
+        }
+        projectLogoUrl={safeProjectLogo || undefined}
+        headerBranding={effectiveHeaderBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={headerFasciaColor?.trim() || CROWN_ESTATES_THEME.gradientMid}
+        subtitleColor="#f5f0ff"
+        position={[0, 6.5, -3.64]}
+      />
 
       <mesh position={[0, 5.75, -3.6]}>
         <boxGeometry args={[12.5, 0.05, 0.05]} />

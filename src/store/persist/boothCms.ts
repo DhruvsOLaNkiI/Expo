@@ -126,6 +126,7 @@ const BOOTH_THEME_KEYS = [
   'tvWallColor',
   'headerFasciaColor',
   'counterTopColor',
+  'headerTextColor',
 ] as const;
 
 /** Merge two booth patches; `overlay` wins scalars. Nested objects are deep-merged. */

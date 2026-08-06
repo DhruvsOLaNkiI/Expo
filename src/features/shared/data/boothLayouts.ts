@@ -286,7 +286,7 @@ export type BoothLayoutConfig = {
   hostessQuickReplies?: HostessQuickReply[];
   /** Edit layout → per-display position / rotation / scale (main LED, counter, standee, …) */
   displayLayout?: BoothDisplayLayout;
-  /** Builder-8 (Eco / Eldeco): main rear wall behind the TV. */
+  /** Builder-8 (Eco / Eldeco): main rear wall behind the TV. Also used as dual-tone back wall for any booth. */
   backWallColor?: string;
   /** Builder-8: panel behind / around the main LED screen. */
   tvWallColor?: string;
@@ -294,6 +294,11 @@ export type BoothLayoutConfig = {
   headerFasciaColor?: string;
   /** Builder-8: reception desk top trim bar. */
   counterTopColor?: string;
+  /**
+   * Ceiling / fascia title color. When unset, uses {@link accent} (auto-darkened on white boards
+   * if the accent is too light to read). Set explicitly for multi-color branding.
+   */
+  headerTextColor?: string;
 };
 
 function parseHexColor(hex: string): [number, number, number] | null {
@@ -315,6 +320,40 @@ function mixHexColor(hex: string, toward: string, amount: number): string {
   const t = Math.min(1, Math.max(0, amount));
   const channel = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t);
   return `#${[0, 1, 2].map((i) => channel(i).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Relative luminance 0–1 for a hex color (sRGB). */
+function hexLuminance(hex: string): number | null {
+  const rgb = parseHexColor(hex);
+  if (!rgb) return null;
+  return (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+}
+
+/**
+ * Title color for hanging ceiling board / fascia text.
+ * Prefer explicit {@link BoothLayoutConfig.headerTextColor}; otherwise use accent,
+ * auto-darkened when the accent would wash out on a white board.
+ */
+export function resolveHeaderTextColor(
+  b: Pick<BoothLayoutConfig, 'accent' | 'headerTextColor'>,
+  fallbackAccent = '#d4af37',
+): string {
+  const explicit = b.headerTextColor?.trim();
+  if (explicit) return explicit;
+  const accent = b.accent?.trim() || fallbackAccent;
+  const lum = hexLuminance(accent);
+  if (lum !== null && lum > 0.72) return mixHexColor(accent, '#1a1208', 0.58);
+  return accent;
+}
+
+/** Dual-tone walls: side panels vs back wall (falls back to side color when unset). */
+export function resolveBoothWallColors(
+  b: Pick<BoothLayoutConfig, 'color' | 'backWallColor'>,
+  fallback = '#fcfaf5',
+): { sideWallColor: string; backWallColor: string } {
+  const side = b.color?.trim() || fallback;
+  const back = b.backWallColor?.trim() || side;
+  return { sideWallColor: side, backWallColor: back };
 }
 
 /**

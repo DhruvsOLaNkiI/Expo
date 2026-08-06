@@ -19,6 +19,8 @@ export type LuxuryBoothProps = {
   color: string;
   accent: string;
   counterColor: string;
+  backWallColor?: string;
+  headerTextColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
@@ -110,6 +112,8 @@ export function SideExpoBooths({
           color={b.color}
           accent={b.accent}
           counterColor={b.counterColor}
+          backWallColor={b.backWallColor}
+          headerTextColor={b.headerTextColor}
           videoUrl={b.videoUrl}
           stageScreenUrl={b.stageScreenUrl}
           headerLogoUrl={b.headerLogoUrl}

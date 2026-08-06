@@ -107,6 +107,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
   const [tvWallColor, setTvWallColor] = useState<string>(BUILDER_8_GREEN_THEME.tvWallColor);
   const [headerFasciaColor, setHeaderFasciaColor] = useState<string>(BUILDER_8_GREEN_THEME.headerFasciaColor);
   const [counterTopColor, setCounterTopColor] = useState<string>(BUILDER_8_GREEN_THEME.counterTopColor);
+  const [headerTextColor, setHeaderTextColor] = useState('');
   const [headerLogoUrl, setHeaderLogoUrl] = useState('');
   const [projectLogoUrl, setProjectLogoUrl] = useState('');
   const [wallLogoLeftUrl, setWallLogoLeftUrl] = useState('');
@@ -165,10 +166,11 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     setColor(booth.color || '#fcfaf5');
     setAccent(booth.accent || '#d4af37');
     setCounterColor(booth.counterColor || '#ffffff');
-    setBackWallColor(booth.backWallColor || BUILDER_8_GREEN_THEME.backWallColor);
+    setBackWallColor(booth.backWallColor || booth.color || '#fcfaf5');
     setTvWallColor(booth.tvWallColor || BUILDER_8_GREEN_THEME.tvWallColor);
     setHeaderFasciaColor(booth.headerFasciaColor || BUILDER_8_GREEN_THEME.headerFasciaColor);
     setCounterTopColor(booth.counterTopColor || booth.accent || BUILDER_8_GREEN_THEME.counterTopColor);
+    setHeaderTextColor(booth.headerTextColor || '');
     setHeaderBranding({ ...(booth.headerBranding ?? {}) });
     const layouts = unitLayoutsFromConfig(booth);
     setUnitLayouts(layouts.length ? layouts : [newUnitLayout()]);
@@ -187,7 +189,8 @@ export function ExhibitorSetupPage({ onNav }: Props) {
         color: patchThemeColor(color) ?? undefined,
         accent: patchThemeColor(accent) ?? undefined,
         counterColor: patchThemeColor(counterColor) ?? undefined,
-        backWallColor: boothId === 'builder-8' ? backWallColor.trim() || undefined : undefined,
+        backWallColor: patchThemeColor(backWallColor) ?? null,
+        headerTextColor: patchThemeColor(headerTextColor) ?? null,
         tvWallColor: boothId === 'builder-8' ? tvWallColor.trim() || undefined : undefined,
         headerFasciaColor: boothId === 'builder-8' ? headerFasciaColor.trim() || undefined : undefined,
         counterTopColor: boothId === 'builder-8' ? counterTopColor.trim() || undefined : undefined,
@@ -222,6 +225,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
     tvWallColor,
     headerFasciaColor,
     counterTopColor,
+    headerTextColor,
     boothId,
     company,
     counterFrontImageUrl,
@@ -279,8 +283,9 @@ export function ExhibitorSetupPage({ onNav }: Props) {
       setColor(preset.color);
       setAccent(preset.accent);
       setCounterColor(preset.counterColor);
+      setBackWallColor(preset.backWallColor ?? preset.color);
+      setHeaderTextColor('');
       if (boothId === 'builder-8') {
-        setBackWallColor(preset.backWallColor ?? BUILDER_8_GREEN_THEME.backWallColor);
         setTvWallColor(preset.tvWallColor ?? BUILDER_8_GREEN_THEME.tvWallColor);
         setHeaderFasciaColor(preset.headerFasciaColor ?? BUILDER_8_GREEN_THEME.headerFasciaColor);
         setCounterTopColor(preset.counterTopColor ?? preset.accent);
@@ -290,9 +295,10 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           color: preset.color,
           accent: preset.accent,
           counterColor: preset.counterColor,
+          backWallColor: preset.backWallColor ?? preset.color,
+          headerTextColor: null,
           ...(boothId === 'builder-8'
             ? {
-                backWallColor: preset.backWallColor ?? backWallColor,
                 tvWallColor: preset.tvWallColor ?? tvWallColor,
                 headerFasciaColor: preset.headerFasciaColor ?? headerFasciaColor,
                 counterTopColor: preset.counterTopColor ?? preset.accent,
@@ -304,7 +310,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
       setStatusMsg(r.message);
       if (!r.ok) setErrorMsg(r.message);
     },
-    [persist, boothId, backWallColor, tvWallColor, headerFasciaColor],
+    [persist, boothId, tvWallColor, headerFasciaColor],
   );
 
   const buildWallPersistPatch = useCallback(
@@ -454,6 +460,7 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           tvWallColor={tvWallColor}
           headerFasciaColor={headerFasciaColor}
           counterTopColor={counterTopColor}
+          headerTextColor={headerTextColor}
           onColor={(v) => {
             setColor(v);
             const c = patchThemeColor(v);
@@ -474,7 +481,6 @@ export function ExhibitorSetupPage({ onNav }: Props) {
           }}
           onBackWallColor={(v) => {
             setBackWallColor(v);
-            if (boothId !== 'builder-8') return;
             const c = patchThemeColor(v);
             if (c) scheduleColorPersist({ backWallColor: c });
             else if (!v.trim()) scheduleColorPersist({ backWallColor: null });
@@ -499,6 +505,12 @@ export function ExhibitorSetupPage({ onNav }: Props) {
             const c = patchThemeColor(v);
             if (c) scheduleColorPersist({ counterTopColor: c });
             else if (!v.trim()) scheduleColorPersist({ counterTopColor: null });
+          }}
+          onHeaderTextColor={(v) => {
+            setHeaderTextColor(v);
+            const c = patchThemeColor(v);
+            if (c) scheduleColorPersist({ headerTextColor: c });
+            else scheduleColorPersist({ headerTextColor: null });
           }}
           onApplyPreset={(preset) => void applyColorPreset(preset)}
         />

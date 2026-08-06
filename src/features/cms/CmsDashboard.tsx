@@ -410,6 +410,8 @@ export function CmsDashboard() {
   const [sx, setSx] = useState('1'); const [sy, setSy] = useState('1'); const [sz, setSz] = useState('1');
   const [name, setName] = useState(''); const [color, setColor] = useState(''); const [accent, setAccent] = useState('');
   const [counterColor, setCounterColor] = useState('');
+  const [backWallColor, setBackWallColor] = useState('');
+  const [headerTextColor, setHeaderTextColor] = useState('');
   const [videoUrl, setVideoUrl] = useState(''); const [headerLogoUrl, setHeaderLogoUrl] = useState('');
   const [stageScreenUrl, setStageScreenUrl] = useState('');
   const [description, setDescription] = useState('');
@@ -449,6 +451,8 @@ export function CmsDashboard() {
     setRxDeg(dx.toFixed(2)); setRyDeg(dy.toFixed(2)); setRzDeg(dz.toFixed(2));
     setSx(String(b.scale[0])); setSy(String(b.scale[1])); setSz(String(b.scale[2]));
     setName(b.name); setColor(b.color); setAccent(b.accent); setCounterColor(b.counterColor);
+    setBackWallColor(b.backWallColor ?? '');
+    setHeaderTextColor(b.headerTextColor ?? '');
     setVideoUrl(b.videoUrl); setHeaderLogoUrl(b.headerLogoUrl ?? '');
     setStageScreenUrl(b.stageScreenUrl ?? '');
     setDescription(b.description);
@@ -618,6 +622,8 @@ export function CmsDashboard() {
       color: color.trim() || undefined,
       accent: accent.trim() || undefined,
       counterColor: counterColor.trim() || undefined,
+      backWallColor: backWallColor.trim() || null,
+      headerTextColor: headerTextColor.trim() || null,
       videoUrl: videoUrl.trim() || undefined,
       stageScreenUrl: stageScreenUrl.trim() || undefined,
       headerLogoUrl: headerLogoUrl.trim() || undefined,
@@ -1213,6 +1219,10 @@ export function CmsDashboard() {
                   setAccent={setAccent}
                   counterColor={counterColor}
                   setCounterColor={setCounterColor}
+                  backWallColor={backWallColor}
+                  setBackWallColor={setBackWallColor}
+                  headerTextColor={headerTextColor}
+                  setHeaderTextColor={setHeaderTextColor}
                   stageScreenUrl={stageScreenUrl}
                   setStageScreenUrl={setStageScreenUrl}
                   headerLogoUrl={headerLogoUrl}
@@ -2031,11 +2041,14 @@ function HostessQuickRepliesEditor({
 /* ─── BRANDING TAB ─── */
 function BrandingTab({
   name, setName, color, setColor, accent, setAccent, counterColor, setCounterColor,
+  backWallColor, setBackWallColor, headerTextColor, setHeaderTextColor,
   stageScreenUrl, setStageScreenUrl, headerLogoUrl, setHeaderLogoUrl, description, setDescription,
   hostessQuickReplies, setHostessQuickReplies, boothId, toastUploadResult, persistDocumentField, showUploadError,
 }: {
   name: string; setName: (v: string) => void; color: string; setColor: (v: string) => void; accent: string; setAccent: (v: string) => void;
   counterColor: string; setCounterColor: (v: string) => void;
+  backWallColor: string; setBackWallColor: (v: string) => void;
+  headerTextColor: string; setHeaderTextColor: (v: string) => void;
   stageScreenUrl: string; setStageScreenUrl: (v: string) => void;
   headerLogoUrl: string; setHeaderLogoUrl: (v: string) => void; description: string; setDescription: (v: string) => void;
   hostessQuickReplies: HostessQuickReply[];
@@ -2058,12 +2071,24 @@ function BrandingTab({
         <textarea className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white outline-none focus:border-[#d4af37]/40 resize-none h-20" value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
       <HostessQuickRepliesEditor items={hostessQuickReplies} setItems={setHostessQuickReplies} />
-      <SectionTitle>Colors</SectionTitle>
+      <SectionTitle>Dual tone colors</SectionTitle>
+      <p className="mb-2 text-[10px] leading-relaxed text-white/40">
+        Side wall and back wall can differ. Header text can match Accent or use its own color.
+      </p>
       <div className="grid grid-cols-2 gap-3">
-        <CmsColor label="Wall" value={color} onChange={setColor} />
-        <CmsColor label="Accent" value={accent} onChange={setAccent} />
+        <CmsColor label="Side wall" value={color} onChange={setColor} />
+        <CmsColor label="Back wall" value={backWallColor || color} onChange={setBackWallColor} />
+        <CmsColor label="Accent / trim" value={accent} onChange={setAccent} />
         <CmsColor label="Counter" value={counterColor} onChange={setCounterColor} />
+        <CmsColor label="Header text" value={headerTextColor || accent} onChange={setHeaderTextColor} />
       </div>
+      <button
+        type="button"
+        className="mt-2 w-full rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-[10px] font-medium text-white/70 hover:bg-white/[0.08]"
+        onClick={() => setHeaderTextColor('')}
+      >
+        Match header text to Accent (one color)
+      </button>
       <SectionTitle>Main stage screen (large LED)</SectionTitle>
       <p className="mb-2 text-[10px] leading-relaxed text-white/40">
         Powers the <strong className="text-white/55">large back-wall LED</strong> and counter screen. Upload a project render (PNG/JPG) or a walkthrough video (MP4).

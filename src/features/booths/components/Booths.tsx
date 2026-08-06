@@ -7,10 +7,11 @@ import { clone as cloneSkinnedHierarchy } from 'three/examples/jsm/utils/Skeleto
 import { LedScreenSurface, LedScreenSuspenseFallback, isScreenImageUrl, resolveBoothLedScreenUrl } from '@/features/media/components/LedVideoPlane';
 import { VertexEliteCanopyBranding } from './VertexEliteCanopyBranding';
 import { LuxuryBoothHeaderCanopy } from './LuxuryBoothHeaderCanopy';
-import { BoothNumberBadge } from './BoothSignageFascia';
-import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
+import { BoothNumberBadge, BoothSignageFascia } from './BoothSignageFascia';
 import {
   resolveBoothHeaderBranding,
+  resolveBoothWallColors,
+  resolveHeaderTextColor,
 } from '@/features/shared/data/boothLayouts';
 import { BOOTH_CMS_PERSIST_EVENT } from '@/store/persist/boothCms';
 import { BoothWallLogos } from './BoothWallLogos';
@@ -474,6 +475,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               color={b.color}
               accent={b.accent}
               counterColor={b.counterColor}
+              backWallColor={b.backWallColor}
+              headerTextColor={b.headerTextColor}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
               projectLogoUrl={sanitizeBoothLogoUrlForWebGL(b.projectLogoUrl) || undefined}
               headerBranding={b.headerBranding}
@@ -523,6 +526,7 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               tvWallColor={b.tvWallColor}
               headerFasciaColor={b.headerFasciaColor}
               counterTopColor={b.counterTopColor}
+              headerTextColor={b.headerTextColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
@@ -567,6 +571,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               color={b.color}
               accent={b.accent}
               counterColor={b.counterColor}
+              backWallColor={b.backWallColor}
+              headerTextColor={b.headerTextColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
@@ -610,6 +616,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               color={b.color}
               accent={b.accent}
               counterColor={b.counterColor}
+              backWallColor={b.backWallColor}
+              headerTextColor={b.headerTextColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
@@ -654,6 +662,8 @@ export function Booths({ showVideos = true }: { showVideos?: boolean }) {
               color={b.color}
               accent={b.accent}
               counterColor={b.counterColor}
+              backWallColor={b.backWallColor}
+              headerTextColor={b.headerTextColor}
               videoUrl={b.videoUrl}
               stageScreenUrl={b.stageScreenUrl}
               headerLogoUrl={sanitizeBoothLogoUrlForWebGL(b.headerLogoUrl) || undefined}
@@ -865,6 +875,8 @@ export function StandardLuxuryBooth({
   color,
   accent,
   counterColor,
+  backWallColor,
+  headerTextColor,
   videoUrl,
   stageScreenUrl,
   headerLogoUrl,
@@ -903,6 +915,8 @@ export function StandardLuxuryBooth({
   color: string;
   accent: string;
   counterColor: string;
+  backWallColor?: string;
+  headerTextColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
@@ -936,7 +950,11 @@ export function StandardLuxuryBooth({
   const effectiveVideoUrl = showVideos || isScreenImageUrl(videoUrl) ? videoUrl : '';
   const stageLedUrl = resolveBoothLedScreenUrl(stageScreenUrl, videoUrl, showVideos);
   const glow = accent || '#d4af37';
-  const wallColor = color?.trim() || '#fcfaf5';
+  const { sideWallColor: wallColor, backWallColor: rearWallColor } = resolveBoothWallColors({
+    color,
+    backWallColor,
+  });
+  const headerTitleColor = resolveHeaderTextColor({ accent: glow, headerTextColor });
   const floorPadColor = wallColor;
 
   return (
@@ -944,7 +962,7 @@ export function StandardLuxuryBooth({
       {/* Back Wall with Luxury Trim */}
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        <meshStandardMaterial color={wallColor} roughness={0.4} metalness={0.6} />
+        <meshStandardMaterial color={rearWallColor} roughness={0.4} metalness={0.6} />
       </mesh>
       
       {/* Accent Wall Pillars */}
@@ -970,20 +988,26 @@ export function StandardLuxuryBooth({
         <meshStandardMaterial color={lighting.ledStripColor} emissive={lighting.ledStripColor} emissiveIntensity={lighting.ledStripIntensity} />
       </mesh>
 
-      {/* Ceiling hanging name board (all standard luxury booths) */}
-      <BoothDisplayEditable
+      {/* Attached booth top bar (logo + project name) — not the hanging ceiling board */}
+      <BoothSignageFascia
         boothId={id}
-        slot="ceilingBoard"
-        layout={displayLayout}
-        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
-      >
-        <BoothCeilingHangingBoard
-          boothName={name}
-          headerBranding={headerBranding}
-          companyTagline={company?.tagline}
-          accent={glow}
-        />
-      </BoothDisplayEditable>
+        boothName={name}
+        accent={glow}
+        headerLogoUrl={
+          sanitizeBoothLogoUrlForWebGL(headerLogoUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoLeftUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoRightUrl) ||
+          undefined
+        }
+        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={wallColor}
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
 
       {/* Interactive Concierge Desk */}
       <group position={[0, 0.5, 0]}>
@@ -1137,7 +1161,7 @@ export function EcoSignageImage({ url }: { url: string }) {
 /* ─── Eco luxury booth (builder-8) — white + green palette ─── */
 export function EcoEdenBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
-  backWallColor, tvWallColor, headerFasciaColor, counterTopColor,
+  backWallColor, tvWallColor, headerFasciaColor, counterTopColor, headerTextColor,
   videoUrl, stageScreenUrl, headerLogoUrl, headerBranding, projectLogoUrl, wallLogoLeftUrl, wallLogoRightUrl,
   sideWallLeftImageUrl, sideWallRightImageUrl, exteriorWallLeftImageUrl, exteriorWallRightImageUrl, counterFrontImageUrl,
   standeeImageUrl,
@@ -1162,6 +1186,7 @@ export function EcoEdenBooth({
   tvWallColor?: string;
   headerFasciaColor?: string;
   counterTopColor?: string;
+  headerTextColor?: string;
   videoUrl: string;
   stageScreenUrl?: string;
   headerLogoUrl?: string;
@@ -1267,19 +1292,26 @@ export function EcoEdenBooth({
         <meshStandardMaterial color="#fff4d6" emissive="#fff4d6" emissiveIntensity={1.5} />
       </mesh>
 
-      <BoothDisplayEditable
+      <BoothSignageFascia
         boothId={id}
-        slot="ceilingBoard"
-        layout={displayLayout}
-        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
-      >
-        <BoothCeilingHangingBoard
-          boothName={name}
-          headerBranding={headerBranding}
-          companyTagline={company?.tagline}
-          accent={darkGreen}
-        />
-      </BoothDisplayEditable>
+        boothName={name}
+        accent={darkGreen}
+        headerLogoUrl={
+          sanitizeBoothLogoUrlForWebGL(headerLogoUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoLeftUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoRightUrl) ||
+          undefined
+        }
+        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={headerFasciaColor?.trim() || wallColor}
+        subtitleColor={leafGreen}
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
 
       {/* Premium Reception Desk — white body + green top cap (same layout as Luxe Towers gold trim) */}
       <group position={[0, 0.5, 0]}>
@@ -1452,6 +1484,8 @@ export function EcoEdenBooth({
 /* ─── Futuristic Vertex Elite Studio Booth ─── */
 export function VertexEliteBooth({
   position, rotation, boothScale, id, name, color, accent, counterColor,
+  backWallColor,
+  headerTextColor,
   headerLogoUrl,
   headerBranding,
   projectLogoUrl,
@@ -1482,6 +1516,8 @@ export function VertexEliteBooth({
   color: string;
   accent: string;
   counterColor: string;
+  backWallColor?: string;
+  headerTextColor?: string;
   headerLogoUrl?: string;
   headerBranding?: import('@/features/shared/data/boothLayouts').BoothHeaderBranding;
   projectLogoUrl?: string;
@@ -1522,7 +1558,11 @@ export function VertexEliteBooth({
   displayLayout?: BoothDisplayLayout;
 }) {
   const glow = accent;
-  const wallColor = color?.trim() || '#fcfaf5';
+  const { sideWallColor: wallColor, backWallColor: rearWallColor } = resolveBoothWallColors({
+    color,
+    backWallColor,
+  });
+  const headerTitleColor = resolveHeaderTextColor({ accent: glow, headerTextColor });
   const deskBodyColor = counterColor?.trim() || '#ffffff';
   const floorPadColor = '#efede6';
   const hq = hostessQuickReplies ?? EMPTY_HOSTESS_REPLIES;
@@ -1533,7 +1573,7 @@ export function VertexEliteBooth({
     <BoothLayoutRoot id={id} position={position} rotation={rotation} scale={boothScale}>
       <mesh position={[0, 3, -4]} receiveShadow castShadow>
         <boxGeometry args={[12, 6, 0.5]} />
-        <meshStandardMaterial color={wallColor} roughness={0.55} metalness={0.08} />
+        <meshStandardMaterial color={rearWallColor} roughness={0.55} metalness={0.08} />
       </mesh>
 
       <BoothSideWallAssembly color={wallColor} />
@@ -1558,19 +1598,25 @@ export function VertexEliteBooth({
         <meshStandardMaterial color={glow} emissive={glow} emissiveIntensity={1.25} />
       </mesh>
 
-      <BoothDisplayEditable
+      <BoothSignageFascia
         boothId={id}
-        slot="ceilingBoard"
-        layout={displayLayout}
-        defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.ceilingBoard}
-      >
-        <BoothCeilingHangingBoard
-          boothName={name}
-          headerBranding={headerBranding}
-          companyTagline={company?.tagline}
-          accent={glow}
-        />
-      </BoothDisplayEditable>
+        boothName={name}
+        accent={glow}
+        headerLogoUrl={
+          sanitizeBoothLogoUrlForWebGL(headerLogoUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoLeftUrl) ||
+          sanitizeBoothLogoUrlForWebGL(wallLogoRightUrl) ||
+          undefined
+        }
+        projectLogoUrl={sanitizeBoothLogoUrlForWebGL(projectLogoUrl) || undefined}
+        headerBranding={headerBranding}
+        companyTagline={company?.tagline}
+        fasciaColor={wallColor}
+        width={12.5}
+        height={1.5}
+        depth={0.72}
+        position={[0, 6.5, -3.64]}
+      />
       <BoothNumberBadge
         boothId={id}
         accent={glow}
