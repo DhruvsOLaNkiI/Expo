@@ -409,10 +409,6 @@ function BoothScene({
           <boxGeometry args={[4.2, 0.1, 1.2]} />
           <meshStandardMaterial color={accent} metalness={0.35} roughness={0.25} />
         </mesh>
-        <group position={[1.2, 0.8, -0.2]} rotation={[-0.2, -0.3, 0]}>
-          <mesh castShadow><boxGeometry args={[1.6, 1.0, 0.1]} /><meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} /></mesh>
-          <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
-        </group>
       </group>
 
       {/* Main TV */}

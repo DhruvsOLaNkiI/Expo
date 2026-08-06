@@ -405,12 +405,31 @@ export function BoothLayoutSetupSection({
         </label>
 
         <label className="exb-booth-layout-field">
-          <span className="exb-booth-layout-label">Project name · center slot</span>
+          <span className="exb-booth-layout-label">Project name · hanging board + fascia</span>
           <input
             className="exb-field"
             placeholder={boothName}
             value={headerBranding.projectName ?? ''}
             onChange={(e) => onBrandingChange({ projectName: e.target.value })}
+          />
+          <span className="exb-muted" style={{ display: 'block', marginTop: 4, fontSize: 11 }}>
+            This custom name shows on the white hanging ceiling board.
+          </span>
+        </label>
+
+        <label className="exb-booth-layout-field">
+          <span className="exb-booth-layout-label">
+            Hanging board font size · {Math.round((headerBranding.hangingTitleScale ?? 1.25) * 100)}%
+          </span>
+          <input
+            type="range"
+            min={0.7}
+            max={1.8}
+            step={0.05}
+            value={headerBranding.hangingTitleScale ?? 1.25}
+            onChange={(e) =>
+              onBrandingChange({ hangingTitleScale: Number(e.target.value) })
+            }
           />
         </label>
 

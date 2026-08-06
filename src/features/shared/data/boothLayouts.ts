@@ -115,6 +115,11 @@ export type BoothHeaderBranding = {
   centerHeaderLogo?: boolean;
   /** Hide the RERA block on the right of the header beam. */
   hideRera?: boolean;
+  /**
+   * Hanging ceiling board title size (0.7 = smaller, 1 = default, 1.8 = large).
+   * Custom project name uses this scale on the white hanging board.
+   */
+  hangingTitleScale?: number;
 };
 
 export function resolveFasciaLayout(

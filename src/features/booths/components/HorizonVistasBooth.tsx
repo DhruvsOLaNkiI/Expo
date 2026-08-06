@@ -258,25 +258,6 @@ export function HorizonVistasBooth({
           <meshStandardMaterial attach="material" color={platinum} roughness={0.45} metalness={0.2} />
         </Text>
 
-        <BoothDisplayEditable
-          boothId={id}
-          slot="counter"
-          layout={displayLayout}
-          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
-        >
-          <mesh castShadow>
-            <boxGeometry args={[1.6, 1.0, 0.1]} />
-            <meshStandardMaterial color="#0c1028" roughness={0.85} metalness={0.1} />
-          </mesh>
-          <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
-          </Suspense>
-          <mesh position={[0, -0.6, 0]}>
-            <boxGeometry args={[0.4, 0.2, 0.2]} />
-            <meshStandardMaterial color="#0c1028" />
-          </mesh>
-        </BoothDisplayEditable>
-
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
         </Suspense>

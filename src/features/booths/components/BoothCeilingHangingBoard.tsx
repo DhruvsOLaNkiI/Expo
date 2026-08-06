@@ -27,9 +27,9 @@ export function BoothCeilingHangingBoard({
   /** Title + underline color — defaults to accent; set separately for multi-color branding. */
   textColor,
   boardColor = '#ffffff',
-  width = 7.6,
-  height = 1.15,
-  depth = 0.16,
+  width = 9.2,
+  height = 1.55,
+  depth = 0.18,
 }: {
   boothName: string;
   headerBranding?: BoothHeaderBranding;
@@ -54,9 +54,14 @@ export function BoothCeilingHangingBoard({
   const titleColor = (textColor ?? accent).trim() || accent;
   const zFace = depth / 2 + 0.02;
   const frameT = 0.1;
-  const titleSize = Math.min(0.42, width * 0.055);
+  const rawScale = headerBranding?.hangingTitleScale;
+  const fontScale =
+    typeof rawScale === 'number' && Number.isFinite(rawScale)
+      ? Math.min(1.8, Math.max(0.7, rawScale))
+      : 1.25;
+  const titleSize = Math.min(0.72 * fontScale, width * 0.078 * fontScale);
   const rodXs = useMemo(() => [-width * 0.32, width * 0.32] as const, [width]);
-  const underlineW = Math.min(width * 0.42, title.length * titleSize * 0.42);
+  const underlineW = Math.min(width * 0.55, Math.max(1.2, title.length * titleSize * 0.38));
 
   // Stretch rods so their tops sit flush under the hall ceiling in world space.
   useFrame(() => {
@@ -178,7 +183,7 @@ export function BoothCeilingHangingBoard({
         />
       </Text>
 
-      <mesh position={[0, -0.28, zFace]}>
+      <mesh position={[0, -titleSize * 0.55, zFace]}>
         <boxGeometry args={[underlineW, 0.028, 0.02]} />
         <meshStandardMaterial
           color={titleColor}

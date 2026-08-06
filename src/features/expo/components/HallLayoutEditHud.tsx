@@ -160,6 +160,7 @@ export function HallLayoutEditHud() {
       slots
         // EcoEden standing board is now the standee slot (signage was legacy).
         .filter((slot) => slot !== 'signage')
+        .filter((slot) => slot !== 'counter')
         .filter((slot) => slot !== 'kiosk' || b.id === 'vertex-elite')
         .map((slot) => ({
           id: `booth-display-${b.id}__${slot}`,

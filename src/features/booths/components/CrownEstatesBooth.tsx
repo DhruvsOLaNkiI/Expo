@@ -256,26 +256,6 @@ export function CrownEstatesBooth({
         
         {/* Desk front branding comes from counter-front image only (no baked-in “CROWN ESTATES”). */}
 
-        {/* Counter LED TV */}
-        <BoothDisplayEditable
-          boothId={id}
-          slot="counter"
-          layout={displayLayout}
-          defaults={LUXURY_BOOTH_DISPLAY_DEFAULTS.counter}
-        >
-          <mesh castShadow>
-            <boxGeometry args={[1.6, 1.0, 0.1]} />
-            <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
-          </mesh>
-          <Suspense fallback={<LedScreenSuspenseFallback args={[1.5, 0.9]} />}>
-            <LedScreenSurface args={[1.5, 0.9]} url={stageLedUrl} position={[0, 0, 0.01]} />
-          </Suspense>
-          <mesh position={[0, -0.6, 0]}>
-            <boxGeometry args={[0.4, 0.2, 0.2]} />
-            <meshStandardMaterial color="#111" />
-          </mesh>
-        </BoothDisplayEditable>
-
         <Suspense fallback={null}>
           <BoothHostessGreeter boothId={id} hostessQuickReplies={hostessQuickReplies} />
         </Suspense>
