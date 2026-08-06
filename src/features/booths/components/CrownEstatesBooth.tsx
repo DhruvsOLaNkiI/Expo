@@ -17,6 +17,7 @@ import { PooledBoothLight } from './BoothLightPool';
 import { BoothManagedHeader } from './BoothManagedHeader';
 import { BoothCeilingHangingBoard } from './BoothCeilingHangingBoard';
 import { BoothPlacementImages } from './BoothPlacementImages';
+import { BoothWallLogos } from './BoothWallLogos';
 import { BOOTH_WALL, boothSideWallContinuousArgs, type BoothWallPlacementAdjustments } from './boothWallMetrics';
 import { BoothLayoutRoot } from './BoothLayoutRoot';
 import { BoothDisplayEditable } from './BoothDisplayEditable';
@@ -284,6 +285,10 @@ export function CrownEstatesBooth({
       </BoothDisplayEditable>
 
       <Suspense fallback={null}>
+        <BoothWallLogos
+          wallLogoLeftUrl={wallLogoLeftUrl}
+          wallLogoRightUrl={wallLogoRightUrl}
+        />
         <BoothPlacementImages
           sideWallLeftImageUrl={sideWallLeftImageUrl}
           sideWallRightImageUrl={sideWallRightImageUrl}
