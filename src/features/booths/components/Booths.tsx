@@ -161,6 +161,9 @@ function HostessGreetingBubble({
   const teleportPlayer = useStore((s) => s.teleportPlayer);
   const enterRegistrationLobby = useStore((s) => s.enterRegistrationLobby);
   const boothOverrides = useStore((s) => s.boothOverrides);
+  const greetingEnabled = useStore(
+    (s) => mergeSceneConfig(s.sceneOverrides).showHostessGreeting !== false,
+  );
   const teleportDestinations = useMemo(
     () => buildExpoTeleportDestinations(boothOverrides),
     [boothOverrides],
@@ -185,7 +188,23 @@ function HostessGreetingBubble({
   const hasTeleportOptions = shownOptions.some((r) => r.action === 'teleport');
   const hasHelpDeskOption = shownOptions.some((r) => r.action === 'helpDesk');
 
+  useEffect(() => {
+    if (greetingEnabled) return;
+    wasNearRef.current = false;
+    showRef.current = false;
+    setVisible(false);
+    setActiveReplyId(null);
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [greetingEnabled]);
+
   useFrame(() => {
+    if (!greetingEnabled) return;
     if (activeBooth || helpDeskOpen || ctaResourcePopup) {
       wasNearRef.current = false;
       if (showRef.current) {
@@ -207,6 +226,8 @@ function HostessGreetingBubble({
     if (near && !wasNearRef.current) trySpeakHostessGreeting();
     wasNearRef.current = near;
   });
+
+  if (!greetingEnabled) return null;
 
   const activeReply = activeReplyId ? shownOptions.find((o) => o.id === activeReplyId) : undefined;
 

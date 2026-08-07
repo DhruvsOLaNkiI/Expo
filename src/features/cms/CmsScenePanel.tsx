@@ -413,6 +413,39 @@ export function CmsScenePanel() {
         <input
           type="checkbox"
           className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showBoothHostess}
+          onChange={(e) => patchScene({ showBoothHostess: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">Show booth attendant (3D hostess)</span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            Avatar behind each reception desk and at the help desk. Turn off to hide all attendants.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
+          checked={cfg.showHostessGreeting !== false}
+          onChange={(e) => patchScene({ showHostessGreeting: e.target.checked })}
+        />
+        <span>
+          <span className="block text-[11px] font-medium text-white/80">
+            Attendant greeting — “How can I help you?”
+          </span>
+          <span className="mt-1 block text-[9px] leading-relaxed text-white/35">
+            On: bubble + voice when a visitor approaches. Off: attendant stays, greeting stops (no speech /
+            bubble). Requires attendant shown above.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#d4af37]"
           checked={cfg.showHallPlants}
           onChange={(e) => patchScene({ showHallPlants: e.target.checked })}
         />

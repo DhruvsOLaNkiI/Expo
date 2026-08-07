@@ -86,9 +86,25 @@ export function ExpoSceneSettingsHud() {
             />
             <ToggleRow
               label="Ballroom stage"
-              hint="Chairs + stage at north end"
+              hint="East-wall LED screen"
               checked={cfg.showBallroom}
               onChange={(v) => patchScene({ showBallroom: v })}
+            />
+          </div>
+
+          <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.15em] text-[#d4af37]">Attendant</p>
+          <div className="space-y-2">
+            <ToggleRow
+              label="Show booth attendant"
+              hint="3D hostess at desks — off hides the avatar"
+              checked={cfg.showBoothHostess !== false}
+              onChange={(v) => patchScene({ showBoothHostess: v })}
+            />
+            <ToggleRow
+              label="“How can I help you?” greeting"
+              hint="On = bubble + voice when you approach. Off = stop greeting (avatar can stay)."
+              checked={cfg.showHostessGreeting !== false}
+              onChange={(v) => patchScene({ showHostessGreeting: v })}
             />
           </div>
 

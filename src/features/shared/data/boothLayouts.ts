@@ -847,6 +847,11 @@ export type SceneConfig = {
   showBoothStandee: boolean;
   /** 3D hostess GLB at booth counters and help desk. */
   showBoothHostess: boolean;
+  /**
+   * Hostess “How can I help you?” bubble + spoken greeting when a visitor approaches.
+   * Off keeps the attendant avatar but stops the greeting voice and speech bubble.
+   */
+  showHostessGreeting: boolean;
   /** Array of booth IDs to hide (for selective performance tuning). */
   hiddenBooths: string[];
   /**
@@ -906,6 +911,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   showHallAisleStandees: false,
   showBoothStandee: true,
   showBoothHostess: true,
+  showHostessGreeting: true,
   hiddenBooths: [...DEFAULT_HIDDEN_SIDE_BOOTH_IDS],
   modelCompression: '30fps',
   performanceBoost: true,

@@ -135,7 +135,7 @@ function mergeHallSceneConfig(
   );
   const boolSceneKeys = [
     'showVideos', 'showBallroom', 'showStandardBooths',
-    'showHallAisleStandees', 'showBoothHostess',
+    'showHallAisleStandees', 'showBoothHostess', 'showHostessGreeting',
   ] as const;
   for (const k of boolSceneKeys) {
     if (sceneFromApi[k] === true && sceneMerged[k] !== true) {
