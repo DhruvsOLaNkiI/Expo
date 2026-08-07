@@ -4,6 +4,7 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
 import { getVideoPlaybackTier, isRenderQuality } from '@/features/shared/data/renderQuality';
+import { resolveMediaUrlForWebGL, resolveTextureUrlForWebGL } from '@/config/webglTextureUrl';
 import { useStore } from '@/store';
 
 type LedVideoPlaneProps = {
@@ -35,16 +36,18 @@ export function isScreenVideoUrl(url: string): boolean {
   return false;
 }
 
-/** Large back-wall LED only — does not reuse Walk Through {@link videoUrl}. */
+/** Large back-wall LED — prefers {@link stageScreenUrl}; falls back to Walk Through only if LED is empty. */
 export function resolveBoothLedScreenUrl(
   stageScreenUrl: string | undefined,
-  _videoUrl: string,
+  videoUrl: string,
   showVideos: boolean,
 ): string {
   const stage = (stageScreenUrl ?? '').trim();
-  if (!stage) return '';
-  if (isScreenImageUrl(stage)) return stage;
-  return showVideos ? stage : '';
+  const walk = (videoUrl ?? '').trim();
+  const raw = stage || walk;
+  if (!raw) return '';
+  if (isScreenImageUrl(raw)) return raw;
+  return showVideos ? raw : '';
 }
 
 export function LedScreenSuspenseFallback({
@@ -87,8 +90,9 @@ function LedImagePlane({ args, url, polygonOffset = true, ...meshProps }: LedVid
   const sceneOverrides = useStore((s) => s.sceneOverrides);
   const cfg = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
   const tier = getVideoPlaybackTier(isRenderQuality(cfg.renderQuality) ? cfg.renderQuality : 'hd');
-  const tex = useTexture(url, undefined, (loader) => {
-    if (/^https?:\/\//i.test(url.trim())) loader.setCrossOrigin('anonymous');
+  const resolvedUrl = useMemo(() => resolveTextureUrlForWebGL(url) || url, [url]);
+  const tex = useTexture(resolvedUrl, undefined, (loader) => {
+    if (/^https?:\/\//i.test(resolvedUrl.trim())) loader.setCrossOrigin('anonymous');
   });
 
   useLayoutEffect(() => {
@@ -177,9 +181,13 @@ function acquireSharedVideo(url: string, tier: ReturnType<typeof getVideoPlaybac
   let entry = sharedVideos.get(url);
   if (!entry) {
     const video = document.createElement('video');
-    // crossOrigin must be set BEFORE src — otherwise the fetch starts without CORS and
-    // every canvas draw taints it, throwing SecurityError on each frame's texture upload.
-    video.crossOrigin = 'anonymous';
+    // Same-origin proxy URLs do not need CORS; keep anonymous for any leftover remote URLs.
+    const isSameOrigin =
+      url.startsWith('/') ||
+      (typeof window !== 'undefined' && url.startsWith(`${window.location.origin}/`));
+    if (!isSameOrigin) {
+      video.crossOrigin = 'anonymous';
+    }
     video.src = url;
     video.loop = true;
     video.muted = true;
@@ -268,10 +276,11 @@ export function LedVideoPlane({
   const cfg = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
   const tier = getVideoPlaybackTier(isRenderQuality(cfg.renderQuality) ? cfg.renderQuality : 'hd');
   const tierKey = tierCacheKey(tier);
+  const playUrl = useMemo(() => resolveMediaUrlForWebGL(url) || url, [url]);
   const [entry, setEntry] = useState<SharedVideoEntry | null>(null);
 
   useEffect(() => {
-    const acquired = acquireSharedVideo(url, tier);
+    const acquired = acquireSharedVideo(playUrl, tier);
     setEntry(acquired);
     const { video } = acquired;
     const onReady = () => {
@@ -281,10 +290,10 @@ export function LedVideoPlane({
     else video.addEventListener('canplay', onReady);
     return () => {
       video.removeEventListener('canplay', onReady);
-      releaseSharedVideo(url);
+      releaseSharedVideo(playUrl);
       setEntry(null);
     };
-  }, [url, tierKey]);
+  }, [playUrl, tierKey]);
 
   useLayoutEffect(() => {
     if (!entry) return;

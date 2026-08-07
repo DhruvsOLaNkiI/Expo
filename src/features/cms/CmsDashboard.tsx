@@ -1534,13 +1534,14 @@ function BoothDisplaysTab({
     <>
       <SectionTitle>Booth LED screens</SectionTitle>
       <p className="mb-3 text-[10px] leading-relaxed text-white/40">
-        Two separate uploads: <strong className="text-white/60">LED TV</strong> (back-wall screen) and{' '}
-        <strong className="text-white/60">Walk Through</strong> (side button). They no longer share the same file.
-        Preview updates on the left — click <strong className="text-white/60">Apply Changes</strong> to save.
+        Two uploads: <strong className="text-white/60">LED TV</strong> (back wall) and{' '}
+        <strong className="text-white/60">Walk Through</strong> (side button). If LED is empty, the wall
+        temporarily shows the Walk Through file so screens are not black. Upload a dedicated LED file to
+        separate them. Preview updates on the left — click <strong className="text-white/60">Apply Changes</strong> to save.
       </p>
       <SectionTitle>LED TV video / image (back wall)</SectionTitle>
       <p className="mb-2 text-[10px] leading-relaxed text-white/35">
-        Only shows on the large booth LED. Does <strong className="text-white/50">not</strong> feed Walk Through.
+        Preferred source for the large booth LED. Leave empty to fall back to Walk Through.
       </p>
       <CmsDocFieldWithPreview
         label="LED TV URL"

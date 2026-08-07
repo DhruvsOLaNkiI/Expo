@@ -74,7 +74,7 @@ export function ExpoSceneSettingsHud() {
           <div className="space-y-2">
             <ToggleRow
               label="Show LED screens & videos"
-              hint="One shared video stream — pauses when you walk away"
+              hint="Pause LED decoding when you walk away — each booth still needs its own LED upload"
               checked={cfg.showVideos}
               onChange={(v) => patchScene({ showVideos: v })}
             />

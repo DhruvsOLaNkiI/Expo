@@ -241,7 +241,7 @@ export type BoothLayoutConfig = {
   color: string;
   accent: string;
   counterColor: string;
-  /** Walkthrough booth button + legacy LED fallback when {@link stageScreenUrl} is empty */
+  /** Walkthrough booth button. Also fills the LED only when {@link stageScreenUrl} is empty. */
   videoUrl: string;
   /** Main stage screen (large back-wall LED) — image or video URL */
   stageScreenUrl?: string;
@@ -429,9 +429,11 @@ export function resolveEcoBoothSurfaceColors(
   };
 }
 
-/** Main back-wall LED content — {@link stageScreenUrl} only (Walk Through uses {@link videoUrl}). */
+/** Main back-wall LED — prefers {@link stageScreenUrl}, else Walk Through {@link videoUrl} when LED is empty. */
 export function boothStageScreenUrl(b: Pick<BoothLayoutConfig, 'stageScreenUrl' | 'videoUrl'>): string {
-  return (b.stageScreenUrl ?? '').trim();
+  const stage = (b.stageScreenUrl ?? '').trim();
+  if (stage) return stage;
+  return (b.videoUrl ?? '').trim();
 }
 
 /** Ordered URLs for the site map lightbox (primary + gallery). */
@@ -1060,6 +1062,7 @@ function makeDefaultBooth(
     accent: '#d4af37',
     counterColor: '#ffffff',
     videoUrl,
+    stageScreenUrl: videoUrl,
     headerLogoUrl,
     media: [],
     placedImages: [],

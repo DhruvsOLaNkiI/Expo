@@ -2,6 +2,8 @@ import { normalizeR2PublicUrl } from '../api/r2Urls';
 import { getR2PublicBase } from './r2Public';
 
 const TEXTURE_PROXY_PATH = '/api/assets/texture';
+/** Streaming proxy for LED / walkthrough videos (supports Range) — avoids R2 CORS blocks. */
+export const MEDIA_PROXY_PATH = '/api/assets/media';
 
 /** True when URL can load in Three.js without cross-origin taint (data, same-site, or our proxy). */
 export function isWebGLSafeTextureUrl(url: string | undefined): boolean {
@@ -51,7 +53,7 @@ export function resolveTextureUrlForWebGL(url: string | undefined): string {
   const raw = url?.trim() ?? '';
   if (!raw) return '';
   if (isWebGLSafeTextureUrl(raw)) return raw;
-  if (raw.startsWith(TEXTURE_PROXY_PATH)) return raw;
+  if (raw.startsWith(TEXTURE_PROXY_PATH) || raw.startsWith(MEDIA_PROXY_PATH)) return raw;
 
   if (isRemoteTextureUrl(raw) && isAllowedR2TextureUrl(raw)) {
     const normalized = normalizeR2PublicUrl(raw);
@@ -59,4 +61,24 @@ export function resolveTextureUrlForWebGL(url: string | undefined): string {
   }
 
   return '';
+}
+
+/**
+ * Resolve a video/media URL for WebGL VideoTexture.
+ * Same-origin paths stay; R2 public URLs go through the streaming media proxy.
+ */
+export function resolveMediaUrlForWebGL(url: string | undefined): string {
+  const raw = url?.trim() ?? '';
+  if (!raw) return '';
+  if (raw.startsWith('data:')) return raw;
+  if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
+  if (raw.startsWith(MEDIA_PROXY_PATH) || raw.startsWith(TEXTURE_PROXY_PATH)) return raw;
+
+  if (isRemoteTextureUrl(raw) && isAllowedR2TextureUrl(raw)) {
+    const normalized = normalizeR2PublicUrl(raw);
+    return `${MEDIA_PROXY_PATH}?url=${encodeURIComponent(normalized)}`;
+  }
+
+  // Non-R2 remote URL — leave as-is (caller still sets crossOrigin).
+  return raw;
 }

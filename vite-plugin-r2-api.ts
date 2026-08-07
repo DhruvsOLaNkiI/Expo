@@ -51,6 +51,83 @@ async function handleTextureProxy(
   }
 }
 
+/** Stream R2 videos with Range support so LED screens work without bucket CORS. */
+async function handleMediaProxy(
+  req: IncomingMessage,
+  res: ServerResponse,
+  publicBase: string,
+) {
+  const fullUrl = req.url ?? '';
+  const q = fullUrl.indexOf('?');
+  const params = new URLSearchParams(q >= 0 ? fullUrl.slice(q + 1) : '');
+  const target = params.get('url')?.trim() ?? '';
+  if (!target || !isAllowedR2TextureUrl(target, publicBase)) {
+    sendJson(res, 400, { ok: false, error: 'Invalid or disallowed media URL' });
+    return;
+  }
+
+  try {
+    const normalized = normalizeR2PublicUrl(target);
+    const upstreamHeaders: Record<string, string> = { Accept: '*/*' };
+    const range = req.headers.range;
+    if (typeof range === 'string' && range.trim()) {
+      upstreamHeaders.Range = range.trim();
+    }
+
+    const upstream = await fetch(normalized, { headers: upstreamHeaders });
+    if (!(upstream.ok || upstream.status === 206)) {
+      sendJson(res, upstream.status, { ok: false, error: `Upstream returned ${upstream.status}` });
+      return;
+    }
+
+    res.statusCode = upstream.status;
+    const contentType = upstream.headers.get('content-type') || 'video/mp4';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Accept-Ranges', upstream.headers.get('accept-ranges') || 'bytes');
+    const contentLength = upstream.headers.get('content-length');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    const contentRange = upstream.headers.get('content-range');
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+
+    if (!upstream.body) {
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.end(buf);
+      return;
+    }
+
+    const reader = upstream.body.getReader();
+    const pump = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          res.end();
+          break;
+        }
+        if (!res.write(Buffer.from(value))) {
+          await new Promise<void>((resolve) => res.once('drain', resolve));
+        }
+      }
+    };
+    req.on('close', () => {
+      try {
+        void reader.cancel();
+      } catch {
+        /* ignore */
+      }
+    });
+    await pump();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('Media proxy failed:', msg);
+    if (!res.headersSent) {
+      sendJson(res, 502, { ok: false, error: msg });
+    } else {
+      res.end();
+    }
+  }
+}
+
 type ApiConnectServer = { middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void } };
 
 function attachR2Api(server: ApiConnectServer, rootDir: string, mode: string) {
@@ -138,6 +215,11 @@ function attachR2Api(server: ApiConnectServer, rootDir: string, mode: string) {
 
         if (url === '/api/assets/texture' && req.method === 'GET') {
           void handleTextureProxy(req, res as ServerResponse, env.R2_PUBLIC_BASE_URL ?? '');
+          return;
+        }
+
+        if (url === '/api/assets/media' && req.method === 'GET') {
+          void handleMediaProxy(req, res as ServerResponse, env.R2_PUBLIC_BASE_URL ?? '');
           return;
         }
 
