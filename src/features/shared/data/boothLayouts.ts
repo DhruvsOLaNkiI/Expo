@@ -429,11 +429,9 @@ export function resolveEcoBoothSurfaceColors(
   };
 }
 
-/** Main back-wall LED content — prefers dedicated stage URL, falls back to videoUrl. */
+/** Main back-wall LED content — {@link stageScreenUrl} only (Walk Through uses {@link videoUrl}). */
 export function boothStageScreenUrl(b: Pick<BoothLayoutConfig, 'stageScreenUrl' | 'videoUrl'>): string {
-  const stage = (b.stageScreenUrl ?? '').trim();
-  if (stage) return stage;
-  return (b.videoUrl ?? '').trim();
+  return (b.stageScreenUrl ?? '').trim();
 }
 
 /** Ordered URLs for the site map lightbox (primary + gallery). */

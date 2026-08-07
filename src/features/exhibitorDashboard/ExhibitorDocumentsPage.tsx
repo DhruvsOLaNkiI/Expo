@@ -40,9 +40,18 @@ const BOOTH_DOC_SLOTS = [
     hint: 'PDF or image',
   },
   {
+    id: 'led',
+    title: 'LED TV screen',
+    description: 'Video or image on the large back-wall booth screen. Separate from Walk Through.',
+    field: 'stageScreenUrl' as const,
+    folder: 'stage-video',
+    accept: 'image/*,video/*,.mp4,.webm',
+    hint: 'MP4 / WEBM / image · max 100 MB',
+  },
+  {
     id: 'video',
     title: 'Walkthrough video',
-    description: 'Project walkthrough for the Walk Through button.',
+    description: 'Opens only from the Walk Through side button — not the LED TV.',
     field: 'videoUrl' as const,
     folder: 'walkthrough-video',
     accept: 'video/*,.mp4,.webm',
@@ -58,6 +67,7 @@ export function ExhibitorDocumentsPage({ onNav }: Props) {
 
   const [brochureUrl, setBrochureUrl] = useState('');
   const [priceListUrl, setPriceListUrl] = useState('');
+  const [stageScreenUrl, setStageScreenUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -71,6 +81,7 @@ export function ExhibitorDocumentsPage({ onNav }: Props) {
     if (!booth) return;
     setBrochureUrl(booth.brochureUrl ?? '');
     setPriceListUrl(booth.priceListUrl ?? '');
+    setStageScreenUrl(booth.stageScreenUrl ?? '');
     setVideoUrl(booth.videoUrl ?? '');
   }, [booth]);
 
@@ -88,14 +99,16 @@ export function ExhibitorDocumentsPage({ onNav }: Props) {
     () => ({
       brochureUrl,
       priceListUrl,
+      stageScreenUrl,
       videoUrl,
     }),
-    [brochureUrl, priceListUrl, videoUrl],
+    [brochureUrl, priceListUrl, stageScreenUrl, videoUrl],
   );
 
   const setUrlByField = useCallback((field: keyof typeof urlByField, url: string) => {
     if (field === 'brochureUrl') setBrochureUrl(url);
     if (field === 'priceListUrl') setPriceListUrl(url);
+    if (field === 'stageScreenUrl') setStageScreenUrl(url);
     if (field === 'videoUrl') setVideoUrl(url);
   }, []);
 
@@ -108,7 +121,11 @@ export function ExhibitorDocumentsPage({ onNav }: Props) {
       setUploadingId(slot.id);
       setErrorMsg(null);
       try {
-        const url = await exhibitorUploadFile(file, boothId, slot.folder);
+        const folder =
+          slot.field === 'stageScreenUrl' && file.type.startsWith('image/')
+            ? 'stage-image'
+            : slot.folder;
+        const url = await exhibitorUploadFile(file, boothId, folder);
         setUrlByField(slot.field, url);
         const patch: BoothLayoutPatch = { [slot.field]: url };
         const r = await persist(patch, slot.title);

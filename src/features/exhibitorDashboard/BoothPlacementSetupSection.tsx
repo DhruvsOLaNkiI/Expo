@@ -235,8 +235,8 @@ export function BoothPlacementSetupSection({
       <p className="exb-muted">
         <strong>Outside walls</strong> = large white side panels (walk the aisle to see them).{' '}
         <strong>Inside walls</strong> = entrance panels as you walk in. Click any slot below or in the
-        3D preview to upload. The large <strong>main back screen</strong> in the expo is the default
-        walkthrough video — change it under <strong>Documents → Walkthrough video</strong>, not here.
+        3D preview to upload. The large <strong>back-wall LED</strong> is separate — set it under{' '}
+        <strong>Documents → LED TV screen</strong>. Walk Through uses <strong>Documents → Walkthrough video</strong>.
       </p>
       {hasAnyPlacementImage ? (
         <p className="exb-muted">

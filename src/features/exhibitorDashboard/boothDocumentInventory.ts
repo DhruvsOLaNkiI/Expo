@@ -215,11 +215,11 @@ export function buildBoothDocumentInventory(booth: BoothLayoutConfig): BoothDocu
     }
   });
 
+  if (booth.stageScreenUrl?.trim()) {
+    addFieldDoc(docs, booth.stageScreenUrl, 'LED TV Screen', 'Videos', 'stageScreenUrl', `${booth.id}-stage`);
+  }
   if (booth.videoUrl?.trim()) {
     addFieldDoc(docs, booth.videoUrl, 'Walkthrough Video', 'Videos', 'videoUrl', `${booth.id}-video`);
-  }
-  if (booth.stageScreenUrl?.trim()) {
-    addFieldDoc(docs, booth.stageScreenUrl, 'Stage Screen', 'Images', 'stageScreenUrl', `${booth.id}-stage`);
   }
   if (booth.signageImageUrl?.trim()) {
     addFieldDoc(docs, booth.signageImageUrl, 'Signage', 'Images', 'signageImageUrl', `${booth.id}-signage`);

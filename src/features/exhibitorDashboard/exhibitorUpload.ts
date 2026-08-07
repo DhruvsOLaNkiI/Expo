@@ -167,6 +167,12 @@ export function buildExhibitorChecklist(booth: BoothLayoutConfig): ExhibitorChec
       nav: 'uploads',
     },
     {
+      id: 'led',
+      label: 'LED TV screen',
+      done: Boolean(booth.stageScreenUrl?.trim()),
+      nav: 'uploads',
+    },
+    {
       id: 'video',
       label: 'Walkthrough video',
       done: Boolean(booth.videoUrl?.trim()),

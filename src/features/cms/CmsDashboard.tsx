@@ -1534,24 +1534,29 @@ function BoothDisplaysTab({
     <>
       <SectionTitle>Booth LED screens</SectionTitle>
       <p className="mb-3 text-[10px] leading-relaxed text-white/40">
-        Manage this booth&apos;s large back-wall LED and walk-through video. Changes preview live on the left — click <strong className="text-white/60">Apply Changes</strong> to save.
+        Two separate uploads: <strong className="text-white/60">LED TV</strong> (back-wall screen) and{' '}
+        <strong className="text-white/60">Walk Through</strong> (side button). They no longer share the same file.
+        Preview updates on the left — click <strong className="text-white/60">Apply Changes</strong> to save.
       </p>
-      <SectionTitle>Main stage screen (large LED)</SectionTitle>
+      <SectionTitle>LED TV video / image (back wall)</SectionTitle>
+      <p className="mb-2 text-[10px] leading-relaxed text-white/35">
+        Only shows on the large booth LED. Does <strong className="text-white/50">not</strong> feed Walk Through.
+      </p>
       <CmsDocFieldWithPreview
-        label="Stage screen URL"
+        label="LED TV URL"
         value={stageScreenUrl}
         onChange={setStageScreenUrl}
-        placeholder="/images/first ever expo.jpg or .mp4"
-        uploadLabel="Upload image or video"
+        placeholder="/images/project-render.jpg or .mp4"
+        uploadLabel="Upload LED image or video"
         uploadAccept="image/*,video/*,.mp4,.webm"
-        previewColumnTitle="Stage preview"
+        previewColumnTitle="LED preview"
         onUploadFile={async (f) => {
           try {
             const folder = f.type.startsWith('video/') ? 'stage-video' : 'stage-image';
             const up = await uploadCmsFile(f, boothId, folder);
             setStageScreenUrl(up.url);
-            toastUploadResult(up, 'Stage screen');
-            await persistDocumentField('stageScreenUrl', up.url, 'Stage screen');
+            toastUploadResult(up, 'LED TV screen');
+            await persistDocumentField('stageScreenUrl', up.url, 'LED TV screen');
           } catch (e) {
             showUploadError(e);
           }
@@ -1559,16 +1564,16 @@ function BoothDisplaysTab({
       />
       <SectionTitle>Walk-through video (booth button)</SectionTitle>
       <p className="mb-2 text-[10px] leading-relaxed text-white/35">
-        Used when visitors tap <strong className="text-white/50">Walk Through</strong> — separate from the main stage screen.
+        Used only when visitors tap <strong className="text-white/50">Walk Through</strong> — separate from the LED TV.
       </p>
       <CmsDocFieldWithPreview
         label="Walk-through URL"
         value={videoUrl}
         onChange={setVideoUrl}
         placeholder="/13391496_3840_2160_60fps.mp4"
-        uploadLabel="Upload video"
+        uploadLabel="Upload walkthrough video"
         uploadAccept="video/*,.mp4,.webm"
-        previewColumnTitle="Video preview"
+        previewColumnTitle="Walkthrough preview"
         onUploadFile={async (f) => {
           try {
             const up = await uploadCmsFile(f, boothId, 'walkthrough-video');
@@ -1731,11 +1736,11 @@ function BoothDisplayRow({
   showUploadError: (err: unknown) => void;
   onOpenBooth: (boothId: string) => void;
 }) {
-  const [stageUrl, setStageUrl] = useState(booth.stageScreenUrl ?? booth.videoUrl ?? '');
+  const [stageUrl, setStageUrl] = useState(booth.stageScreenUrl ?? '');
 
   useEffect(() => {
-    setStageUrl(booth.stageScreenUrl ?? booth.videoUrl ?? '');
-  }, [booth.stageScreenUrl, booth.videoUrl, booth.id]);
+    setStageUrl(booth.stageScreenUrl ?? '');
+  }, [booth.stageScreenUrl, booth.id]);
 
   return (
     <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
@@ -2101,25 +2106,26 @@ function BrandingTab({
       >
         Match header text to Accent (one color)
       </button>
-      <SectionTitle>Main stage screen (large LED)</SectionTitle>
+      <SectionTitle>LED TV (back-wall screen)</SectionTitle>
       <p className="mb-2 text-[10px] leading-relaxed text-white/40">
-        Powers the <strong className="text-white/55">large back-wall LED</strong> and counter screen. Upload a project render (PNG/JPG) or a walkthrough video (MP4).
+        Powers the <strong className="text-white/55">large back-wall LED</strong> only. Separate from Walk Through —
+        upload a project render (PNG/JPG) or a looping video (MP4).
       </p>
       <CmsDocFieldWithPreview
-        label="Stage screen URL"
+        label="LED TV URL"
         value={stageScreenUrl}
         onChange={setStageScreenUrl}
         placeholder="/13391496_3840_2160_60fps.mp4 or https://…/render.jpg"
-        uploadLabel="Upload image or video"
+        uploadLabel="Upload LED image or video"
         uploadAccept="image/*,video/*,.mp4,.webm"
-        previewColumnTitle="Stage preview"
+        previewColumnTitle="LED preview"
         onUploadFile={async (f) => {
           try {
             const folder = f.type.startsWith('video/') ? 'stage-video' : 'stage-image';
             const up = await uploadCmsFile(f, boothId, folder);
             setStageScreenUrl(up.url);
-            toastUploadResult(up, 'Stage screen');
-            await persistDocumentField('stageScreenUrl', up.url, 'Stage screen');
+            toastUploadResult(up, 'LED TV screen');
+            await persistDocumentField('stageScreenUrl', up.url, 'LED TV screen');
           } catch (e) {
             showUploadError(e);
           }

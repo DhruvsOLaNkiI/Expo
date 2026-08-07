@@ -35,18 +35,16 @@ export function isScreenVideoUrl(url: string): boolean {
   return false;
 }
 
-/** Large back-wall + counter LED — explicit {@link stageScreenUrl} wins over legacy {@link videoUrl} fallback. */
+/** Large back-wall LED only — does not reuse Walk Through {@link videoUrl}. */
 export function resolveBoothLedScreenUrl(
   stageScreenUrl: string | undefined,
-  videoUrl: string,
+  _videoUrl: string,
   showVideos: boolean,
 ): string {
   const stage = (stageScreenUrl ?? '').trim();
-  const video = (videoUrl ?? '').trim();
-  const raw = stage || video;
-  if (!raw) return '';
-  if (isScreenImageUrl(raw)) return raw;
-  return showVideos ? raw : '';
+  if (!stage) return '';
+  if (isScreenImageUrl(stage)) return stage;
+  return showVideos ? stage : '';
 }
 
 export function LedScreenSuspenseFallback({
