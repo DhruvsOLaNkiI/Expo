@@ -6,10 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
-# PageIndex CLI output (generated JSON trees)
-pageindex/results/
-pageindex/.venv/
-pageindex/uploads/
+# PageIndex is a local-only dev tool (Python venv, never runs in the Node container).
+# Kept out of git so Coolify's shallow submodule clone cannot break the deploy.
+pageindex/
 .claude/
 dashboard-host/
 DBExpo/
