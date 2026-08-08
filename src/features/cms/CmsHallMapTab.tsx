@@ -16,7 +16,10 @@ import {
   type BoothLayoutConfig,
   type BoothLayoutPatch,
 } from '@/features/shared/data/boothLayouts';
-import { DEFAULT_MAIN_EXPO_SPAWN } from '@/features/shared/data/registrationHall';
+import {
+  DEFAULT_MAIN_EXPO_SPAWN,
+  DEFAULT_MAIN_EXPO_SPAWN_YAW,
+} from '@/features/shared/data/registrationHall';
 import { DEFAULT_EXPO_HALL_ID, type ExpoHallMeta } from '@/features/shared/data/expoHalls';
 import { CmsApplyHallLayoutControls } from './CmsApplyHallLayoutControls';
 import { CmsApplySelectedBoothLayout } from './CmsApplySelectedBoothLayout';
@@ -75,6 +78,22 @@ function snap(v: number, size: number): number {
 function worldToSvg(wx: number, wz: number): { x: number; y: number } {
   return { x: wx, y: -wz };
 }
+
+/** Signed shortest angle in degrees, so preset highlighting works across the 0/360 seam. */
+function normalizeDeg(deg: number): number {
+  return ((deg + 180) % 360 + 360) % 360 - 180;
+}
+
+/**
+ * Camera yaw follows three's `rotation.set(0, yaw, 0, 'YXZ')`, where the view
+ * looks down -Z at yaw 0. On the map -Z is up, so 0° = toward the top edge.
+ */
+const ENTRY_FACING_PRESETS = [
+  { label: 'North', deg: 0, hint: 'Face the far end of the hall (-Z)' },
+  { label: 'East', deg: 270, hint: 'Face the east booth row (+X)' },
+  { label: 'South', deg: 180, hint: 'Face the entrance lobby (+Z)' },
+  { label: 'West', deg: 90, hint: 'Face the west booth row (-X)' },
+] as const;
 
 function svgToWorld(sx: number, sy: number): { x: number; z: number } {
   return { x: sx, z: -sy };
@@ -276,6 +295,20 @@ export function CmsHallMapTab({
   const [entrySvgPos, setEntrySvgPos] = useState<{ x: number; y: number } | null>(null);
 
   const gridStep = useMemo(() => (snapEnabled ? snapSize : 5), [snapEnabled, snapSize]);
+  const currentEntryYaw = useMemo(() => {
+    const y = hallLayout?.mainExpoSpawnYaw;
+    return typeof y === 'number' && Number.isFinite(y) ? y : DEFAULT_MAIN_EXPO_SPAWN_YAW;
+  }, [hallLayout?.mainExpoSpawnYaw]);
+  const entryFacingDeg = useMemo(
+    () => Math.round((((currentEntryYaw * 180) / Math.PI) % 360 + 360) % 360),
+    [currentEntryYaw],
+  );
+  const setEntryFacing = useCallback(
+    (deg: number) => {
+      onPatchHallLayout({ mainExpoSpawnYaw: (deg * Math.PI) / 180 });
+    },
+    [onPatchHallLayout],
+  );
   const currentEntry = useMemo<[number, number, number]>(() => {
     const s = hallLayout?.mainExpoSpawn;
     if (s && s.length === 3 && s.every((n) => Number.isFinite(n))) return s;
@@ -543,6 +576,40 @@ export function CmsHallMapTab({
           East Z
         </button>
 
+        <div className="mx-2 h-4 w-px bg-white/10" />
+
+        {/* Which way the visitor looks when they land on the ENTRY marker */}
+        <span className="text-[10px] text-white/40 uppercase tracking-wider">Entry facing</span>
+        {ENTRY_FACING_PRESETS.map((preset) => {
+          const isActive = Math.abs(normalizeDeg(entryFacingDeg - preset.deg)) < 1;
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setEntryFacing(preset.deg)}
+              className={`rounded px-2.5 py-1 text-[11px] transition-colors border ${
+                isActive
+                  ? 'border-[#d4af37]/50 bg-[#d4af37]/15 text-[#f5e6c8]'
+                  : 'border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white'
+              }`}
+              title={preset.hint}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+        <input
+          type="range"
+          min={0}
+          max={359}
+          step={1}
+          value={entryFacingDeg}
+          onChange={(e) => setEntryFacing(Number(e.target.value))}
+          className="w-28 accent-[#d4af37]"
+          title="Rotate the visitor's starting view"
+        />
+        <span className="w-9 font-mono text-[11px] text-[#d4af37]">{entryFacingDeg}&deg;</span>
+
         {selectedBoothLayout && selectedBoothLayout.halls.length > 1 ? (
           selectedBoothLayout.slotIds.length > 1 ? (
             <CmsApplyMultiBoothLayout
@@ -659,17 +726,40 @@ export function CmsHallMapTab({
             );
           })()}
 
-          {/* Visitor entry spawn (drag to reposition) */}
+          {/* Visitor entry spawn (drag to reposition, arrow shows facing) */}
           {(() => {
             const [ex, , ez] = currentEntry;
             const entryPos = entrySvgPos ?? worldToSvg(ex, ez);
             const entryW = 2.8;
             const entryD = 3.2;
+            // Camera forward is (-sin yaw, 0, -cos yaw); the map flips Z, so +y here.
+            const dirX = -Math.sin(currentEntryYaw);
+            const dirY = Math.cos(currentEntryYaw);
+            const reach = 3.4;
+            const tipX = entryPos.x + dirX * reach;
+            const tipY = entryPos.y + dirY * reach;
+            const headBackX = tipX - dirX * 0.9;
+            const headBackY = tipY - dirY * 0.9;
             return (
               <g
                 onPointerDown={canEdit ? handleEntryDown : undefined}
                 style={{ cursor: canEdit ? 'grab' : 'default' }}
               >
+                <line
+                  x1={entryPos.x}
+                  y1={entryPos.y}
+                  x2={tipX}
+                  y2={tipY}
+                  stroke="#4ade80"
+                  strokeWidth={0.16}
+                  strokeDasharray="0.5 0.35"
+                  style={{ pointerEvents: 'none' }}
+                />
+                <polygon
+                  points={`${tipX},${tipY} ${headBackX - dirY * 0.42},${headBackY + dirX * 0.42} ${headBackX + dirY * 0.42},${headBackY - dirX * 0.42}`}
+                  fill="#4ade80"
+                  style={{ pointerEvents: 'none' }}
+                />
                 <rect
                   x={entryPos.x - entryW / 2}
                   y={entryPos.y - entryD / 2}

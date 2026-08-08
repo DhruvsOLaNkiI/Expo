@@ -252,6 +252,12 @@ export default function App() {
     setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
+  // Booths.tsx only mounts in the main hall, so lobby visitors would otherwise
+  // never hydrate booth positions — and the loading screen waits on that flag.
+  useEffect(() => {
+    void useStore.getState().initBoothCms();
+  }, []);
+
   useEffect(() => {
     const syncRoute = () => {
       const p = window.location.pathname.replace(/\/$/, '') || '/';

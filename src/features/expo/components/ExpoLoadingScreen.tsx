@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProgress } from '@react-three/drei';
 import { AnimatePresence, motion } from 'motion/react';
+import { useStore } from '@/store';
 
 /** Drop a real logo here (png/svg/webp) and it replaces the built-in wordmark. */
 const LOGO_SRC = '/images/digital-broker-logo.png';
@@ -46,6 +47,13 @@ export function ExpoLoadingScreen() {
   const latest = useRef(progressState);
   latest.current = progressState;
 
+  // Booth positions and the entry marker arrive from the CMS after first paint.
+  // Lifting the curtain before they land makes the player visibly snap to the
+  // real spawn a moment later.
+  const cmsHydrated = useStore((s) => s._boothCmsHydrated);
+  const cmsHydratedRef = useRef(cmsHydrated);
+  cmsHydratedRef.current = cmsHydrated;
+
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(true);
   const [shown, setShown] = useState(0);
@@ -61,8 +69,9 @@ export function ExpoLoadingScreen() {
 
       const assetsDone = loaded > 0 && progress >= 100 && !active;
       const nothingQueued = loaded === 0 && !active && elapsed > 5000;
+      const sceneSettled = (assetsDone || nothingQueued) && cmsHydratedRef.current;
 
-      if (assetsDone || nothingQueued) settledAt ??= performance.now();
+      if (sceneSettled) settledAt ??= performance.now();
       else settledAt = null;
 
       const held = settledAt !== null && performance.now() - settledAt > 450;
@@ -88,7 +97,13 @@ export function ExpoLoadingScreen() {
   }, [ready]);
 
   const percent = Math.round(shown);
-  const stage = percent < 35 ? 'Building the hall' : percent < 75 ? 'Dressing the booths' : 'Lighting the stage';
+  const stage = !cmsHydrated
+    ? 'Placing the booths'
+    : percent < 35
+      ? 'Building the hall'
+      : percent < 75
+        ? 'Dressing the booths'
+        : 'Lighting the stage';
 
   return (
     <AnimatePresence>

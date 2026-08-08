@@ -1,6 +1,6 @@
 import { useTexture } from '@react-three/drei';
 import { type ThreeElements, useFrame, useThree } from '@react-three/fiber';
-import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
 import { getVideoPlaybackTier, isRenderQuality } from '@/features/shared/data/renderQuality';
@@ -133,9 +133,60 @@ type SharedVideoEntry = {
   tierKey: string;
   /** Set once a frame upload fails (CORS-tainted / decode error) so we stop retrying every frame. */
   uploadFailed?: boolean;
+  /** Kept so a source detached to free a decoder can be re-attached on approach. */
+  src: string;
+  attached: boolean;
+  /** Every plane drawing this video — nearest one decides the entry's priority. */
+  meshes: Set<THREE.Object3D>;
 };
 
 const sharedVideos = new Map<string, SharedVideoEntry>();
+
+/**
+ * Phones expose only a handful of hardware video decoders. Past that limit a
+ * `<video>` silently never reaches readyState 2, so the LED stays black forever.
+ * Only the nearest few screens are allowed to decode; the rest freeze on their
+ * last frame until the visitor walks closer.
+ */
+const CONCURRENT_VIDEO_BUDGET = (() => {
+  if (typeof navigator === 'undefined') return 8;
+  const ua = navigator.userAgent;
+  if (/Android|iPhone|iPod/i.test(ua)) return 2;
+  if (/iPad/i.test(ua)) return 3;
+  return 8;
+})();
+
+/** Pausing alone does not always hand the decoder back — phones need the source dropped. */
+const RELEASE_DECODERS = CONCURRENT_VIDEO_BUDGET <= 3;
+
+/** How often the nearest-screen ranking is recomputed. Per-frame would be wasteful. */
+const RANK_INTERVAL_MS = 400;
+
+function attachSource(entry: SharedVideoEntry) {
+  if (entry.attached) return;
+  entry.video.src = entry.src;
+  entry.video.load();
+  entry.attached = true;
+}
+
+function detachSource(entry: SharedVideoEntry) {
+  entry.video.pause();
+  // Without a canvas the texture samples the element directly, so dropping the
+  // source would blank the screen instead of freezing it.
+  if (!RELEASE_DECODERS || !entry.ctx || !entry.attached) return;
+  entry.video.removeAttribute('src');
+  entry.video.load();
+  entry.attached = false;
+}
+
+function nearestDistanceSq(entry: SharedVideoEntry, camera: THREE.Vector3, scratch: THREE.Vector3): number {
+  let best = Infinity;
+  for (const mesh of entry.meshes) {
+    const d = mesh.getWorldPosition(scratch).distanceToSquared(camera);
+    if (d < best) best = d;
+  }
+  return best;
+}
 
 function tierCacheKey(tier: ReturnType<typeof getVideoPlaybackTier>): string {
   return `${tier.decodeWidth}x${tier.decodeHeight}@${tier.textureUpdateMs}`;
@@ -200,6 +251,9 @@ function acquireSharedVideo(url: string, tier: ReturnType<typeof getVideoPlaybac
       refs: 0,
       lastTexUpdate: 0,
       tierKey: '',
+      src: url,
+      attached: true,
+      meshes: new Set(),
     };
     sharedVideos.set(url, entry);
   }
@@ -227,12 +281,32 @@ export function SharedVideoTextureUpdater() {
   const cfg = useMemo(() => mergeSceneConfig(sceneOverrides), [sceneOverrides]);
   const tier = getVideoPlaybackTier(isRenderQuality(cfg.renderQuality) ? cfg.renderQuality : 'hd');
 
+  const camPos = useRef(new THREE.Vector3()).current;
+  const scratch = useRef(new THREE.Vector3()).current;
+  const allowed = useRef(new Set<SharedVideoEntry>()).current;
+  const lastRank = useRef(-Infinity);
+
   useFrame((state) => {
     const now = state.clock.elapsedTime * 1000;
+
+    if (now - lastRank.current >= RANK_INTERVAL_MS) {
+      lastRank.current = now;
+      state.camera.getWorldPosition(camPos);
+      const live = [...sharedVideos.values()].filter((e) => e.refs > 0 && !e.uploadFailed);
+      live.sort((a, b) => nearestDistanceSq(a, camPos, scratch) - nearestDistanceSq(b, camPos, scratch));
+      allowed.clear();
+      for (const entry of live.slice(0, CONCURRENT_VIDEO_BUDGET)) allowed.add(entry);
+      for (const entry of live) {
+        if (allowed.has(entry)) attachSource(entry);
+        else detachSource(entry);
+      }
+    }
+
     for (const entry of sharedVideos.values()) {
       if (entry.refs <= 0) continue;
       // A tainted/undecodable source throws on every upload — freeze on the last frame instead.
       if (entry.uploadFailed) continue;
+      if (!allowed.has(entry)) continue;
       bindTextureToTier(entry, tier);
       const { video } = entry;
 
@@ -278,6 +352,7 @@ export function LedVideoPlane({
   const tierKey = tierCacheKey(tier);
   const playUrl = useMemo(() => resolveMediaUrlForWebGL(url) || url, [url]);
   const [entry, setEntry] = useState<SharedVideoEntry | null>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
 
   useEffect(() => {
     const acquired = acquireSharedVideo(playUrl, tier);
@@ -296,6 +371,15 @@ export function LedVideoPlane({
   }, [playUrl, tierKey]);
 
   useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!entry || !mesh) return;
+    entry.meshes.add(mesh);
+    return () => {
+      entry.meshes.delete(mesh);
+    };
+  }, [entry]);
+
+  useLayoutEffect(() => {
     if (!entry) return;
     bindTextureToTier(entry, tier);
     const cap = gl.capabilities.getMaxAnisotropy?.() ?? 1;
@@ -309,7 +393,7 @@ export function LedVideoPlane({
   }
 
   return (
-    <mesh position={[0, 0, 0.1]} {...meshProps}>
+    <mesh ref={meshRef} position={[0, 0, 0.1]} {...meshProps}>
       <planeGeometry args={args} />
       <meshBasicMaterial
         map={entry.texture}
