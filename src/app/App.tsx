@@ -5,6 +5,7 @@ import { useStore } from '@/store';
 import { mergeSceneConfig } from '@/features/shared/data/boothLayouts';
 import { getRenderQualityPreset } from '@/features/shared/data/renderQuality';
 import { getEffectiveCanvasDpr } from '@/utils/devicePerformance';
+import { useFullscreen } from '@/hooks/useFullscreen';
 import {
   Player,
   ExpoHall,
@@ -216,6 +217,7 @@ export default function App() {
   const skipToMainExpo = useStore((s) => s.skipToMainExpo);
   const visitorProfile = useStore((s) => s.visitorProfile);
   const [isTouch, setIsTouch] = useState(false);
+  const fullscreen = useFullscreen();
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [isExhibitorRoute, setIsExhibitorRoute] = useState(() => {
     const p = window.location.pathname.replace(/\/$/, '') || '/';
@@ -355,9 +357,12 @@ export default function App() {
 
   return (
     <div
-      className="w-full h-screen bg-black overflow-hidden select-none font-sans"
+      className="w-full h-dvh bg-black overflow-hidden select-none font-sans"
       onClick={() => {
-        if (showInstructions && !needsOnboarding) setShowInstructions(false);
+        if (showInstructions && !needsOnboarding) {
+          if (isTouch && fullscreen.supported) void fullscreen.enter();
+          setShowInstructions(false);
+        }
       }}
     >
       <KeyboardControls
@@ -565,6 +570,20 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {isTouch && fullscreen.supported && !showInstructions && !needsOnboarding && (
+        <button
+          type="button"
+          aria-label={fullscreen.active ? 'Exit full screen' : 'Enter full screen'}
+          className="fixed top-3 right-3 z-[60] rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white/80 shadow-xl backdrop-blur-md pointer-events-auto"
+          onClick={(e) => {
+            e.stopPropagation();
+            fullscreen.toggle();
+          }}
+        >
+          {fullscreen.active ? 'Exit' : 'Full screen'}
+        </button>
       )}
 
       {!isTouch && (
