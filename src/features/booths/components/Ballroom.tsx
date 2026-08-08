@@ -7,8 +7,14 @@ import {
   resolveBoothLedScreenUrl,
 } from '@/features/media/components/LedVideoPlane';
 
-/** East width wall — anchor slightly inside the hall so the screen is not past the perimeter. */
-export const BALLROOM_WALL_X = HALL_HALF_WIDTH - 1.5;
+/**
+ * Local +Z of this group points back into the hall, so the housing's rear face
+ * lands at `BALLROOM_WALL_X - BALLROOM_HOUSING_BACK`. Anchoring by that depth
+ * mounts the screen flush on the east wall instead of leaving a visible void
+ * behind it (the old inset floated the whole assembly ~1.9 off the wall).
+ */
+const BALLROOM_HOUSING_BACK = 0.4;
+export const BALLROOM_WALL_X = HALL_HALF_WIDTH + BALLROOM_HOUSING_BACK;
 const BALLROOM_FACE_YAW = -Math.PI / 2;
 
 export const BALLROOM_LED = {
