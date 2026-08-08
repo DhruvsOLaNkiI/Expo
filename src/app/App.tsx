@@ -20,6 +20,7 @@ import {
   RoamingExecutive,
   FpsMeter,
   RenderStatsProbe,
+  ExpoLoadingScreen,
 } from '@/features/expo';
 import { Booths, Ballroom, VertexEliteScreenHud } from '@/features/booths';
 import {
@@ -573,6 +574,8 @@ export default function App() {
       {showQuestionnaire && (
         <BuyerQuestionnairePopup onClose={handleQuestionnaireClose} />
       )}
+
+      <ExpoLoadingScreen />
     </div>
   );
 }

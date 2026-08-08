@@ -1062,7 +1062,6 @@ function makeDefaultBooth(
     accent: '#d4af37',
     counterColor: '#ffffff',
     videoUrl,
-    stageScreenUrl: videoUrl,
     headerLogoUrl,
     media: [],
     placedImages: [],
