@@ -580,7 +580,7 @@ export default function App() {
         </div>
       )}
 
-      {isTouch && fullscreen.supported && !showInstructions && !needsOnboarding && (
+      {isTouch && fullscreen.supported && !showInstructions && !needsOnboarding && isAdmin && (
         <button
           type="button"
           aria-label={fullscreen.active ? 'Exit full screen' : 'Enter full screen'}
