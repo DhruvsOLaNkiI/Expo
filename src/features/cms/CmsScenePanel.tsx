@@ -162,7 +162,8 @@ export function CmsScenePanel() {
       </div>
       <p className="mb-4 text-[9px] text-white/30 leading-relaxed">
         Same presets as the <strong className="text-white/50">Quality</strong> bar in the expo (bottom center).
-        Only changes resolution — fog, compress models, and videos stay as you set them below.
+        Changes save to the server and apply to <strong className="text-white/50">every visitor</strong> on this hall.
+        Visitors see their current setting as a Display badge (they cannot change it).
       </p>
 
       <SectionTitle>Performance (advanced)</SectionTitle>

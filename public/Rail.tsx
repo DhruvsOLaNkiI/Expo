@@ -4,7 +4,7 @@ import { REG_MAIN_EXPO_SPAWN } from '@/src/data/registrationHall';
 import { ucs2 } from 'punycode';
 import {faqResponseLocal} from '@/src/dashboard/faqResponseLocal';
 import {appendLocalFaqSubmission, readLocalFaqSubmissions} from '@/src/dashboard/faqResponseLocal';
-
+import { FullScreen, useFullScreenHandle} from 'react-full-screen'
 async function idbPutJson(json: string): Promise<boolean> {
   try {
     const db = await openDb();

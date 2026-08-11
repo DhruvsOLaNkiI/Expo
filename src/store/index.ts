@@ -124,6 +124,31 @@ async function resolveHallOverridesForLayoutCopy(
   return merged;
 }
 
+/**
+ * Display / performance keys the admin sets once for the whole hall.
+ * Server (API) must win over stale browser localStorage — otherwise a visitor who once
+ * opened the site as admin (or inherited old LS) keeps running Full HD while production CMS says 480p.
+ */
+const ADMIN_GLOBAL_SCENE_KEYS = [
+  'renderQuality',
+  'performanceBoost',
+  'modelCompression',
+  'showVideos',
+  'showHallCanopy',
+  'showBallroom',
+  'showStandardBooths',
+  'showHallAisleStandees',
+  'showBoothHostess',
+  'showHostessGreeting',
+  'showRoamingExecutive',
+  'showHallPlants',
+  'showVertexEliteCtaKiosk',
+  'showBoothStandee',
+  'postProcessing',
+  'fogEnabled',
+  'hiddenBooths',
+] as const;
+
 function mergeHallSceneConfig(
   sceneFromApi: SceneOverridesInput,
   sceneFromLs: SceneOverridesInput,
@@ -133,13 +158,9 @@ function mergeHallSceneConfig(
     sceneFromApi,
     sceneFromLs,
   );
-  const boolSceneKeys = [
-    'showVideos', 'showBallroom', 'showStandardBooths',
-    'showHallAisleStandees', 'showBoothHostess', 'showHostessGreeting',
-  ] as const;
-  for (const k of boolSceneKeys) {
-    if (sceneFromApi[k] === true && sceneMerged[k] !== true) {
-      sceneMerged = { ...sceneMerged, [k]: true };
+  for (const k of ADMIN_GLOBAL_SCENE_KEYS) {
+    if (sceneFromApi[k] !== undefined) {
+      sceneMerged = { ...sceneMerged, [k]: sceneFromApi[k] };
     }
   }
   return sceneMerged;

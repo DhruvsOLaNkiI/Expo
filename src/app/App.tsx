@@ -22,6 +22,7 @@ import {
   FpsMeter,
   RenderStatsProbe,
   ExpoLoadingScreen,
+  VisitorDisplaySettingsBadge,
 } from '@/features/expo';
 import { Booths, Ballroom, VertexEliteScreenHud } from '@/features/booths';
 import {
@@ -455,6 +456,7 @@ export default function App() {
           <FpsMeter />
         </>
       )}
+      <VisitorDisplaySettingsBadge />
       <VideoEnabledHint />
       {!inRegistration && <VertexEliteScreenHud />}
       <HallLayoutEditHud />

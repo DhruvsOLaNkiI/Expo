@@ -13,5 +13,6 @@ export { RoamingExecutive } from './components/RoamingExecutive';
 export { FpsMeter } from './components/FpsMeter';
 export { ExpoLoadingScreen } from './components/ExpoLoadingScreen';
 export { RenderStatsProbe } from './components/RenderStatsProbe';
+export { VisitorDisplaySettingsBadge } from './components/VisitorDisplaySettingsBadge';
 export { CAMERA_MODES, CAMERA_MODE_ORDER } from './camera/cameraModes';
 export type { CameraMode } from './camera/cameraModes';

@@ -332,9 +332,31 @@ export function ExpoVisitorMenu({ onOpenAnalytics }: Props) {
                       </div>
                     </>
                   ) : (
-                    <p className="text-[10px] text-[#8a7a5a] leading-relaxed">
-                      Environment and CMS changes affect everyone in the expo. Sign in as admin to edit.
-                    </p>
+                    <div className="rounded-xl border border-[#e8dcc8] bg-white px-3 py-2.5">
+                      <p className="text-[9px] uppercase tracking-wider text-[#8a7a5a] mb-2">
+                        Your display settings
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="rounded-md bg-[#d4af37]/20 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#5c4a1a]">
+                          {getRenderQualityPreset(activeQuality).label}
+                        </span>
+                        <span
+                          className={`rounded-md px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider ${
+                            cfg.performanceBoost
+                              ? 'bg-sky-100 text-sky-900'
+                              : 'bg-[#f4f0e8] text-[#8a7a5a]'
+                          }`}
+                        >
+                          {cfg.performanceBoost ? 'Boost ON' : 'Boost OFF'}
+                        </span>
+                        <span className="rounded-md bg-[#f4f0e8] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#8a7a5a]">
+                          {cfg.showVideos ? 'Videos on' : '3D only'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-[10px] text-[#8a7a5a] leading-relaxed">
+                        Set by the expo admin for everyone. Sign in as admin to change Full HD / HD / 480p or Boost.
+                      </p>
+                    </div>
                   )}
 
                   <button
